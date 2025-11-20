@@ -1,0 +1,36 @@
+# Python venv
+.venv/
+env/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+
+# build
+build/
+dist/
+
+# pyproject / poetry cache
+.poetry/
+
+# mypy
+.mypy_cache/
+
+# pytest
+.pytest_cache/
+
+# IDE
+.idea/
+
+# data
+data/
+
+# outputs
+outputs/

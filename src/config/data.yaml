@@ -1,0 +1,3 @@
+# config/data.yaml
+DATA:
+  N: 40   # numero di immagini di training
