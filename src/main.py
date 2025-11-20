@@ -47,6 +47,7 @@ def main(cfg: DictConfig) -> None:
         train_loader=train_loader,
         epochs=epochs,
         learning_rate=learning_rate,
+        non_equivariance=non_equivariance,
         verbose=verbose,
     )
 
