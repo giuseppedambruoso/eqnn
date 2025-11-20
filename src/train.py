@@ -1,8 +1,9 @@
 # train.py
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 import torch
+from tqdm import tqdm
 
 from qnn import create_qnn
 
@@ -53,7 +54,7 @@ def train_loop(
     epochs: int,
     learning_rate: float,
     device: str,
-    non_equivarianceness: bool = True,
+    non_equivariance: Literal[0, 1, 2],
     verbose: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, list[Any], list[Any]]:
     if verbose:
@@ -64,7 +65,7 @@ def train_loop(
     phi = torch.empty(1).uniform_(-0.1, 0.1)
     phi.requires_grad_()
 
-    opt = Adam([params], lr=learning_rate, betas=(0.5, 0.99))
+    opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.99))
 
     train_loss_history = []
     train_acc_history = []
@@ -79,7 +80,7 @@ def train_loop(
         for batch_images, batch_labels in train_loader:
             opt.zero_grad()
             batch_predictions = execute_batch(
-                batch_images, device, params, phi, non_equivarianceness
+                batch_images, device, params, phi, non_equivariance
             )
             loss = loss_function(batch_predictions, batch_labels)
             loss.backward()

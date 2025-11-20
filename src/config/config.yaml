@@ -1,13 +1,23 @@
 # config/config.yaml
-defaults:
-  - general: general
-  - data: data
-  - qnn: qnn
-  - training: training
-
 hydra:
   job_logging:
     root:
       level: INFO
   sweep:
     subdir: ${hydra.job.override_dirname}
+
+GENERAL:
+  seed: 22
+  verbose: True
+
+DATA:
+  N: 40   # numero di immagini di training
+
+QNN:
+  device: "default.qubit"
+  non_equivariance: 1
+  phi: 0
+
+TRAINING:
+  epochs: 100
+  learning_rate: 0.01

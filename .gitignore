@@ -34,3 +34,6 @@ data/
 
 # outputs
 outputs/
+
+# poetry
+poetry.lock

@@ -1,5 +1,0 @@
-# config/qnn.yaml
-QNN:
-  device: "default.qubit"
-  equivariant: False
-  phi: 0
