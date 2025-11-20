@@ -3,9 +3,8 @@ import logging
 import torch
 import torchvision
 import torchvision.transforms as transforms
-from torch.utils.data import DataLoader, Subset
-
 from data_encoding import embedding_unitary
+from torch.utils.data import DataLoader, Subset
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +32,18 @@ def load_mnist_data(
     )
 
     train_full = torchvision.datasets.EMNIST(
-        root="../data", train=True, download=True, transform=transform, split="digits"
+        root="../../data",
+        train=True,
+        download=True,
+        transform=transform,
+        split="digits",
     )
     test_full = torchvision.datasets.EMNIST(
-        root="../data", train=False, download=True, transform=transform, split="digits"
+        root="../../data",
+        train=False,
+        download=True,
+        transform=transform,
+        split="digits",
     )
 
     target_labels = torch.tensor([0, 1])

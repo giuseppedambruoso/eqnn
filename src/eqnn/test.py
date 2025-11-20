@@ -6,7 +6,6 @@ from typing import Literal
 import torch
 from hydra.core.hydra_config import HydraConfig
 from tqdm import tqdm
-
 from train import execute_batch, loss_function
 
 logger = logging.getLogger(__name__)
@@ -15,6 +14,7 @@ logger = logging.getLogger(__name__)
 def test_loop(
     test_loader: torch.utils.data.DataLoader,
     N: int,
+    seed: int,
     device: str,
     params: torch.Tensor,
     phi: torch.Tensor,
@@ -66,7 +66,7 @@ def test_loop(
 
     with open(file_path, "a") as f:
         f.write(
-            f"Sample size: {N}, Non equivariance: {non_equivariance}, Test Accuracy: {final_accuracy:.4f}\n"
+            f"Seed: {seed}, Sample size: {N}, Non equivariance: {non_equivariance}, Test Accuracy: {final_accuracy:.4f}\n"
         )
 
     return final_loss, final_accuracy

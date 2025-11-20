@@ -4,9 +4,8 @@ from test import test_loop
 
 import hydra
 import torch
-from omegaconf import DictConfig
-
 from mnist_loading import load_mnist_data
+from omegaconf import DictConfig
 from plot import plot_results
 from train import train_loop
 
@@ -54,6 +53,7 @@ def main(cfg: DictConfig) -> None:
     # TESTING
     test_loop(
         test_loader=test_loader,
+        seed=SEED,
         N=N,
         device=device,
         params=training_output[0],

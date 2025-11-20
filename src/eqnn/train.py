@@ -3,9 +3,8 @@ import logging
 from typing import Any, Literal
 
 import torch
-from tqdm import tqdm
-
 from qnn import create_qnn
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
