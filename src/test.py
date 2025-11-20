@@ -39,7 +39,9 @@ def test_loop(
 
             total_loss += loss.item() * batch_labels.size(0)
             total_correct += (
-                (torch.argmax(batch_predictions, 1) == batch_labels).sum().item()
+                (torch.argmax(batch_predictions.squeeze(), 1) == batch_labels)
+                .sum()
+                .item()
             )
             total_samples += batch_labels.size(0)
 

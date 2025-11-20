@@ -11,13 +11,12 @@ GENERAL:
   verbose: True
 
 DATA:
-  N: 40   # numero di immagini di training
+  N: 20   # numero di immagini di training
 
 QNN:
   device: "default.qubit"
   non_equivariance: 1
-  phi: 0
 
 TRAINING:
-  epochs: 100
+  epochs: 2
   learning_rate: 0.01

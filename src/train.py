@@ -14,13 +14,8 @@ def loss_function(predictions: torch.Tensor, targets: torch.Tensor) -> torch.Ten
     target_vectors = torch.zeros(targets.shape[0], 2, dtype=predictions.dtype)
     target_vectors[targets == 0, 0] = 1.0
     target_vectors[targets == 1, 1] = 1.0
-    loss = torch.mean((predictions - target_vectors) ** 2)
+    loss = torch.mean((predictions.squeeze() - target_vectors) ** 2)
     return loss
-
-
-def accuracy(predictions: torch.Tensor, targets: torch.Tensor) -> float:
-    predicted_labels = torch.argmax(predictions, axis=1)
-    return (predicted_labels == targets).sum().item() / targets.size(0)
 
 
 def create_and_execute_qnn(
@@ -88,7 +83,9 @@ def train_loop(
 
             total_loss += loss.item() * batch_labels.size(0)
             total_correct += (
-                (torch.argmax(batch_predictions, 1) == batch_labels).sum().item()
+                (torch.argmax(batch_predictions.squeeze(), 1) == batch_labels)
+                .sum()
+                .item()
             )
             total_samples += batch_labels.size(0)
 
