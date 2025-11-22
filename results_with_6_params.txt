@@ -1,0 +1,11 @@
+Sample size: 20, Non equivariance: 0, Test Accuracy: 0.600
+Sample size: 20, Non equivariance: 1, Test Accuracy: 0.720
+Sample size: 20, Non equivariance: 2, Test Accuracy: 0.720
+
+Sample size: 40, Non equivariance: 0, Test Accuracy: 0.490
+Sample size: 40, Non equivariance: 1, Test Accuracy: 0.640
+Sample size: 40, Non equivariance: 2, Test Accuracy: 0.640
+
+Sample size: 80, Non equivariance: 0, Test Accuracy: 0.495
+Sample size: 80, Non equivariance: 1, Test Accuracy: 0.640
+Sample size: 80, Non equivariance: 2, Test Accuracy: 0.640

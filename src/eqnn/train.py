@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 import torch
 from qnn import create_qnn
+from torch.nn import functional as F
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,8 @@ def loss_function(predictions: torch.Tensor, targets: torch.Tensor) -> torch.Ten
     target_vectors = torch.zeros(targets.shape[0], 2, dtype=predictions.dtype)
     target_vectors[targets == 0, 0] = 1.0
     target_vectors[targets == 1, 1] = 1.0
-    loss = torch.mean((predictions.squeeze() - target_vectors) ** 2)
+    predictions = predictions.squeeze()
+    loss = F.binary_cross_entropy_with_logits(predictions, target_vectors)
     return loss
 
 
@@ -54,7 +56,7 @@ def train_loop(
     if verbose:
         logger.info("Starting QNN training...")
 
-    params = torch.empty(6).uniform_(-0.1, 0.1)
+    params = torch.empty(9).uniform_(-0.1, 0.1)
     params.requires_grad_()
     phi = torch.empty(1).uniform_(-0.1, 0.1)
     phi.requires_grad_()

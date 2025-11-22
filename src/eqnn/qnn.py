@@ -28,11 +28,11 @@ def scanning_phase(params: torch.Tensor) -> None:
 
 
 def U4(params: torch.Tensor, wires: list[int]) -> None:
-    qml.RX(params[0], wires=wires[0])
-    qml.RX(params[1], wires=wires[1])
-    qml.RX(params[0], wires=wires[2])
-    qml.RX(params[1], wires=wires[3])
-    qml.PauliRot(params[2], "YYYY", wires=wires)
+    qml.RX(params[6], wires=wires[0])
+    qml.RX(params[7], wires=wires[1])
+    qml.RX(params[6], wires=wires[2])
+    qml.RX(params[7], wires=wires[3])
+    qml.PauliRot(params[8], "YYYY", wires=wires)
 
 
 def equiv_ansatz(params: torch.Tensor) -> None:

@@ -18,5 +18,5 @@ QNN:
   non_equivariance: 1
 
 TRAINING:
-  epochs: 3
+  epochs: 100
   learning_rate: 0.01
