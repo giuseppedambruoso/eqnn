@@ -7,6 +7,5 @@ Sample size: 40, Non equivariance: 1, Test Accuracy: 0.8000
 Sample size: 40, Non equivariance: 2, Test Accuracy: 0.8000
 
 Sample size: 80, Non equivariance: 0, Test Accuracy: 0.5000
-Sample size: 80, Non equivariance: 1, Test Accuracy: 0.8500
 Sample size: 80, Non equivariance: 1, Test Accuracy: 0.8800
 Sample size: 80, Non equivariance: 2, Test Accuracy: 0.8800
