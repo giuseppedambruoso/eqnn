@@ -1,0 +1,11 @@
+GENERAL:
+  seed: 42
+  verbose: true
+DATA:
+  'N': 80
+QNN:
+  device: default.qubit
+  non_equivariance: 1
+TRAINING:
+  epochs: 100
+  learning_rate: 0.01

@@ -4,11 +4,10 @@ from test import test_loop
 
 import hydra
 import torch
+from data_loading import load_eurosat_data, load_mnist_data
 from omegaconf import DictConfig
 from plot import plot_results
 from train import train_loop
-
-from eqnn.data_loading import load_eurosat_data, load_mnist_data
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +26,7 @@ def main(cfg: DictConfig) -> None:
     epochs = cfg.TRAINING.epochs
     learning_rate = cfg.TRAINING.learning_rate
     N = cfg.DATA.N
+    dataset = cfg.DATA.dataset
     batch_size = int(N / 10)
     verbose = cfg.GENERAL.verbose
 
@@ -37,12 +37,16 @@ def main(cfg: DictConfig) -> None:
         )
 
     # DATA LOADING
-    train_loader, test_loader = load_mnist_data(
-        batch_size=batch_size, N=N, num_workers=1, verbose=verbose
-    )
-    train_loader, test_loader = load_eurosat_data(
-        batch_size=batch_size, N=N, num_workers=1, verbose=verbose
-    )
+    if dataset == "mnist":
+        train_loader, test_loader = load_mnist_data(
+            batch_size=batch_size, N=N, num_workers=1, verbose=verbose
+        )
+    elif dataset == "eurosat":
+        train_loader, test_loader = load_eurosat_data(
+            batch_size=batch_size, N=N, num_workers=1, verbose=verbose
+        )
+    else:
+        raise ValueError("dataset must be either 'mnist' or 'eurosat'")
 
     # TRAINING
     training_output = train_loop(

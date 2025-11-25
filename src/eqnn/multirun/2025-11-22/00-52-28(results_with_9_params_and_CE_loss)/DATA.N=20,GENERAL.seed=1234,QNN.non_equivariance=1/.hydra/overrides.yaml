@@ -1,0 +1,3 @@
+- DATA.N=20
+- QNN.non_equivariance=1
+- GENERAL.seed=1234

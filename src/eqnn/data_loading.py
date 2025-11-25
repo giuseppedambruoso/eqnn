@@ -72,7 +72,7 @@ def load_eurosat_data(
     batch_size: int, N: int, num_workers: int, verbose: bool = False
 ) -> tuple[DataLoader, DataLoader]:
     if verbose:
-        logger.info("Loading and embedding EuroSATdata...")
+        logger.info("Loading and embedding EuroSAT data...")
 
     transform = transforms.Compose(
         [
@@ -90,16 +90,34 @@ def load_eurosat_data(
     train_set = datasets.ImageFolder(train_path, transform=transform)
     test_set = datasets.ImageFolder(test_path, transform=transform)
 
-    train_loader = torch.utils.data.DataLoader(
-        train_set,
+    target_labels = torch.tensor([0, 1])
+    train_idx = torch.isin(torch.tensor(train_set.targets), target_labels).nonzero(
+        as_tuple=True
+    )[0]
+    test_idx = torch.isin(torch.tensor(test_set.targets), target_labels).nonzero(
+        as_tuple=True
+    )[0]
+
+    train_filtered = Subset(train_set, train_idx)
+    test_filtered = Subset(test_set, test_idx)
+
+    train_final = Subset(train_filtered, list(range(N)))
+    test_final = Subset(test_filtered, list(range(int(0.5 * N))))
+
+    train_loader = DataLoader(
+        train_final,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
     )
 
-    test_loader = torch.utils.data.DataLoader(
-        test_set, batch_size=32, shuffle=False, num_workers=num_workers, pin_memory=True
+    test_loader = DataLoader(
+        test_final,
+        batch_size=32,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
     )
 
     return train_loader, test_loader

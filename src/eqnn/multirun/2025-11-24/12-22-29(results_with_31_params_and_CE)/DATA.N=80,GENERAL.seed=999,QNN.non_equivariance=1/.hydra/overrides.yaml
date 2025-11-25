@@ -1,0 +1,3 @@
+- GENERAL.seed=999
+- DATA.N=80
+- QNN.non_equivariance=1

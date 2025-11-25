@@ -56,7 +56,7 @@ def train_loop(
     if verbose:
         logger.info("Starting QNN training...")
 
-    params = torch.empty(31).uniform_(-0.1, 0.1)
+    params = torch.empty(48).uniform_(-0.1, 0.1)
     params.requires_grad_()
     phi = torch.empty(1).uniform_(-0.1, 0.1)
     phi.requires_grad_()
