@@ -20,30 +20,30 @@ def scanning_gate(p: torch.Tensor, w1: int, w2: int) -> None:
 def scanning_phase(params: torch.Tensor) -> None:
     num_pairs = 4
     for i in range(num_pairs):
-        scanning_gate(params, 2 * i, 2 * i + 1)
+        scanning_gate(params[0:6], 2 * i, 2 * i + 1)
 
     wire_pairs = [[0, 3], [1, 2], [4, 7], [5, 6]]
     for w1, w2 in wire_pairs:
-        scanning_gate(params, w1, w2)
+        scanning_gate(params[6:12], w1, w2)
 
 
 def U4(params: torch.Tensor, wires: list[int]) -> None:
-    qml.RX(params[6], wires=wires[0])
-    qml.RX(params[7], wires=wires[1])
-    qml.RX(params[6], wires=wires[2])
-    qml.RX(params[7], wires=wires[3])
-    qml.PauliRot(params[8], "YYYY", wires=wires)
+    qml.RX(params[0], wires=wires[0])
+    qml.RX(params[1], wires=wires[1])
+    qml.RX(params[0], wires=wires[2])
+    qml.RX(params[1], wires=wires[3])
+    qml.PauliRot(params[2], "YYYY", wires=wires)
 
 
 def equiv_ansatz(params: torch.Tensor) -> None:
     combinations = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 6, 7], [2, 3, 4, 5]]
     for comb in combinations:
-        U4(params, comb)
+        U4(params[12:15], comb)
 
     for i in range(0, 8, 2):
         qml.CZ([i, i + 1])
 
-    U4(params, [1, 3, 5, 7])
+    U4(params[15:18], [1, 3, 5, 7])
 
     for i in [1, 5]:
         qml.CZ([i, i + 2])
@@ -52,14 +52,14 @@ def equiv_ansatz(params: torch.Tensor) -> None:
 def approx_equiv_ansatz(params: torch.Tensor) -> None:
     combinations = [[0, 1], [2, 3], [4, 5], [6, 7], [1, 2], [3, 4], [5, 6]]
     for comb in combinations:
-        scanning_gate(params, w1=comb[0], w2=comb[1])
+        scanning_gate(params[18:24], w1=comb[0], w2=comb[1])
 
     for i in range(0, 8, 2):
         qml.CZ([i, i + 1])
 
     combinations = [[1, 3], [5, 7], [1, 7], [3, 5]]
     for comb in combinations:
-        scanning_gate(params, w1=comb[0], w2=comb[1])
+        scanning_gate(params[24:30], w1=comb[0], w2=comb[1])
 
     for i in [1, 5]:
         qml.CZ([i, i + 2])

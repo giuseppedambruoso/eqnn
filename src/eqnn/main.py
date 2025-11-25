@@ -4,10 +4,11 @@ from test import test_loop
 
 import hydra
 import torch
-from mnist_loading import load_mnist_data
 from omegaconf import DictConfig
 from plot import plot_results
 from train import train_loop
+
+from eqnn.data_loading import load_eurosat_data, load_mnist_data
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,9 @@ def main(cfg: DictConfig) -> None:
 
     # DATA LOADING
     train_loader, test_loader = load_mnist_data(
+        batch_size=batch_size, N=N, num_workers=1, verbose=verbose
+    )
+    train_loader, test_loader = load_eurosat_data(
         batch_size=batch_size, N=N, num_workers=1, verbose=verbose
     )
 

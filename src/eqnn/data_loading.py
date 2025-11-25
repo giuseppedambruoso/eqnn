@@ -5,6 +5,7 @@ import torchvision
 import torchvision.transforms as transforms
 from data_encoding import embedding_unitary
 from torch.utils.data import DataLoader, Subset
+from torchvision import datasets
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ def load_mnist_data(
     batch_size: int, N: int, num_workers: int, verbose: bool = False
 ) -> tuple[DataLoader, DataLoader]:
     if verbose:
-        logger.info("Loading and embedding data...")
+        logger.info("Loading and embedding MNIST data...")
 
     transform = transforms.Compose(
         [
@@ -64,4 +65,41 @@ def load_mnist_data(
     )
 
     logger.info("Data loading complete.")
+    return train_loader, test_loader
+
+
+def load_eurosat_data(
+    batch_size: int, N: int, num_workers: int, verbose: bool = False
+) -> tuple[DataLoader, DataLoader]:
+    if verbose:
+        logger.info("Loading and embedding EuroSATdata...")
+
+    transform = transforms.Compose(
+        [
+            transforms.Grayscale(num_output_channels=1),
+            transforms.ToTensor(),
+            L2Normalize(),
+            transforms.Lambda(lambda x: x.squeeze(0)),
+            transforms.Lambda(lambda x: embedding_unitary(x)),
+        ]
+    )
+
+    train_path = "../../data/EuroSAT_16x16/train"
+    test_path = "../../data/EuroSAT_16x16/test"
+
+    train_set = datasets.ImageFolder(train_path, transform=transform)
+    test_set = datasets.ImageFolder(test_path, transform=transform)
+
+    train_loader = torch.utils.data.DataLoader(
+        train_set,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    test_loader = torch.utils.data.DataLoader(
+        test_set, batch_size=32, shuffle=False, num_workers=num_workers, pin_memory=True
+    )
+
     return train_loader, test_loader
