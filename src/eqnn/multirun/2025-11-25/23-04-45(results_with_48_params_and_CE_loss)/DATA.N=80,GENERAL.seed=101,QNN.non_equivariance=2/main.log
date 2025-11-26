@@ -1,0 +1,10 @@
+[2025-11-26 00:08:45,136][__main__][INFO] - QNN training pipeline initialized
+[2025-11-26 00:08:45,136][__main__][INFO] - Non-equivariance: 2, Sample size: 80, Epochs: 100, Learning rate: 0.01
+[2025-11-26 00:08:45,136][data_loading][INFO] - Loading and embedding MNIST data...
+[2025-11-26 00:08:45,291][data_loading][INFO] - Data loading complete.
+[2025-11-26 00:08:45,291][train][INFO] - Starting QNN training...
+[2025-11-26 00:21:13,850][train][INFO] - Training completed.
+[2025-11-26 00:21:13,870][test][INFO] - Testing the QNN...
+[2025-11-26 00:21:17,166][test][INFO] - Test completed with loss 0.5805, and accuracy 90%
+[2025-11-26 00:21:17,577][plot][INFO] - Training plots saved
+[2025-11-26 00:21:17,577][plot][INFO] -
