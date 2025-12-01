@@ -32,22 +32,27 @@ def load_mnist_data(
         ]
     )
 
-    train_full = torchvision.datasets.EMNIST(
+    switch = {0: 3, 1: 4, 3: 0, 4: 1}
+    tar_transform = lambda y: switch[y]
+
+    train_full = torchvision.datasets.MNIST(
         root="../../data",
         train=True,
         download=True,
         transform=transform,
-        split="digits",
+        target_transform=tar_transform,
+        # split="digits",
     )
-    test_full = torchvision.datasets.EMNIST(
+    test_full = torchvision.datasets.MNIST(
         root="../../data",
         train=False,
         download=True,
         transform=transform,
-        split="digits",
+        target_transform=tar_transform,
+        # split="digits",
     )
 
-    target_labels = torch.tensor([0, 1])
+    target_labels = torch.tensor([3, 4])
     train_idx = torch.isin(train_full.targets, target_labels).nonzero(as_tuple=True)[0]
     test_idx = torch.isin(test_full.targets, target_labels).nonzero(as_tuple=True)[0]
 
@@ -55,7 +60,7 @@ def load_mnist_data(
     test_filtered = Subset(test_full, test_idx)
 
     train_final = Subset(train_filtered, list(range(N)))
-    test_final = Subset(test_filtered, list(range(int(0.5 * N))))
+    test_final = Subset(test_filtered, list(range(N)))
 
     train_loader = DataLoader(
         train_final, batch_size=batch_size, shuffle=True, num_workers=num_workers
@@ -84,13 +89,13 @@ def load_eurosat_data(
         ]
     )
 
-    train_path = "../../data/EuroSAT_16x16/train"
-    test_path = "../../data/EuroSAT_16x16/test"
+    train_path = "data/EuroSAT_16x16/train"
+    test_path = "data/EuroSAT_16x16/test"
 
     train_set = datasets.ImageFolder(train_path, transform=transform)
     test_set = datasets.ImageFolder(test_path, transform=transform)
 
-    target_labels = torch.tensor([0, 1])
+    target_labels = torch.tensor([0, 6])
     train_idx = torch.isin(torch.tensor(train_set.targets), target_labels).nonzero(
         as_tuple=True
     )[0]

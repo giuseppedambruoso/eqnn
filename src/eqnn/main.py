@@ -52,20 +52,11 @@ def main(cfg: DictConfig) -> None:
     training_output = train_loop(
         device=device,
         train_loader=train_loader,
+        val_loader=test_loader,
         epochs=epochs,
         learning_rate=learning_rate,
-        non_equivariance=non_equivariance,
-        verbose=verbose,
-    )
-
-    # TESTING
-    test_loop(
-        test_loader=test_loader,
         seed=SEED,
         N=N,
-        device=device,
-        params=training_output[0],
-        phi=training_output[1],
         non_equivariance=non_equivariance,
         verbose=verbose,
     )

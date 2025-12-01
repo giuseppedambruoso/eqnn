@@ -20,14 +20,14 @@ def scanning_gate(p: torch.Tensor, w1: int, w2: int) -> None:
 def scanning_phase(scanning_params: torch.Tensor) -> None:
     num_pairs = 4
     for i in range(num_pairs):
-        scanning_gate(scanning_params[6 * i : 6 * i + 6], 2 * i, 2 * i + 1)
+        scanning_gate(scanning_params, 2 * i, 2 * i + 1)
 
     index = 0
     wire_pairs = [[0, 3], [1, 2], [4, 7], [5, 6]]
     for pair in wire_pairs:
         w1 = pair[0]
         w2 = pair[1]
-        scanning_gate(scanning_params[index : index + 6], w1, w2)
+        scanning_gate(scanning_params, w1, w2)
         index += 6
 
 
@@ -43,30 +43,22 @@ def equiv_ansatz(ansatz_params: torch.Tensor) -> None:
     combinations = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 6, 7], [2, 3, 4, 5]]
     index = 0
     for comb in combinations:
-        U4(ansatz_params[index : index + 3], comb)
+        U4(ansatz_params, comb)
         index += 3
 
     for i in range(0, 8, 2):
         qml.CZ([i, i + 1])
 
-    U4(ansatz_params[3:6], [1, 3, 5, 7])
+    U4(ansatz_params, [1, 3, 5, 7])
 
     for i in [1, 5]:
         qml.CZ([i, i + 2])
 
 
 def approx_equiv_ansatz(ansatz_params: torch.Tensor) -> None:
-    combinations = [[0, 1], [2, 3], [4, 5], [6, 7]]
-    index = 0
+    combinations = [[0, 1], [2, 3], [4, 5], [6, 7], [1, 2], [3, 4], [5, 6]]
     for comb in combinations:
-        scanning_gate(ansatz_params[index : index + 6], w1=comb[0], w2=comb[1])
-        index += 6
-
-    combinations = [[1, 2], [3, 4], [5, 6]]
-    index = 0
-    for comb in combinations:
-        scanning_gate(ansatz_params[index : index + 6], w1=comb[0], w2=comb[1])
-        index += 6
+        scanning_gate(ansatz_params, w1=comb[0], w2=comb[1])
 
     for i in range(0, 8, 2):
         qml.CZ([i, i + 1])
@@ -74,14 +66,12 @@ def approx_equiv_ansatz(ansatz_params: torch.Tensor) -> None:
     index = 0
     combinations = [[1, 3], [5, 7]]
     for comb in combinations:
-        scanning_gate(ansatz_params[index : index + 6], w1=comb[0], w2=comb[1])
+        scanning_gate(ansatz_params, w1=comb[0], w2=comb[1])
         index += 6
 
-    index = 0
-    combinations = [[1, 3], [5, 7]]
+    combinations = [[1, 7], [3, 5]]
     for comb in combinations:
-        scanning_gate(ansatz_params[index : index + 6], w1=comb[0], w2=comb[1])
-        index += 6
+        scanning_gate(ansatz_params, w1=comb[0], w2=comb[1])
 
     for i in [1, 5]:
         qml.CZ([i, i + 2])
@@ -101,21 +91,28 @@ def create_qnn(
     @qml.qnode(device, interface="torch", diff_method="backprop")
     def qnn(params: torch.Tensor, phi: torch.Tensor) -> Any:
         qml.QubitUnitary(embedding_unitary, wires=range(8))
-        scanning_params = params[0:24]
-        ansatz_params = params[24:48]
-
-        scanning_phase(scanning_params)
-        if non_equivariance == 0:
-            equiv_ansatz(ansatz_params)
-            phi = torch.tensor(0.0, requires_grad=False)
-            approx_equiv_measure(phi)
-        elif non_equivariance == 1:
-            approx_equiv_ansatz(ansatz_params)
-            phi = torch.tensor(0.0, requires_grad=False)
-            approx_equiv_measure(phi)
-        elif non_equivariance == 2:
-            approx_equiv_ansatz(ansatz_params)
-            approx_equiv_measure(phi)
+        scanning_params = params[0:6]
+        ansatz_params = params[0:3]
+        if non_equivariance in [0, 1, 2]:
+            scanning_phase(scanning_params)
+            if non_equivariance == 0:
+                equiv_ansatz(ansatz_params)
+                phi = torch.tensor(0.0, requires_grad=False)
+                approx_equiv_measure(phi)
+            elif non_equivariance == 1:
+                approx_equiv_ansatz(scanning_params)
+                phi = torch.tensor(0.0, requires_grad=False)
+                approx_equiv_measure(phi)
+            elif non_equivariance == 2:
+                approx_equiv_ansatz(scanning_params)
+                approx_equiv_measure(phi)
+        elif non_equivariance == 3:
+            for i in range(8):
+                qml.RY(params[i], wires=i)
+            for i in range(7):
+                qml.CNOT(wires=[i, i + 1])
+        else:
+            raise ValueError("non_equivariance must be one among 0,1,2,3")
         return [qml.expval(qml.Z(3)), qml.expval(qml.Z(7))]
 
     return qnn

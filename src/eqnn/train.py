@@ -1,8 +1,10 @@
 # train.py
 import logging
+import os
 from typing import Any, Literal
 
 import torch
+from hydra.core.hydra_config import HydraConfig
 from qnn import create_qnn
 from torch.nn import functional as F
 from tqdm import tqdm
@@ -47,24 +49,30 @@ def execute_batch(
 
 def train_loop(
     train_loader: torch.utils.data.DataLoader,
+    val_loader: torch.utils.data.DataLoader,
     epochs: int,
     learning_rate: float,
     device: str,
+    seed: int,
+    N: int,
     non_equivariance: Literal[0, 1, 2],
     verbose: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor, list[Any], list[Any]]:
+) -> tuple[torch.Tensor, torch.Tensor, list[Any], list[Any], list[Any], list[Any]]:
     if verbose:
-        logger.info("Starting QNN training...")
+        logger.info("Starting QNN training and validation...")
 
-    params = torch.empty(48).uniform_(-0.1, 0.1)
+    params = torch.empty(8).uniform_(-0.1, 0.1)
     params.requires_grad_()
-    phi = torch.empty(1).uniform_(-0.1, 0.1)
+    phi = torch.tensor(0.05)
+    # torch.empty(1).uniform_(-3.14, 3.14)
     phi.requires_grad_()
 
     opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.99))
 
     train_loss_history = []
     train_acc_history = []
+    val_loss_history = []
+    val_acc_history = []
 
     pbar = tqdm(range(epochs), desc="Epoch") if verbose else range(epochs)
 
@@ -80,6 +88,8 @@ def train_loop(
             )
             loss = loss_function(batch_predictions, batch_labels)
             loss.backward()
+            # print("Gradients for params:", params.grad)
+            # print("Gradients for phi:", phi.grad)
             opt.step()
 
             total_loss += loss.item() * batch_labels.size(0)
@@ -90,15 +100,63 @@ def train_loop(
             )
             total_samples += batch_labels.size(0)
 
-        epoch_loss = total_loss / total_samples
-        epoch_acc = total_correct / total_samples
-        train_loss_history.append(epoch_loss)
-        train_acc_history.append(epoch_acc)
+        epoch_train_loss = total_loss / total_samples
+        epoch_train_acc = total_correct / total_samples
+        train_loss_history.append(epoch_train_loss)
+        train_acc_history.append(epoch_train_acc)
+
+        total_loss = 0.0
+        total_correct = 0
+        total_samples = 0
+
+        for batch_images, batch_labels in val_loader:
+            opt.zero_grad()
+            batch_predictions = execute_batch(
+                batch_images, device, params, phi, non_equivariance
+            )
+            loss = loss_function(batch_predictions, batch_labels)
+            total_loss += loss.item() * batch_labels.size(0)
+            total_correct += (
+                (torch.argmax(batch_predictions.squeeze(), 1) == batch_labels)
+                .sum()
+                .item()
+            )
+            total_samples += batch_labels.size(0)
+
+        epoch_val_loss = total_loss / total_samples
+        epoch_val_acc = total_correct / total_samples
+        val_loss_history.append(epoch_val_loss)
+        val_acc_history.append(epoch_val_acc)
 
         if verbose:
             pbar.set_postfix(
-                {"train loss": f"{epoch_loss:.4f}", "train acc": f"{epoch_acc:.3f}"}
+                {
+                    "train loss": f"{epoch_train_loss:.4f}",
+                    "train acc": f"{epoch_train_acc:.3f}",
+                    "val loss": f"{epoch_val_loss:.4f}",
+                    "val acc": f"{epoch_val_acc:.3f}",
+                }
             )
 
-    logger.info("Training completed.")
-    return params, phi, train_loss_history, train_acc_history
+        max_val_acc = max(val_acc_history)
+        max_val_acc_idx = val_acc_history.index(max_val_acc) + 1
+
+    logger.info(
+        f"Training completed with maximum val acc equal to {max_val_acc}, found at epoch {max_val_acc_idx}"
+    )
+
+    sweep_dir = HydraConfig.get().sweep.dir
+    os.makedirs(sweep_dir, exist_ok=True)
+    file_path = os.path.join(sweep_dir, "test_accuracies.txt")
+    with open(file_path, "a") as f:
+        f.write(
+            f"Seed: {seed}, Sample size: {N}, Non equivariance: {non_equivariance}, Test Accuracy: {max_val_acc:.4f} (at epoch {max_val_acc_idx})\n"
+        )
+    return (
+        params,
+        phi,
+        train_loss_history,
+        train_acc_history,
+        val_loss_history,
+        val_acc_history,
+    )

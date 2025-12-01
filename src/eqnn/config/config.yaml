@@ -7,11 +7,11 @@ hydra:
     subdir: ${hydra.job.override_dirname}
 
 GENERAL:
-  seed: 22
+  seed: 42
   verbose: True
 
 DATA:
-  N: 20   # number of images in the training set
+  N: 40  # number of images in the training set
   dataset: "mnist"
 
 QNN:
@@ -19,5 +19,5 @@ QNN:
   non_equivariance: 1
 
 TRAINING:
-  epochs: 100
+  epochs: 40
   learning_rate: 0.01

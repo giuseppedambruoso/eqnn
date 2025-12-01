@@ -1,0 +1,2 @@
+equivariante: 75%
+approx equiv: 50%

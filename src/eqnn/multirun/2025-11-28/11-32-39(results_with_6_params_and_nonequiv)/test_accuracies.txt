@@ -1,0 +1,4 @@
+Seed: 22, Sample size: 40, Non equivariance: 3, Test Accuracy: 0.8500
+Seed: 22, Sample size: 40, Non equivariance: 0, Test Accuracy: 0.5000
+Seed: 22, Sample size: 40, Non equivariance: 1, Test Accuracy: 0.5500
+Seed: 22, Sample size: 40, Non equivariance: 2, Test Accuracy: 0.5500
