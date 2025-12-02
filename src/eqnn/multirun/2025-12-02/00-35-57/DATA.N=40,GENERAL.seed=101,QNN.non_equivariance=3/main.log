@@ -1,0 +1,7 @@
+[2025-12-02 02:27:24,506][__main__][INFO] - QNN training pipeline initialized
+[2025-12-02 02:27:24,506][__main__][INFO] - Non-equivariance: 3, Sample size: 40, Epochs: 40, Learning rate: 0.01
+[2025-12-02 02:27:24,506][data_loading][INFO] - Loading and embedding MNIST data...
+[2025-12-02 02:27:24,567][data_loading][INFO] - Data loading complete.
+[2025-12-02 02:27:24,567][train][INFO] - Starting QNN training and validation...
+[2025-12-02 02:32:28,166][train][INFO] - Training completed with maximum val acc equal to 0.7, found at epoch 16
+[2025-12-02 02:32:28,590][plot][INFO] - Training and validation plots saved at /home/giuseppe/Scrivania/phd/projects/eqnn/code/src/eqnn/multirun/2025-12-02/00-35-57/DATA.N=40,GENERAL.seed=101,QNN.non_equivariance=3/plot.png

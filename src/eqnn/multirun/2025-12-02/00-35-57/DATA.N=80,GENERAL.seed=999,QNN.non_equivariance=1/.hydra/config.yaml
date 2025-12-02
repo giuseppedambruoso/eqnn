@@ -1,0 +1,12 @@
+GENERAL:
+  seed: 999
+  verbose: true
+DATA:
+  'N': 80
+  dataset: mnist
+QNN:
+  device: default.qubit
+  non_equivariance: 1
+TRAINING:
+  epochs: 40
+  learning_rate: 0.01
