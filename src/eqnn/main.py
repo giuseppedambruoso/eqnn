@@ -23,6 +23,7 @@ def main(cfg: DictConfig) -> None:
 
     device = cfg.QNN.device
     non_equivariance = cfg.QNN.non_equivariance
+    p_err = cfg.QNN.p_err
     epochs = cfg.TRAINING.epochs
     learning_rate = cfg.TRAINING.learning_rate
     N = cfg.DATA.N
@@ -58,6 +59,7 @@ def main(cfg: DictConfig) -> None:
         seed=SEED,
         N=N,
         non_equivariance=non_equivariance,
+        p_err=p_err,
         verbose=verbose,
     )
 

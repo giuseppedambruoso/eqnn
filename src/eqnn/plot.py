@@ -2,6 +2,7 @@ import logging
 import os
 
 import matplotlib.pyplot as plt
+import pandas as pd
 from hydra.core.hydra_config import HydraConfig
 
 logger = logging.getLogger(__name__)
@@ -14,8 +15,22 @@ def plot_results(
     val_acc: list[float],
 ) -> None:
     job_dir = HydraConfig.get().runtime.output_dir
-    full_save_path = os.path.join(job_dir, "plot.png")
+    plot_save_path = os.path.join(job_dir, "plot.png")
+    csv_save_path = os.path.join(job_dir, "metrics.csv")
 
+    # Save metrics to CSV
+    metrics_df = pd.DataFrame(
+        {
+            "train_loss": train_loss,
+            "val_loss": val_loss,
+            "train_acc": train_acc,
+            "val_acc": val_acc,
+        }
+    )
+    metrics_df.to_csv(csv_save_path, index_label="epoch")
+    logger.info(f"Metrics saved at {csv_save_path}")
+
+    # Plotting
     _, axes = plt.subplots(1, 2, figsize=(14, 5))
 
     # Plot Loss
@@ -37,7 +52,6 @@ def plot_results(
     axes[1].legend()
 
     plt.tight_layout()
-    plt.savefig(full_save_path, dpi=300)
+    plt.savefig(plot_save_path, dpi=300)
     plt.close()
-
-    logger.info(f"Training and validation plots saved at {full_save_path}")
+    logger.info(f"Training and validation plots saved at {plot_save_path}")

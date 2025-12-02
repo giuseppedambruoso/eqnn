@@ -108,6 +108,7 @@ wheel = "0.45.1"
 wrapt = "2.0.1"
 pytest = "^9.0.1"
 pytest-cov = "^7.0.0"
+pandas = "^2.3.3"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.8.0"

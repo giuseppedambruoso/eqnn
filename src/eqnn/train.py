@@ -27,8 +27,9 @@ def create_and_execute_qnn(
     params: torch.Tensor,
     phi: torch.Tensor,
     non_equivariance: Literal[0, 1, 2],
+    p_err: float,
 ) -> torch.Tensor:
-    qnn = create_qnn(image, device, non_equivariance)
+    qnn = create_qnn(image, device, non_equivariance, p_err)
     output = qnn(params, phi)
     return torch.stack(output)
 
@@ -39,9 +40,10 @@ def execute_batch(
     params: torch.Tensor,
     phi: torch.Tensor,
     non_equivariance: Literal[0, 1, 2],
+    p_err: float,
 ) -> torch.Tensor:
     batch_predictions = [
-        create_and_execute_qnn(image, device, params, phi, non_equivariance)
+        create_and_execute_qnn(image, device, params, phi, non_equivariance, p_err)
         for image in batch_images
     ]
     return torch.stack(batch_predictions)
@@ -56,6 +58,7 @@ def train_loop(
     seed: int,
     N: int,
     non_equivariance: Literal[0, 1, 2],
+    p_err: float,
     verbose: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, list[Any], list[Any], list[Any], list[Any]]:
     if verbose:
@@ -84,7 +87,7 @@ def train_loop(
         for batch_images, batch_labels in train_loader:
             opt.zero_grad()
             batch_predictions = execute_batch(
-                batch_images, device, params, phi, non_equivariance
+                batch_images, device, params, phi, non_equivariance, p_err
             )
             loss = loss_function(batch_predictions, batch_labels)
             loss.backward()
@@ -112,7 +115,7 @@ def train_loop(
         for batch_images, batch_labels in val_loader:
             opt.zero_grad()
             batch_predictions = execute_batch(
-                batch_images, device, params, phi, non_equivariance
+                batch_images, device, params, phi, non_equivariance, p_err
             )
             loss = loss_function(batch_predictions, batch_labels)
             total_loss += loss.item() * batch_labels.size(0)
@@ -150,7 +153,7 @@ def train_loop(
     file_path = os.path.join(sweep_dir, "test_accuracies.txt")
     with open(file_path, "a") as f:
         f.write(
-            f"Seed: {seed}, Sample size: {N}, Non equivariance: {non_equivariance}, Test Accuracy: {max_val_acc:.4f} (at epoch {max_val_acc_idx})\n"
+            f"Seed: {seed}, Sample size: {N}, Non equivariance: {non_equivariance}, Noise: {p_err}, Test Accuracy: {max_val_acc:.4f} (at epoch {max_val_acc_idx})\n"
         )
     return (
         params,

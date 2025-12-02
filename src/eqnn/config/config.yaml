@@ -15,8 +15,9 @@ DATA:
   dataset: "mnist"
 
 QNN:
-  device: "default.qubit"
+  device: "default.mixed"
   non_equivariance: 1
+  p_err: 0.02
 
 TRAINING:
   epochs: 40
