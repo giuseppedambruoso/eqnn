@@ -33,9 +33,6 @@ def main(cfg: DictConfig) -> None:
 
     if verbose:
         logger.info("QNN training pipeline initialized")
-        logger.info(
-            f"Non-equivariance: {non_equivariance}, Sample size: {N}, Epochs: {epochs}, Learning rate: {learning_rate}"
-        )
 
     # DATA LOADING
     if dataset == "mnist":
