@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 def loss_function(predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    target_vectors = torch.zeros(targets.shape[0], 2, dtype=predictions.dtype)
+    target_vectors = torch.zeros(
+        targets.shape[0], 2, dtype=predictions.dtype, device=predictions.device
+    )
     target_vectors[targets == 0, 0] = 1.0
     target_vectors[targets == 1, 1] = 1.0
     predictions = predictions.squeeze()
@@ -37,11 +39,15 @@ def create_and_execute_qnn(
 def execute_batch(
     batch_images: torch.Tensor,
     device: str,
+    dev: torch.device,
     params: torch.Tensor,
     phi: torch.Tensor,
     non_equivariance: Literal[0, 1, 2],
     p_err: float,
 ) -> torch.Tensor:
+
+    batch_images = batch_images.to(dev)
+
     batch_predictions = [
         create_and_execute_qnn(image, device, params, phi, non_equivariance, p_err)
         for image in batch_images
@@ -55,19 +61,22 @@ def train_loop(
     epochs: int,
     learning_rate: float,
     device: str,
+    dev: str,
     seed: int,
     N: int,
     non_equivariance: Literal[0, 1, 2],
     p_err: float,
     verbose: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, list[Any], list[Any], list[Any], list[Any]]:
+
+    dev = torch.device(dev)
     if verbose:
+        logger.info(f"Using device: {dev}")
         logger.info("Starting QNN training and validation...")
 
-    params = torch.empty(8).uniform_(-0.1, 0.1)
+    params = torch.empty(8, device=dev).uniform_(-0.1, 0.1)
     params.requires_grad_()
-    phi = torch.tensor(0.05)
-    # torch.empty(1).uniform_(-3.14, 3.14)
+    phi = torch.empty(1, device=dev).uniform_(-0.1, 0.1)
     phi.requires_grad_()
 
     opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.99))
@@ -85,14 +94,13 @@ def train_loop(
         total_samples = 0
 
         for batch_images, batch_labels in train_loader:
+            batch_labels = batch_labels.to(dev)
             opt.zero_grad()
             batch_predictions = execute_batch(
-                batch_images, device, params, phi, non_equivariance, p_err
+                batch_images, device, dev, params, phi, non_equivariance, p_err
             )
             loss = loss_function(batch_predictions, batch_labels)
             loss.backward()
-            # print("Gradients for params:", params.grad)
-            # print("Gradients for phi:", phi.grad)
             opt.step()
 
             total_loss += loss.item() * batch_labels.size(0)
@@ -113,9 +121,10 @@ def train_loop(
         total_samples = 0
 
         for batch_images, batch_labels in val_loader:
+            batch_labels = batch_labels.to(dev)
             opt.zero_grad()
             batch_predictions = execute_batch(
-                batch_images, device, params, phi, non_equivariance, p_err
+                batch_images, device, dev, params, phi, non_equivariance, p_err
             )
             loss = loss_function(batch_predictions, batch_labels)
             total_loss += loss.item() * batch_labels.size(0)
