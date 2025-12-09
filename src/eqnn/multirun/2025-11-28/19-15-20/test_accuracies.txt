@@ -1,3 +1,0 @@
-Seed: 42, Sample size: 40, Non equivariance: 3, Test Accuracy: 0.8000
-Seed: 42, Sample size: 40, Non equivariance: 0, Test Accuracy: 0.5000
-Seed: 42, Sample size: 40, Non equivariance: 1, Test Accuracy: 0.5000

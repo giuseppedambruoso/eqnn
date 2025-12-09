@@ -11,21 +11,25 @@ logger = logging.getLogger(__name__)
 def scanning_gate(p: torch.Tensor, w1: int, w2: int, p_err: float) -> None:
     qml.RX(p[0], wires=w1)
     qml.RX(p[1], wires=w2)
-    qml.DepolarizingChannel(p_err, w1)
-    qml.DepolarizingChannel(p_err, w2)
+    if p_err!=0:
+        qml.DepolarizingChannel(p_err, w1)
+        qml.DepolarizingChannel(p_err, w2)
 
     qml.IsingYY(p[2], wires=[w1, w2])
-    qml.DepolarizingChannel(p_err, w1)
-    qml.DepolarizingChannel(p_err, w2)
+    if p_err !=0:
+        qml.DepolarizingChannel(p_err, w1)
+        qml.DepolarizingChannel(p_err, w2)
 
     qml.RX(p[3], wires=w1)
     qml.RX(p[4], wires=w2)
-    qml.DepolarizingChannel(p_err, w1)
-    qml.DepolarizingChannel(p_err, w2)
+    if p_err != 0:
+        qml.DepolarizingChannel(p_err, w1)
+        qml.DepolarizingChannel(p_err, w2)
 
     qml.IsingYY(p[5], wires=[w1, w2])
-    qml.DepolarizingChannel(p_err, w1)
-    qml.DepolarizingChannel(p_err, w2)
+    if p_err != 0:
+        qml.DepolarizingChannel(p_err, w1)
+        qml.DepolarizingChannel(p_err, w2)
 
 
 def scanning_phase(scanning_params: torch.Tensor, p_err: float) -> None:
@@ -47,16 +51,18 @@ def U4(params: torch.Tensor, wires: list[int], p_err: float) -> None:
     qml.RX(params[1], wires=wires[1])
     qml.RX(params[0], wires=wires[2])
     qml.RX(params[1], wires=wires[3])
-    qml.DepolarizingChannel(p_err, wires[0])
-    qml.DepolarizingChannel(p_err, wires[1])
-    qml.DepolarizingChannel(p_err, wires[2])
-    qml.DepolarizingChannel(p_err, wires[3])
+    if p_err != 0: 
+        qml.DepolarizingChannel(p_err, wires[0])
+        qml.DepolarizingChannel(p_err, wires[1])
+        qml.DepolarizingChannel(p_err, wires[2])
+        qml.DepolarizingChannel(p_err, wires[3])
 
     qml.PauliRot(params[2], "YYYY", wires=wires)
-    qml.DepolarizingChannel(p_err, wires[0])
-    qml.DepolarizingChannel(p_err, wires[1])
-    qml.DepolarizingChannel(p_err, wires[2])
-    qml.DepolarizingChannel(p_err, wires[3])
+    if p_err != 0:
+        qml.DepolarizingChannel(p_err, wires[0])
+        qml.DepolarizingChannel(p_err, wires[1])
+        qml.DepolarizingChannel(p_err, wires[2])
+        qml.DepolarizingChannel(p_err, wires[3])
 
 
 def equiv_ansatz(ansatz_params: torch.Tensor, p_err: float) -> None:
@@ -100,9 +106,11 @@ def approx_equiv_ansatz(ansatz_params: torch.Tensor, p_err: float) -> None:
 def approx_equiv_measure(phi: torch.Tensor, p_err: float) -> None:
     for i in [3, 7]:
         qml.RZ(phi, wires=i)
-        qml.DepolarizingChannel(p_err, wires=i)
+        if p_err != 0:  
+            qml.DepolarizingChannel(p_err, wires=i)
         qml.H(wires=i)
-        qml.DepolarizingChannel(p_err, wires=i)
+        if p_err != 0:
+         qml.DepolarizingChannel(p_err, wires=i)
 
 
 def create_qnn(
@@ -134,11 +142,13 @@ def create_qnn(
         elif non_equivariance == 3:
             for i in range(8):
                 qml.RY(params[i], wires=i)
-                qml.DepolarizingChannel(p_err, wires=i)
+                if p_err != 0:
+                    qml.DepolarizingChannel(p_err, wires=i)
             for i in range(7):
                 qml.CNOT(wires=[i, i + 1])
-                qml.DepolarizingChannel(p_err, wires=i)
-                qml.DepolarizingChannel(p_err, wires=i + 1)
+                if p_err != 0:
+                    qml.DepolarizingChannel(p_err, wires=i)
+                    qml.DepolarizingChannel(p_err, wires=i + 1)
         else:
             raise ValueError("non_equivariance must be one among 0,1,2,3")
         return [qml.expval(qml.Z(3)), qml.expval(qml.Z(7))]

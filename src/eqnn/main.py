@@ -21,7 +21,7 @@ def main(cfg: DictConfig) -> None:
     SEED = cfg.GENERAL.seed
     torch.manual_seed(SEED)
 
-    device = cfg.QNN.device
+    device = cfg.QNN.device if cfg.QNN.p_err!=0 else "default.qubit"
     non_equivariance = cfg.QNN.non_equivariance
     p_err = cfg.QNN.p_err
     epochs = cfg.TRAINING.epochs
