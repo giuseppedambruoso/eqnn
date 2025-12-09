@@ -30,7 +30,8 @@ def main(cfg: DictConfig) -> None:
     dataset = cfg.DATA.dataset
     batch_size = int(N / 10)
     verbose = cfg.GENERAL.verbose
-    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    dev = torch.device("cpu")
 
     if verbose:
         logger.info("QNN training pipeline initialized")
