@@ -1,0 +1,4 @@
+Seed: 42, Sample size: 20, Non equivariance: 0, Noise: 0.02, Test Accuracy: 0.8500 (at epoch 16)
+Seed: 42, Sample size: 20, Non equivariance: 1, Noise: 0.02, Test Accuracy: 0.9500 (at epoch 22)
+Seed: 42, Sample size: 20, Non equivariance: 2, Noise: 0.02, Test Accuracy: 0.9500 (at epoch 22)
+Seed: 42, Sample size: 20, Non equivariance: 3, Noise: 0.02, Test Accuracy: 0.8500 (at epoch 35)
