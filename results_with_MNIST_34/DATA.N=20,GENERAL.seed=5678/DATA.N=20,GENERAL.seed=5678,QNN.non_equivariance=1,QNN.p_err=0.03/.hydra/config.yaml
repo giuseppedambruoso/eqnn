@@ -1,0 +1,13 @@
+GENERAL:
+  seed: 5678
+  verbose: true
+DATA:
+  'N': 20
+  dataset: mnist
+QNN:
+  device: default.mixed
+  non_equivariance: 1
+  p_err: 0.03
+TRAINING:
+  epochs: 40
+  learning_rate: 0.01
