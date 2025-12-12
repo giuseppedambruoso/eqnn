@@ -1,0 +1,8 @@
+[2025-12-12 10:56:24,174][__main__][INFO] - QNN training pipeline initialized
+[2025-12-12 10:56:24,174][data_loading][INFO] - Loading and embedding MNIST data...
+[2025-12-12 10:56:24,192][data_loading][INFO] - Data loading complete.
+[2025-12-12 10:56:24,192][train][INFO] - Using device: cpu
+[2025-12-12 10:56:24,193][train][INFO] - Starting QNN training and validation...
+[2025-12-12 11:09:28,591][train][INFO] - Training completed with maximum val acc equal to 0.85, found at epoch 11
+[2025-12-12 11:09:28,650][plot][INFO] - Metrics saved at /home/giuseppe/Scrivania/phd/projects/eqnn/code/src/eqnn/multirun/2025-12-12/10-40-04/DATA.N=20,GENERAL.seed=1234,QNN.non_equivariance=2,QNN.p_err=0.02/metrics.csv
+[2025-12-12 11:09:29,075][plot][INFO] - Training and validation plots saved at /home/giuseppe/Scrivania/phd/projects/eqnn/code/src/eqnn/multirun/2025-12-12/10-40-04/DATA.N=20,GENERAL.seed=1234,QNN.non_equivariance=2,QNN.p_err=0.02/plot.png

@@ -1,8 +1,0 @@
-Seed: 1234, Sample size: 20, Non equivariance: 1, Noise: 0, Test Accuracy: 0.9500 (at epoch 10)
-Seed: 1234, Sample size: 20, Non equivariance: 1, Noise: 0.01, Test Accuracy: 0.9000 (at epoch 12)
-Seed: 1234, Sample size: 20, Non equivariance: 1, Noise: 0.02, Test Accuracy: 0.8500 (at epoch 11)
-Seed: 1234, Sample size: 20, Non equivariance: 1, Noise: 0.03, Test Accuracy: 0.8500 (at epoch 12)
-Seed: 1234, Sample size: 20, Non equivariance: 1, Noise: 0.04, Test Accuracy: 0.7500 (at epoch 12)
-Seed: 1234, Sample size: 20, Non equivariance: 1, Noise: 0.05, Test Accuracy: 0.7000 (at epoch 19)
-Seed: 1234, Sample size: 20, Non equivariance: 1, Noise: 0.06, Test Accuracy: 0.7000 (at epoch 19)
-Seed: 1234, Sample size: 20, Non equivariance: 1, Noise: 0.07, Test Accuracy: 0.6500 (at epoch 19)
