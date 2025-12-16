@@ -196,8 +196,8 @@ def train_loop(
 
 
 def train_loop_in(
-    image: torch.Tensor,
-    label: torch.Tensor,
+    images: torch.Tensor,
+    labels: torch.Tensor,
     learning_rate: float,
     device: str,
     dev: str,
@@ -221,10 +221,10 @@ def train_loop_in(
     opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.99))
 
     opt.zero_grad()
-    prediction = create_and_execute_qnn(
-        image, device, params, phi, non_equivariance, p_err
+    predictions = execute_batch(
+        images, device, dev, params, phi, non_equivariance, p_err
     )
-    loss = loss_function_single(prediction, label)
+    loss = loss_function(predictions, labels)
     loss.backward()
 
     params_grad = params.grad

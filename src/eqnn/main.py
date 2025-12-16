@@ -51,16 +51,16 @@ def main(cfg: DictConfig) -> None:
 
     if initialization_analysis:
         torch.manual_seed(SEED)
-        image, label = next(iter(train_loader))
-        image = image[0].unsqueeze(0).to(dev)
-        label = label[0].unsqueeze(0).to(dev)
+        images, labels = next(iter(train_loader))
+        images = images.to(dev)
+        labels = labels.to(dev)
         grad_norms = []
         for seed in range(1, 10000):
             print(f"Running training with seed {seed}")
             torch.manual_seed(seed)
             grad_norm = train_loop_in(
-                image=image,
-                label=label,
+                images=images,
+                labels=labels,
                 device=device,
                 dev=dev,
                 learning_rate=learning_rate,
