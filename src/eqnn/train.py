@@ -111,8 +111,8 @@ def train_loop(
             )
             total_samples += batch_labels.size(0)
 
-        epoch_train_loss = total_loss / total_samples
-        epoch_train_acc = total_correct / total_samples
+        epoch_train_loss = total_loss / (total_samples + 1e-8)
+        epoch_train_acc = total_correct / (total_samples + 1e-8)
         train_loss_history.append(epoch_train_loss)
         train_acc_history.append(epoch_train_acc)
 
@@ -135,8 +135,8 @@ def train_loop(
             )
             total_samples += batch_labels.size(0)
 
-        epoch_val_loss = total_loss / total_samples
-        epoch_val_acc = total_correct / total_samples
+        epoch_val_loss = total_loss / (total_samples + 1e-8)
+        epoch_val_acc = total_correct / (total_samples + 1e-8)
         val_loss_history.append(epoch_val_loss)
         val_acc_history.append(epoch_val_acc)
 
@@ -164,6 +164,7 @@ def train_loop(
         f.write(
             f"Seed: {seed}, Sample size: {N}, Non equivariance: {non_equivariance}, Noise: {p_err}, Test Accuracy: {max_val_acc:.4f} (at epoch {max_val_acc_idx})\n"
         )
+
     return (
         params,
         phi,
@@ -172,3 +173,49 @@ def train_loop(
         val_loss_history,
         val_acc_history,
     )
+
+
+def train_loop_in(
+    train_loader: torch.utils.data.DataLoader,
+    epochs: int,
+    learning_rate: float,
+    device: str,
+    dev: str,
+    seed: int,
+    non_equivariance: Literal[0, 1, 2],
+    p_err: float,
+    verbose: bool = False,
+) -> tuple[
+    torch.Tensor, torch.Tensor, list[Any], list[Any], list[Any], list[Any], float
+]:
+
+    dev = torch.device(dev)
+    if verbose:
+        logger.info(f"Seed: {seed}")
+
+    params = torch.empty(8, device=dev).uniform_(-0.1, 0.1)
+    params.requires_grad_()
+    phi = torch.empty(1, device=dev).uniform_(-0.1, 0.1)
+    phi.requires_grad_()
+
+    opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.99))
+
+    for epoch in range(epochs):
+
+        for batch_images, batch_labels in train_loader:
+            batch_labels = batch_labels.to(dev)
+            opt.zero_grad()
+            batch_predictions = execute_batch(
+                batch_images, device, dev, params, phi, non_equivariance, p_err
+            )
+            loss = loss_function(batch_predictions, batch_labels)
+            loss.backward()
+
+            break
+        break
+
+    params_grad = params.grad
+    phi_grad = phi.grad
+    grad_norm = torch.sqrt(torch.dot(params_grad, params_grad)).item()
+
+    return grad_norm

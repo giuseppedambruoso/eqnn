@@ -169,7 +169,6 @@ Seed: 5678, Sample size: 20, Non equivariance: 2, Noise: 0.1, Test Accuracy: 0.5
 Seed: 999, Sample size: 20, Non equivariance: 2, Noise: 0.1, Test Accuracy: 0.7000 (at epoch 3)
 
 
-
 Seed: 42, Sample size: 20, Non equivariance: 3, Noise: 0, Test Accuracy: 0.8000 (at epoch 40)
 Seed: 101, Sample size: 20, Non equivariance: 3, Noise: 0, Test Accuracy: 0.6500 (at epoch 30)
 Seed: 1234, Sample size: 20, Non equivariance: 3, Noise: 0, Test Accuracy: 0.5500 (at epoch 32)

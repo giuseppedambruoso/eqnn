@@ -8,16 +8,18 @@ hydra:
 
 GENERAL:
   seed: 42
-  verbose: True
+  dev: "cuda"
+  verbose: False
+  initialization_analysis: True
 
 DATA:
-  N: 40  # number of images in the training set
+  N: 20  # number of images in the training set
   dataset: "mnist"
 
 QNN:
-  device: "default.mixed"
-  non_equivariance: 1
-  p_err: 0.02
+  device: "default.qubit"
+  non_equivariance: 0
+  p_err: 0
 
 TRAINING:
   epochs: 40
