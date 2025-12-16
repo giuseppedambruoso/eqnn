@@ -23,6 +23,26 @@ def loss_function(predictions: torch.Tensor, targets: torch.Tensor) -> torch.Ten
     return loss
 
 
+def loss_function_single(prediction: torch.Tensor, target: int) -> torch.Tensor:
+    """
+    Computes binary cross-entropy loss for a single prediction vs single label.
+
+    Args:
+        prediction: Tensor of shape (2,) - raw logits for the two classes
+        target: int - 0 or 1
+    """
+    # Create one-hot vector for target
+    target_vector = torch.zeros(2, dtype=prediction.dtype, device=prediction.device)
+    target_vector[target] = 1.0
+
+    # Ensure prediction has correct shape
+    prediction = prediction.squeeze()
+
+    # Compute loss
+    loss = F.binary_cross_entropy_with_logits(prediction, target_vector)
+    return loss
+
+
 def create_and_execute_qnn(
     image: torch.Tensor,
     device: str,
@@ -176,8 +196,8 @@ def train_loop(
 
 
 def train_loop_in(
-    train_loader: torch.utils.data.DataLoader,
-    epochs: int,
+    image: torch.Tensor,
+    label: torch.Tensor,
     learning_rate: float,
     device: str,
     dev: str,
@@ -200,22 +220,14 @@ def train_loop_in(
 
     opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.99))
 
-    for epoch in range(epochs):
-
-        for batch_images, batch_labels in train_loader:
-            batch_labels = batch_labels.to(dev)
-            opt.zero_grad()
-            batch_predictions = execute_batch(
-                batch_images, device, dev, params, phi, non_equivariance, p_err
-            )
-            loss = loss_function(batch_predictions, batch_labels)
-            loss.backward()
-
-            break
-        break
+    opt.zero_grad()
+    prediction = create_and_execute_qnn(
+        image, device, params, phi, non_equivariance, p_err
+    )
+    loss = loss_function_single(prediction, label)
+    loss.backward()
 
     params_grad = params.grad
-    phi_grad = phi.grad
     grad_norm = torch.sqrt(torch.dot(params_grad, params_grad)).item()
 
     return grad_norm

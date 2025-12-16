@@ -50,15 +50,19 @@ def main(cfg: DictConfig) -> None:
         raise ValueError("dataset must be either 'mnist' or 'eurosat'")
 
     if initialization_analysis:
+        torch.manual_seed(SEED)
+        image, label = next(iter(train_loader))
+        image = image[0].unsqueeze(0).to(dev)
+        label = label[0].unsqueeze(0).to(dev)
         grad_norms = []
-        for seed in range(1, 10):
+        for seed in range(1, 10000):
             print(f"Running training with seed {seed}")
             torch.manual_seed(seed)
             grad_norm = train_loop_in(
+                image=image,
+                label=label,
                 device=device,
                 dev=dev,
-                train_loader=train_loader,
-                epochs=epochs,
                 learning_rate=learning_rate,
                 seed=SEED,
                 non_equivariance=non_equivariance,
