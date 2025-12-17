@@ -11,12 +11,12 @@ logger = logging.getLogger(__name__)
 def scanning_gate(p: torch.Tensor, w1: int, w2: int, p_err: float) -> None:
     qml.RX(p[0], wires=w1)
     qml.RX(p[1], wires=w2)
-    if p_err!=0:
+    if p_err != 0:
         qml.DepolarizingChannel(p_err, w1)
         qml.DepolarizingChannel(p_err, w2)
 
     qml.IsingYY(p[2], wires=[w1, w2])
-    if p_err !=0:
+    if p_err != 0:
         qml.DepolarizingChannel(p_err, w1)
         qml.DepolarizingChannel(p_err, w2)
 
@@ -51,7 +51,7 @@ def U4(params: torch.Tensor, wires: list[int], p_err: float) -> None:
     qml.RX(params[1], wires=wires[1])
     qml.RX(params[0], wires=wires[2])
     qml.RX(params[1], wires=wires[3])
-    if p_err != 0: 
+    if p_err != 0:
         qml.DepolarizingChannel(p_err, wires[0])
         qml.DepolarizingChannel(p_err, wires[1])
         qml.DepolarizingChannel(p_err, wires[2])
@@ -103,14 +103,41 @@ def approx_equiv_ansatz(ansatz_params: torch.Tensor, p_err: float) -> None:
         qml.CZ([i, i + 2])
 
 
+def V_x() -> None:
+    for i in range(4):
+        qml.X(wires=i)
+
+
+def V_y() -> None:
+    for i in range(4, 8):
+        qml.X(wires=i)
+
+
+def V_r() -> None:
+    V_x()
+    for i in range(4):
+        qml.SWAP(wires=[i, i + 4])
+
+
+def equivariantor(x: int) -> None:
+    if x == 1:
+        V_x()
+    elif x == 2:
+        V_y()
+    elif x == 3:
+        V_r()
+    else:
+        raise ValueError("x must be one among 1,2,3")
+
+
 def approx_equiv_measure(phi: torch.Tensor, p_err: float) -> None:
     for i in [3, 7]:
         qml.RZ(phi, wires=i)
-        if p_err != 0:  
+        if p_err != 0:
             qml.DepolarizingChannel(p_err, wires=i)
         qml.H(wires=i)
         if p_err != 0:
-         qml.DepolarizingChannel(p_err, wires=i)
+            qml.DepolarizingChannel(p_err, wires=i)
 
 
 def create_qnn(
@@ -119,7 +146,8 @@ def create_qnn(
     non_equivariance: Literal[0, 1, 2],
     p_err: float,
 ) -> qml.QNode:
-    device = qml.device(device, wires=8)
+    device = qml.device(device, wires=8, shots=None)
+    dic = {1: V_x, 2: V_y, 3: V_r}
 
     @qml.qnode(device, interface="torch", diff_method="backprop")
     def qnn(params: torch.Tensor, phi: torch.Tensor) -> Any:
@@ -149,8 +177,16 @@ def create_qnn(
                 if p_err != 0:
                     qml.DepolarizingChannel(p_err, wires=i)
                     qml.DepolarizingChannel(p_err, wires=i + 1)
+        elif non_equivariance == 4:
+            x = torch.randint(1, 4, (1,)).item()
+            equivariantor(x)
+            for i in range(8):
+                qml.RY(params[i], wires=i)
+            for i in range(7):
+                qml.CNOT(wires=[i, i + 1])
+            equivariantor(x)
         else:
-            raise ValueError("non_equivariance must be one among 0,1,2,3")
+            raise ValueError("non_equivariance must be one among 0,1,2,3,4")
         return [qml.expval(qml.Z(3)), qml.expval(qml.Z(7))]
 
     return qnn

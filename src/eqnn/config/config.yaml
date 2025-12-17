@@ -9,8 +9,8 @@ hydra:
 GENERAL:
   seed: 42
   dev: "cuda"
-  verbose: False
-  initialization_analysis: True
+  verbose: True
+  initialization_analysis: False
 
 DATA:
   N: 20  # number of images in the training set
@@ -18,7 +18,7 @@ DATA:
 
 QNN:
   device: "default.qubit"
-  non_equivariance: 0
+  non_equivariance: 4
   p_err: 0
 
 TRAINING:
