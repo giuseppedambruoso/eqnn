@@ -29,7 +29,7 @@ def main(cfg: DictConfig) -> None:
     learning_rate = cfg.TRAINING.learning_rate
     N = cfg.DATA.N
     dataset = cfg.DATA.dataset
-    batch_size = int(N / 10)
+    batch_size = N
     verbose = cfg.GENERAL.verbose
     dev = torch.device(cfg.GENERAL.dev)
     initialization_analysis = cfg.GENERAL.initialization_analysis
@@ -55,8 +55,8 @@ def main(cfg: DictConfig) -> None:
         images = images.to(dev)
         labels = labels.to(dev)
         grad_norms = []
-        for seed in range(1, 10000):
-            print(f"Running training with seed {seed}")
+        for seed in range(1, 1000):
+            logger.info(f"Running training with seed {seed}")
             torch.manual_seed(seed)
             grad_norm = train_loop_in(
                 images=images,
@@ -64,7 +64,7 @@ def main(cfg: DictConfig) -> None:
                 device=device,
                 dev=dev,
                 learning_rate=learning_rate,
-                seed=SEED,
+                seed=seed,
                 non_equivariance=non_equivariance,
                 p_err=p_err,
                 verbose=verbose,

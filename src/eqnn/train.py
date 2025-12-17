@@ -210,8 +210,6 @@ def train_loop_in(
 ]:
 
     dev = torch.device(dev)
-    if verbose:
-        logger.info(f"Seed: {seed}")
 
     params = torch.empty(8, device=dev).uniform_(-0.1, 0.1)
     params.requires_grad_()
