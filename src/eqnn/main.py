@@ -73,6 +73,7 @@ def main(cfg: DictConfig) -> None:
 
         plt.hist(grad_norms, bins=50)
         plt.show()
+        plt.savefig(f"histo_{non_equivariance}")
     else:
         # TRAINING
         training_output = train_loop(
