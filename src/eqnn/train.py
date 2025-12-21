@@ -1,6 +1,7 @@
 # train.py
 import logging
 import os
+import time
 from typing import Any, Literal
 
 import torch
@@ -196,22 +197,16 @@ def train_loop(
 
 
 def train_loop_in(
-    images: torch.Tensor,
-    labels: torch.Tensor,
+    image: torch.Tensor,
+    label: torch.Tensor,
     learning_rate: float,
     device: str,
     dev: str,
-    seed: int,
     non_equivariance: Literal[0, 1, 2],
     p_err: float,
-    verbose: bool = False,
-) -> tuple[
-    torch.Tensor, torch.Tensor, list[Any], list[Any], list[Any], list[Any], float
-]:
-
+) -> float:
+    start_time = time.time()
     dev = torch.device(dev)
-    if verbose:
-        logger.info(f"Seed: {seed}")
 
     params = torch.empty(8, device=dev).uniform_(-0.1, 0.1)
     params.requires_grad_()
@@ -221,13 +216,18 @@ def train_loop_in(
     opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.99))
 
     opt.zero_grad()
-    predictions = execute_batch(
-        images, device, dev, params, phi, non_equivariance, p_err
+    predictions = create_and_execute_qnn(
+        image, device, params, phi, non_equivariance, p_err
     )
-    loss = loss_function(predictions, labels)
+    loss = loss_function_single(predictions, label)
     loss.backward()
 
     params_grad = params.grad
     grad_norm = torch.sqrt(torch.dot(params_grad, params_grad)).item()
+    end_time = time.time()
+    duration = end_time - start_time
+    logger.info(
+        f"Gradient norm after single training step: {grad_norm:.6f}, time: {duration:.6f} seconds"
+    )
 
     return grad_norm

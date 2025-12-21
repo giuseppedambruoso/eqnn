@@ -22,7 +22,7 @@ def main(cfg: DictConfig) -> None:
     SEED = cfg.GENERAL.seed
     torch.manual_seed(SEED)
 
-    device = cfg.QNN.device if cfg.QNN.p_err != 0 else "default.qubit"
+    device = cfg.QNN.device
     non_equivariance = cfg.QNN.non_equivariance
     p_err = cfg.QNN.p_err
     epochs = cfg.TRAINING.epochs
@@ -52,22 +52,23 @@ def main(cfg: DictConfig) -> None:
     if initialization_analysis:
         torch.manual_seed(SEED)
         images, labels = next(iter(train_loader))
-        images = images.to(dev)
-        labels = labels.to(dev)
+        # take only the first sample
+        image = images[0].unsqueeze(0)  # keep batch dim if model expects it
+        label = labels[0].unsqueeze(0)
+        image = image.to(dev)
+        label = label.to(dev)
         grad_norms = []
         for seed in range(1, 10000):
-            print(f"Running training with seed {seed}")
+            logger.info(f"Running training with seed {seed}")
             torch.manual_seed(seed)
             grad_norm = train_loop_in(
-                images=images,
-                labels=labels,
+                image=image,
+                label=labels,
                 device=device,
                 dev=dev,
                 learning_rate=learning_rate,
-                seed=SEED,
                 non_equivariance=non_equivariance,
                 p_err=p_err,
-                verbose=verbose,
             )
             grad_norms.append(grad_norm)
 
