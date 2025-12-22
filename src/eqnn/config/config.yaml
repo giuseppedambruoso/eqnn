@@ -10,15 +10,15 @@ GENERAL:
   seed: 42
   dev: "cpu"
   verbose: True
-  initialization_analysis: True
+  initialization_analysis: False
 
 DATA:
-  N: 160  # number of images in the training set
+  N: 20  # number of images in the training set
   dataset: "mnist"
 
 QNN:
-  device: "default.qubit"
-  non_equivariance: 0
+  device: "default.mixed"
+  non_equivariance: 4
   p_err: 0
 
 TRAINING:

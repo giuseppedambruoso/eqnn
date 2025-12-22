@@ -113,15 +113,15 @@ hydra:
     - hydra.mode=MULTIRUN
     task:
     - DATA.N=20
+    - GENERAL.seed=999
     - QNN.non_equivariance=4
     - QNN.p_err=0.04
-    - GENERAL.seed=999
   job:
     name: main
     chdir: null
     override_dirname: DATA.N=20,GENERAL.seed=999,QNN.non_equivariance=4,QNN.p_err=0.04
-    id: '12'
-    num: 12
+    id: '21'
+    num: 21
     config_name: config
     env_set: {}
     env_copy: []
@@ -144,7 +144,7 @@ hydra:
     - path: ''
       schema: structured
       provider: schema
-    output_dir: /home/giuseppe/Scrivania/phd/projects/eqnn/code/src/eqnn/multirun/2025-12-21/21-34-27/DATA.N=20,GENERAL.seed=999,QNN.non_equivariance=4,QNN.p_err=0.04
+    output_dir: /home/giuseppe/Scrivania/phd/projects/eqnn/code/src/eqnn/multirun/2025-12-22/01-52-04/DATA.N=20,GENERAL.seed=999,QNN.non_equivariance=4,QNN.p_err=0.04
     choices:
       hydra/env: default
       hydra/callbacks: null

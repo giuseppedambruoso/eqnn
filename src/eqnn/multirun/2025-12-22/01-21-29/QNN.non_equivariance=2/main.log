@@ -1,4 +1,0 @@
-[2025-12-22 04:47:44,317][__main__][INFO] - QNN training pipeline initialized
-[2025-12-22 04:47:44,317][data_loading][INFO] - Loading and embedding MNIST data...
-[2025-12-22 04:47:44,347][data_loading][INFO] - Data loading complete.
-[2025-12-22 06:50:58,696][__main__][INFO] - Saved gradient norms to grad_norms_2.csv
