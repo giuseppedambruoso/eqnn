@@ -1,6 +1,7 @@
 # main.py
+import csv
 import logging
-from test import test_loop
+import time
 
 import hydra
 import matplotlib.pyplot as plt
@@ -8,6 +9,7 @@ import torch
 from data_loading import load_eurosat_data, load_mnist_data
 from omegaconf import DictConfig
 from plot import plot_results
+from tqdm import tqdm
 from train import train_loop, train_loop_in
 
 logger = logging.getLogger(__name__)
@@ -58,8 +60,8 @@ def main(cfg: DictConfig) -> None:
         image = image.to(dev)
         label = label.to(dev)
         grad_norms = []
-        for seed in range(1, 10000):
-            print(f"Running training with seed {seed}")
+        pbar = tqdm(range(1, 10000), desc="progress") if verbose else range(epochs)
+        for seed in pbar:
             torch.manual_seed(seed)
             grad_norm = train_loop_in(
                 image=image,
@@ -67,15 +69,24 @@ def main(cfg: DictConfig) -> None:
                 device=device,
                 dev=dev,
                 learning_rate=learning_rate,
-                seed=SEED,
                 non_equivariance=non_equivariance,
                 p_err=p_err,
             )
             grad_norms.append(grad_norm)
 
         plt.hist(grad_norms, bins=50)
-        plt.show()
         plt.savefig(f"histo_{non_equivariance}")
+        plt.show()
+
+        csv_path = f"grad_norms_{non_equivariance}.csv"
+
+        with open(csv_path, mode="w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["seed", "grad_norm"])  # header
+            for seed, grad_norm in enumerate(grad_norms, start=1):
+                writer.writerow([seed, grad_norm])
+
+        logger.info(f"Saved gradient norms to {csv_path}")
     else:
         # TRAINING
         training_output = train_loop(

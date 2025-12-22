@@ -1,7 +1,6 @@
 # train.py
 import logging
 import os
-import time
 from typing import Any, Literal
 
 import torch
@@ -205,7 +204,6 @@ def train_loop_in(
     non_equivariance: Literal[0, 1, 2],
     p_err: float,
 ) -> float:
-    start_time = time.time()
     dev = torch.device(dev)
 
     params = torch.empty(8, device=dev).uniform_(-0.1, 0.1)
@@ -224,10 +222,5 @@ def train_loop_in(
 
     params_grad = params.grad
     grad_norm = torch.sqrt(torch.dot(params_grad, params_grad)).item()
-    end_time = time.time()
-    duration = end_time - start_time
-    logger.info(
-        f"Gradient norm after single training step: {grad_norm:.6f}, time: {duration:.6f} seconds"
-    )
 
     return grad_norm
