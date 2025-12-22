@@ -1,0 +1,15 @@
+GENERAL:
+  seed: 42
+  dev: cpu
+  verbose: true
+  initialization_analysis: true
+DATA:
+  'N': 160
+  dataset: mnist
+QNN:
+  device: default.qubit
+  non_equivariance: 2
+  p_err: 0
+TRAINING:
+  epochs: 40
+  learning_rate: 0.05

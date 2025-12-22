@@ -1,0 +1,3 @@
+[2025-12-22 07:06:06,285][__main__][INFO] - QNN training pipeline initialized
+[2025-12-22 07:06:06,285][data_loading][INFO] - Loading and embedding MNIST data...
+[2025-12-22 07:06:06,315][data_loading][INFO] - Data loading complete.

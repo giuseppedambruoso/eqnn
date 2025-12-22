@@ -60,7 +60,7 @@ def main(cfg: DictConfig) -> None:
         image = image.to(dev)
         label = label.to(dev)
         grad_norms = []
-        pbar = tqdm(range(1, 10000), desc="progress") if verbose else range(epochs)
+        pbar = tqdm(range(1, 100000), desc="progress") if verbose else range(epochs)
         for seed in pbar:
             torch.manual_seed(seed)
             grad_norm = train_loop_in(
