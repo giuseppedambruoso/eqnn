@@ -10,7 +10,7 @@ GENERAL:
   seed: 42
   dev: "cpu"
   verbose: True
-  initialization_analysis: False
+  initialization_analysis: True
 
 DATA:
   N: 20  # number of images in the training set
