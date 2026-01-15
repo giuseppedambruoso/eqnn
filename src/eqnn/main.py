@@ -42,11 +42,11 @@ def main(cfg: DictConfig) -> None:
     # DATA LOADING
     if dataset == "mnist":
         train_loader, test_loader = load_mnist_data(
-            batch_size=batch_size, N=N, num_workers=1, verbose=verbose
+            batch_size=batch_size, N=N, num_workers=0, verbose=verbose
         )
     elif dataset == "eurosat":
         train_loader, test_loader = load_eurosat_data(
-            batch_size=batch_size, N=N, num_workers=1, verbose=verbose
+            batch_size=batch_size, N=N, num_workers=0, verbose=verbose
         )
     else:
         raise ValueError("dataset must be either 'mnist' or 'eurosat'")
