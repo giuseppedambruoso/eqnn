@@ -3,6 +3,7 @@ import logging
 import os
 from typing import Any, Literal
 
+import pennylane as qml
 import torch
 from hydra.core.hydra_config import HydraConfig
 from qnn import create_qnn
@@ -43,35 +44,26 @@ def loss_function_single(prediction: torch.Tensor, target: int) -> torch.Tensor:
     return loss
 
 
-def create_and_execute_qnn(
-    image: torch.Tensor,
-    device: str,
-    params: torch.Tensor,
-    phi: torch.Tensor,
-    non_equivariance: Literal[0, 1, 2],
-    p_err: float,
-) -> torch.Tensor:
-    qnn = create_qnn(image, device, non_equivariance, p_err)
-    output = qnn(params, phi)
-    return torch.stack(output)
-
-
 def execute_batch(
+    qnn: qml.QNode,
     batch_images: torch.Tensor,
-    device: str,
     dev: torch.device,
     params: torch.Tensor,
     phi: torch.Tensor,
-    non_equivariance: Literal[0, 1, 2],
-    p_err: float,
 ) -> torch.Tensor:
-
+    """
+    Executes the pre-initialized QNN on a batch of images.
+    """
     batch_images = batch_images.to(dev)
 
-    batch_predictions = [
-        create_and_execute_qnn(image, device, params, phi, non_equivariance, p_err)
-        for image in batch_images
-    ]
+    # Loop esplicito ma usando lo stesso QNode compilato
+    # Questo è molto più veloce che ricreare il QNode
+    batch_predictions = []
+    for image in batch_images:
+        output = qnn(image, params, phi)
+        # Convert list of tensors/floats to tensor if needed, usually output is list of tensors
+        batch_predictions.append(torch.stack(output))
+
     return torch.stack(batch_predictions)
 
 
@@ -93,6 +85,11 @@ def train_loop(
     if verbose:
         logger.info(f"Using device: {dev}")
         logger.info("Starting QNN training and validation...")
+
+    # Initialize QNN
+    qnn = create_qnn(device, non_equivariance, p_err)
+    if verbose:
+        logger.info("QNode initialized successfully.")
 
     params = torch.empty(8, device=dev).uniform_(-0.1, 0.1)
     params.requires_grad_()
@@ -116,9 +113,7 @@ def train_loop(
         for batch_images, batch_labels in train_loader:
             batch_labels = batch_labels.to(dev)
             opt.zero_grad()
-            batch_predictions = execute_batch(
-                batch_images, device, dev, params, phi, non_equivariance, p_err
-            )
+            batch_predictions = execute_batch(qnn, batch_images, dev, params, phi)
             loss = loss_function(batch_predictions, batch_labels)
             loss.backward()
             opt.step()
@@ -143,9 +138,7 @@ def train_loop(
         for batch_images, batch_labels in val_loader:
             batch_labels = batch_labels.to(dev)
             opt.zero_grad()
-            batch_predictions = execute_batch(
-                batch_images, device, dev, params, phi, non_equivariance, p_err
-            )
+            batch_predictions = execute_batch(qnn, batch_images, dev, params, phi)
             loss = loss_function(batch_predictions, batch_labels)
             total_loss += loss.item() * batch_labels.size(0)
             total_correct += (
@@ -206,6 +199,9 @@ def train_loop_in(
 ) -> float:
     dev = torch.device(dev)
 
+    # Initialize QNN
+    qnn = create_qnn(device, non_equivariance, p_err)
+
     params = torch.empty(8, device=dev).uniform_(-0.1, 0.1)
     params.requires_grad_()
     phi = torch.empty(1, device=dev).uniform_(-0.1, 0.1)
@@ -214,9 +210,7 @@ def train_loop_in(
     opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.99))
 
     opt.zero_grad()
-    predictions = create_and_execute_qnn(
-        image, device, params, phi, non_equivariance, p_err
-    )
+    predictions = qnn(image, params, phi)
     loss = loss_function_single(predictions, label)
     loss.backward()
 

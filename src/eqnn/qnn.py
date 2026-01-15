@@ -149,7 +149,6 @@ def approx_equiv_measure(phi: torch.Tensor, p_err: float) -> None:
 
 
 def create_qnn(
-    embedding_unitary: torch.Tensor,
     device: str,
     non_equivariance: Literal[0, 1, 2],
     p_err: float,
@@ -157,7 +156,9 @@ def create_qnn(
     device = qml.device(device, wires=8, shots=None)
 
     @qml.qnode(device, interface="torch", diff_method="backprop")
-    def qnn(params: torch.Tensor, phi: torch.Tensor) -> Any:
+    def qnn(
+        embedding_unitary: torch.Tensor, params: torch.Tensor, phi: torch.Tensor
+    ) -> Any:
         qml.QubitUnitary(embedding_unitary, wires=range(8))
         scanning_params = params[0:6]
         ansatz_params = params[0:3]

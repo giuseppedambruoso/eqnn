@@ -10,7 +10,7 @@ GENERAL:
   seed: 42
   dev: "cpu"
   verbose: True
-  initialization_analysis: True
+  initialization_analysis: False
 
 DATA:
   N: 20  # number of images in the training set
@@ -19,7 +19,7 @@ DATA:
 QNN:
   device: "default.mixed"
   non_equivariance: 4
-  p_err: 0
+  p_err: 0.01
 
 TRAINING:
   epochs: 40
