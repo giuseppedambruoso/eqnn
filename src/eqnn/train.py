@@ -1,6 +1,7 @@
 # train.py
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Literal
 
 import pennylane as qml
@@ -65,6 +66,30 @@ def execute_batch(
         batch_predictions.append(torch.stack(output))
 
     return torch.stack(batch_predictions)
+
+
+# def execute_batch(
+#     qnn,
+#     batch_images: torch.Tensor,
+#     dev: torch.device,
+#     params: torch.Tensor,
+#     phi: torch.Tensor
+# ) -> torch.Tensor:
+#     """
+#     Esegue il QNN su un batch di immagini in parallelo usando tutti i thread CPU disponibili.
+#     """
+#     batch_images = batch_images.to(dev)
+#     num_threads = torch.get_num_threads()  # sfrutta tutti i thread disponibili
+
+#     def eval_image(image):
+#         output = qnn(image, params, phi)
+#         return torch.stack(output)
+
+#     # Parallelizzazione su più thread
+#     with ThreadPoolExecutor(max_workers=num_threads) as executor:
+#         results = list(executor.map(eval_image, batch_images))
+
+#     return torch.stack(results)
 
 
 def train_loop(
