@@ -1,0 +1,285 @@
+[0;34m=== Inizio configurazione e lancio esperimenti ===[0m
+
+[0;32m[1/5] L'ambiente 'eqnn_env' esiste già. Salto creazione.[0m
+
+[0;34m[2/5] Attivazione ambiente...[0m
+[0;32m✓ Ambiente attivato: Python 3.11.14[0m
+
+[0;32m[3/5] Poetry è già installato.[0m
+
+[0;34m[4/5] Installazione/Aggiornamento dipendenze del progetto...[0m
+Resolving dependencies...
+Installing dependencies from lock file
+
+No dependencies to install or update
+
+Installing the current project: eqnn (0.1.0)
+[0;32m✓ Dipendenze pronte.[0m
+
+[0;32m✓ Variabili d'ambiente configurate.[0m
+
+[0;34m[6/6] Avvio Job Hydra in parallelo...[0m
+---------------------------------------------------------
+
+[0;32m=== TUTTI GLI ESPERIMENTI COMPLETATI ===[0m
+[2026-01-23 14:34:12,557][HYDRA] Joblib.Parallel(n_jobs=40,backend=loky,prefer=processes,require=None,verbose=0,timeout=None,pre_dispatch=2*n_jobs,batch_size=auto,temp_folder=None,max_nbytes=None,mmap_mode=r) is launching 220 jobs
+[2026-01-23 14:34:12,557][HYDRA] Launching jobs, sweep output dir : multirun/2026-01-23/14-34-02
+[2026-01-23 14:34:12,557][HYDRA] 	#0 : QNN.non_equivariance=0 QNN.p_err=0.0 GENERAL.seed=42
+[2026-01-23 14:34:12,557][HYDRA] 	#1 : QNN.non_equivariance=0 QNN.p_err=0.0 GENERAL.seed=1234
+[2026-01-23 14:34:12,557][HYDRA] 	#2 : QNN.non_equivariance=0 QNN.p_err=0.0 GENERAL.seed=5678
+[2026-01-23 14:34:12,557][HYDRA] 	#3 : QNN.non_equivariance=0 QNN.p_err=0.0 GENERAL.seed=999
+[2026-01-23 14:34:12,557][HYDRA] 	#4 : QNN.non_equivariance=0 QNN.p_err=0.0 GENERAL.seed=104
+[2026-01-23 14:34:12,557][HYDRA] 	#5 : QNN.non_equivariance=0 QNN.p_err=0.01 GENERAL.seed=42
+[2026-01-23 14:34:12,557][HYDRA] 	#6 : QNN.non_equivariance=0 QNN.p_err=0.01 GENERAL.seed=1234
+[2026-01-23 14:34:12,557][HYDRA] 	#7 : QNN.non_equivariance=0 QNN.p_err=0.01 GENERAL.seed=5678
+[2026-01-23 14:34:12,557][HYDRA] 	#8 : QNN.non_equivariance=0 QNN.p_err=0.01 GENERAL.seed=999
+[2026-01-23 14:34:12,557][HYDRA] 	#9 : QNN.non_equivariance=0 QNN.p_err=0.01 GENERAL.seed=104
+[2026-01-23 14:34:12,557][HYDRA] 	#10 : QNN.non_equivariance=0 QNN.p_err=0.02 GENERAL.seed=42
+[2026-01-23 14:34:12,557][HYDRA] 	#11 : QNN.non_equivariance=0 QNN.p_err=0.02 GENERAL.seed=1234
+[2026-01-23 14:34:12,557][HYDRA] 	#12 : QNN.non_equivariance=0 QNN.p_err=0.02 GENERAL.seed=5678
+[2026-01-23 14:34:12,557][HYDRA] 	#13 : QNN.non_equivariance=0 QNN.p_err=0.02 GENERAL.seed=999
+[2026-01-23 14:34:12,557][HYDRA] 	#14 : QNN.non_equivariance=0 QNN.p_err=0.02 GENERAL.seed=104
+[2026-01-23 14:34:12,557][HYDRA] 	#15 : QNN.non_equivariance=0 QNN.p_err=0.03 GENERAL.seed=42
+[2026-01-23 14:34:12,557][HYDRA] 	#16 : QNN.non_equivariance=0 QNN.p_err=0.03 GENERAL.seed=1234
+[2026-01-23 14:34:12,557][HYDRA] 	#17 : QNN.non_equivariance=0 QNN.p_err=0.03 GENERAL.seed=5678
+[2026-01-23 14:34:12,557][HYDRA] 	#18 : QNN.non_equivariance=0 QNN.p_err=0.03 GENERAL.seed=999
+[2026-01-23 14:34:12,557][HYDRA] 	#19 : QNN.non_equivariance=0 QNN.p_err=0.03 GENERAL.seed=104
+[2026-01-23 14:34:12,557][HYDRA] 	#20 : QNN.non_equivariance=0 QNN.p_err=0.04 GENERAL.seed=42
+[2026-01-23 14:34:12,557][HYDRA] 	#21 : QNN.non_equivariance=0 QNN.p_err=0.04 GENERAL.seed=1234
+[2026-01-23 14:34:12,557][HYDRA] 	#22 : QNN.non_equivariance=0 QNN.p_err=0.04 GENERAL.seed=5678
+[2026-01-23 14:34:12,557][HYDRA] 	#23 : QNN.non_equivariance=0 QNN.p_err=0.04 GENERAL.seed=999
+[2026-01-23 14:34:12,557][HYDRA] 	#24 : QNN.non_equivariance=0 QNN.p_err=0.04 GENERAL.seed=104
+[2026-01-23 14:34:12,557][HYDRA] 	#25 : QNN.non_equivariance=0 QNN.p_err=0.05 GENERAL.seed=42
+[2026-01-23 14:34:12,557][HYDRA] 	#26 : QNN.non_equivariance=0 QNN.p_err=0.05 GENERAL.seed=1234
+[2026-01-23 14:34:12,557][HYDRA] 	#27 : QNN.non_equivariance=0 QNN.p_err=0.05 GENERAL.seed=5678
+[2026-01-23 14:34:12,557][HYDRA] 	#28 : QNN.non_equivariance=0 QNN.p_err=0.05 GENERAL.seed=999
+[2026-01-23 14:34:12,557][HYDRA] 	#29 : QNN.non_equivariance=0 QNN.p_err=0.05 GENERAL.seed=104
+[2026-01-23 14:34:12,557][HYDRA] 	#30 : QNN.non_equivariance=0 QNN.p_err=0.06 GENERAL.seed=42
+[2026-01-23 14:34:12,557][HYDRA] 	#31 : QNN.non_equivariance=0 QNN.p_err=0.06 GENERAL.seed=1234
+[2026-01-23 14:34:12,557][HYDRA] 	#32 : QNN.non_equivariance=0 QNN.p_err=0.06 GENERAL.seed=5678
+[2026-01-23 14:34:12,557][HYDRA] 	#33 : QNN.non_equivariance=0 QNN.p_err=0.06 GENERAL.seed=999
+[2026-01-23 14:34:12,557][HYDRA] 	#34 : QNN.non_equivariance=0 QNN.p_err=0.06 GENERAL.seed=104
+[2026-01-23 14:34:12,557][HYDRA] 	#35 : QNN.non_equivariance=0 QNN.p_err=0.07 GENERAL.seed=42
+[2026-01-23 14:34:12,557][HYDRA] 	#36 : QNN.non_equivariance=0 QNN.p_err=0.07 GENERAL.seed=1234
+[2026-01-23 14:34:12,557][HYDRA] 	#37 : QNN.non_equivariance=0 QNN.p_err=0.07 GENERAL.seed=5678
+[2026-01-23 14:34:12,557][HYDRA] 	#38 : QNN.non_equivariance=0 QNN.p_err=0.07 GENERAL.seed=999
+[2026-01-23 14:34:12,557][HYDRA] 	#39 : QNN.non_equivariance=0 QNN.p_err=0.07 GENERAL.seed=104
+[2026-01-23 14:34:12,557][HYDRA] 	#40 : QNN.non_equivariance=0 QNN.p_err=0.08 GENERAL.seed=42
+[2026-01-23 14:34:12,557][HYDRA] 	#41 : QNN.non_equivariance=0 QNN.p_err=0.08 GENERAL.seed=1234
+[2026-01-23 14:34:12,557][HYDRA] 	#42 : QNN.non_equivariance=0 QNN.p_err=0.08 GENERAL.seed=5678
+[2026-01-23 14:34:12,557][HYDRA] 	#43 : QNN.non_equivariance=0 QNN.p_err=0.08 GENERAL.seed=999
+[2026-01-23 14:34:12,557][HYDRA] 	#44 : QNN.non_equivariance=0 QNN.p_err=0.08 GENERAL.seed=104
+[2026-01-23 14:34:12,557][HYDRA] 	#45 : QNN.non_equivariance=0 QNN.p_err=0.09 GENERAL.seed=42
+[2026-01-23 14:34:12,557][HYDRA] 	#46 : QNN.non_equivariance=0 QNN.p_err=0.09 GENERAL.seed=1234
+[2026-01-23 14:34:12,557][HYDRA] 	#47 : QNN.non_equivariance=0 QNN.p_err=0.09 GENERAL.seed=5678
+[2026-01-23 14:34:12,557][HYDRA] 	#48 : QNN.non_equivariance=0 QNN.p_err=0.09 GENERAL.seed=999
+[2026-01-23 14:34:12,557][HYDRA] 	#49 : QNN.non_equivariance=0 QNN.p_err=0.09 GENERAL.seed=104
+[2026-01-23 14:34:12,557][HYDRA] 	#50 : QNN.non_equivariance=0 QNN.p_err=0.1 GENERAL.seed=42
+[2026-01-23 14:34:12,557][HYDRA] 	#51 : QNN.non_equivariance=0 QNN.p_err=0.1 GENERAL.seed=1234
+[2026-01-23 14:34:12,557][HYDRA] 	#52 : QNN.non_equivariance=0 QNN.p_err=0.1 GENERAL.seed=5678
+[2026-01-23 14:34:12,557][HYDRA] 	#53 : QNN.non_equivariance=0 QNN.p_err=0.1 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#54 : QNN.non_equivariance=0 QNN.p_err=0.1 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#55 : QNN.non_equivariance=1 QNN.p_err=0.0 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#56 : QNN.non_equivariance=1 QNN.p_err=0.0 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#57 : QNN.non_equivariance=1 QNN.p_err=0.0 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#58 : QNN.non_equivariance=1 QNN.p_err=0.0 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#59 : QNN.non_equivariance=1 QNN.p_err=0.0 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#60 : QNN.non_equivariance=1 QNN.p_err=0.01 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#61 : QNN.non_equivariance=1 QNN.p_err=0.01 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#62 : QNN.non_equivariance=1 QNN.p_err=0.01 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#63 : QNN.non_equivariance=1 QNN.p_err=0.01 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#64 : QNN.non_equivariance=1 QNN.p_err=0.01 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#65 : QNN.non_equivariance=1 QNN.p_err=0.02 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#66 : QNN.non_equivariance=1 QNN.p_err=0.02 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#67 : QNN.non_equivariance=1 QNN.p_err=0.02 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#68 : QNN.non_equivariance=1 QNN.p_err=0.02 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#69 : QNN.non_equivariance=1 QNN.p_err=0.02 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#70 : QNN.non_equivariance=1 QNN.p_err=0.03 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#71 : QNN.non_equivariance=1 QNN.p_err=0.03 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#72 : QNN.non_equivariance=1 QNN.p_err=0.03 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#73 : QNN.non_equivariance=1 QNN.p_err=0.03 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#74 : QNN.non_equivariance=1 QNN.p_err=0.03 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#75 : QNN.non_equivariance=1 QNN.p_err=0.04 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#76 : QNN.non_equivariance=1 QNN.p_err=0.04 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#77 : QNN.non_equivariance=1 QNN.p_err=0.04 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#78 : QNN.non_equivariance=1 QNN.p_err=0.04 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#79 : QNN.non_equivariance=1 QNN.p_err=0.04 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#80 : QNN.non_equivariance=1 QNN.p_err=0.05 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#81 : QNN.non_equivariance=1 QNN.p_err=0.05 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#82 : QNN.non_equivariance=1 QNN.p_err=0.05 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#83 : QNN.non_equivariance=1 QNN.p_err=0.05 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#84 : QNN.non_equivariance=1 QNN.p_err=0.05 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#85 : QNN.non_equivariance=1 QNN.p_err=0.06 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#86 : QNN.non_equivariance=1 QNN.p_err=0.06 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#87 : QNN.non_equivariance=1 QNN.p_err=0.06 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#88 : QNN.non_equivariance=1 QNN.p_err=0.06 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#89 : QNN.non_equivariance=1 QNN.p_err=0.06 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#90 : QNN.non_equivariance=1 QNN.p_err=0.07 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#91 : QNN.non_equivariance=1 QNN.p_err=0.07 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#92 : QNN.non_equivariance=1 QNN.p_err=0.07 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#93 : QNN.non_equivariance=1 QNN.p_err=0.07 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#94 : QNN.non_equivariance=1 QNN.p_err=0.07 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#95 : QNN.non_equivariance=1 QNN.p_err=0.08 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#96 : QNN.non_equivariance=1 QNN.p_err=0.08 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#97 : QNN.non_equivariance=1 QNN.p_err=0.08 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#98 : QNN.non_equivariance=1 QNN.p_err=0.08 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#99 : QNN.non_equivariance=1 QNN.p_err=0.08 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#100 : QNN.non_equivariance=1 QNN.p_err=0.09 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#101 : QNN.non_equivariance=1 QNN.p_err=0.09 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#102 : QNN.non_equivariance=1 QNN.p_err=0.09 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#103 : QNN.non_equivariance=1 QNN.p_err=0.09 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#104 : QNN.non_equivariance=1 QNN.p_err=0.09 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#105 : QNN.non_equivariance=1 QNN.p_err=0.1 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#106 : QNN.non_equivariance=1 QNN.p_err=0.1 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#107 : QNN.non_equivariance=1 QNN.p_err=0.1 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#108 : QNN.non_equivariance=1 QNN.p_err=0.1 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#109 : QNN.non_equivariance=1 QNN.p_err=0.1 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#110 : QNN.non_equivariance=2 QNN.p_err=0.0 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#111 : QNN.non_equivariance=2 QNN.p_err=0.0 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#112 : QNN.non_equivariance=2 QNN.p_err=0.0 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#113 : QNN.non_equivariance=2 QNN.p_err=0.0 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#114 : QNN.non_equivariance=2 QNN.p_err=0.0 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#115 : QNN.non_equivariance=2 QNN.p_err=0.01 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#116 : QNN.non_equivariance=2 QNN.p_err=0.01 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#117 : QNN.non_equivariance=2 QNN.p_err=0.01 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#118 : QNN.non_equivariance=2 QNN.p_err=0.01 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#119 : QNN.non_equivariance=2 QNN.p_err=0.01 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#120 : QNN.non_equivariance=2 QNN.p_err=0.02 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#121 : QNN.non_equivariance=2 QNN.p_err=0.02 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#122 : QNN.non_equivariance=2 QNN.p_err=0.02 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#123 : QNN.non_equivariance=2 QNN.p_err=0.02 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#124 : QNN.non_equivariance=2 QNN.p_err=0.02 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#125 : QNN.non_equivariance=2 QNN.p_err=0.03 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#126 : QNN.non_equivariance=2 QNN.p_err=0.03 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#127 : QNN.non_equivariance=2 QNN.p_err=0.03 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#128 : QNN.non_equivariance=2 QNN.p_err=0.03 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#129 : QNN.non_equivariance=2 QNN.p_err=0.03 GENERAL.seed=104
+[2026-01-23 14:34:12,558][HYDRA] 	#130 : QNN.non_equivariance=2 QNN.p_err=0.04 GENERAL.seed=42
+[2026-01-23 14:34:12,558][HYDRA] 	#131 : QNN.non_equivariance=2 QNN.p_err=0.04 GENERAL.seed=1234
+[2026-01-23 14:34:12,558][HYDRA] 	#132 : QNN.non_equivariance=2 QNN.p_err=0.04 GENERAL.seed=5678
+[2026-01-23 14:34:12,558][HYDRA] 	#133 : QNN.non_equivariance=2 QNN.p_err=0.04 GENERAL.seed=999
+[2026-01-23 14:34:12,558][HYDRA] 	#134 : QNN.non_equivariance=2 QNN.p_err=0.04 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#135 : QNN.non_equivariance=2 QNN.p_err=0.05 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#136 : QNN.non_equivariance=2 QNN.p_err=0.05 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#137 : QNN.non_equivariance=2 QNN.p_err=0.05 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#138 : QNN.non_equivariance=2 QNN.p_err=0.05 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#139 : QNN.non_equivariance=2 QNN.p_err=0.05 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#140 : QNN.non_equivariance=2 QNN.p_err=0.06 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#141 : QNN.non_equivariance=2 QNN.p_err=0.06 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#142 : QNN.non_equivariance=2 QNN.p_err=0.06 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#143 : QNN.non_equivariance=2 QNN.p_err=0.06 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#144 : QNN.non_equivariance=2 QNN.p_err=0.06 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#145 : QNN.non_equivariance=2 QNN.p_err=0.07 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#146 : QNN.non_equivariance=2 QNN.p_err=0.07 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#147 : QNN.non_equivariance=2 QNN.p_err=0.07 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#148 : QNN.non_equivariance=2 QNN.p_err=0.07 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#149 : QNN.non_equivariance=2 QNN.p_err=0.07 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#150 : QNN.non_equivariance=2 QNN.p_err=0.08 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#151 : QNN.non_equivariance=2 QNN.p_err=0.08 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#152 : QNN.non_equivariance=2 QNN.p_err=0.08 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#153 : QNN.non_equivariance=2 QNN.p_err=0.08 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#154 : QNN.non_equivariance=2 QNN.p_err=0.08 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#155 : QNN.non_equivariance=2 QNN.p_err=0.09 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#156 : QNN.non_equivariance=2 QNN.p_err=0.09 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#157 : QNN.non_equivariance=2 QNN.p_err=0.09 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#158 : QNN.non_equivariance=2 QNN.p_err=0.09 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#159 : QNN.non_equivariance=2 QNN.p_err=0.09 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#160 : QNN.non_equivariance=2 QNN.p_err=0.1 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#161 : QNN.non_equivariance=2 QNN.p_err=0.1 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#162 : QNN.non_equivariance=2 QNN.p_err=0.1 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#163 : QNN.non_equivariance=2 QNN.p_err=0.1 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#164 : QNN.non_equivariance=2 QNN.p_err=0.1 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#165 : QNN.non_equivariance=3 QNN.p_err=0.0 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#166 : QNN.non_equivariance=3 QNN.p_err=0.0 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#167 : QNN.non_equivariance=3 QNN.p_err=0.0 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#168 : QNN.non_equivariance=3 QNN.p_err=0.0 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#169 : QNN.non_equivariance=3 QNN.p_err=0.0 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#170 : QNN.non_equivariance=3 QNN.p_err=0.01 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#171 : QNN.non_equivariance=3 QNN.p_err=0.01 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#172 : QNN.non_equivariance=3 QNN.p_err=0.01 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#173 : QNN.non_equivariance=3 QNN.p_err=0.01 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#174 : QNN.non_equivariance=3 QNN.p_err=0.01 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#175 : QNN.non_equivariance=3 QNN.p_err=0.02 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#176 : QNN.non_equivariance=3 QNN.p_err=0.02 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#177 : QNN.non_equivariance=3 QNN.p_err=0.02 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#178 : QNN.non_equivariance=3 QNN.p_err=0.02 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#179 : QNN.non_equivariance=3 QNN.p_err=0.02 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#180 : QNN.non_equivariance=3 QNN.p_err=0.03 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#181 : QNN.non_equivariance=3 QNN.p_err=0.03 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#182 : QNN.non_equivariance=3 QNN.p_err=0.03 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#183 : QNN.non_equivariance=3 QNN.p_err=0.03 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#184 : QNN.non_equivariance=3 QNN.p_err=0.03 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#185 : QNN.non_equivariance=3 QNN.p_err=0.04 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#186 : QNN.non_equivariance=3 QNN.p_err=0.04 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#187 : QNN.non_equivariance=3 QNN.p_err=0.04 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#188 : QNN.non_equivariance=3 QNN.p_err=0.04 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#189 : QNN.non_equivariance=3 QNN.p_err=0.04 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#190 : QNN.non_equivariance=3 QNN.p_err=0.05 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#191 : QNN.non_equivariance=3 QNN.p_err=0.05 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#192 : QNN.non_equivariance=3 QNN.p_err=0.05 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#193 : QNN.non_equivariance=3 QNN.p_err=0.05 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#194 : QNN.non_equivariance=3 QNN.p_err=0.05 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#195 : QNN.non_equivariance=3 QNN.p_err=0.06 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#196 : QNN.non_equivariance=3 QNN.p_err=0.06 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#197 : QNN.non_equivariance=3 QNN.p_err=0.06 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#198 : QNN.non_equivariance=3 QNN.p_err=0.06 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#199 : QNN.non_equivariance=3 QNN.p_err=0.06 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#200 : QNN.non_equivariance=3 QNN.p_err=0.07 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#201 : QNN.non_equivariance=3 QNN.p_err=0.07 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#202 : QNN.non_equivariance=3 QNN.p_err=0.07 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#203 : QNN.non_equivariance=3 QNN.p_err=0.07 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#204 : QNN.non_equivariance=3 QNN.p_err=0.07 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#205 : QNN.non_equivariance=3 QNN.p_err=0.08 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#206 : QNN.non_equivariance=3 QNN.p_err=0.08 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#207 : QNN.non_equivariance=3 QNN.p_err=0.08 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#208 : QNN.non_equivariance=3 QNN.p_err=0.08 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#209 : QNN.non_equivariance=3 QNN.p_err=0.08 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#210 : QNN.non_equivariance=3 QNN.p_err=0.09 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#211 : QNN.non_equivariance=3 QNN.p_err=0.09 GENERAL.seed=1234
+[2026-01-23 14:34:12,559][HYDRA] 	#212 : QNN.non_equivariance=3 QNN.p_err=0.09 GENERAL.seed=5678
+[2026-01-23 14:34:12,559][HYDRA] 	#213 : QNN.non_equivariance=3 QNN.p_err=0.09 GENERAL.seed=999
+[2026-01-23 14:34:12,559][HYDRA] 	#214 : QNN.non_equivariance=3 QNN.p_err=0.09 GENERAL.seed=104
+[2026-01-23 14:34:12,559][HYDRA] 	#215 : QNN.non_equivariance=3 QNN.p_err=0.1 GENERAL.seed=42
+[2026-01-23 14:34:12,559][HYDRA] 	#216 : QNN.non_equivariance=3 QNN.p_err=0.1 GENERAL.seed=1234
+[2026-01-23 14:34:12,560][HYDRA] 	#217 : QNN.non_equivariance=3 QNN.p_err=0.1 GENERAL.seed=5678
+[2026-01-23 14:34:12,560][HYDRA] 	#218 : QNN.non_equivariance=3 QNN.p_err=0.1 GENERAL.seed=999
+[2026-01-23 14:34:12,560][HYDRA] 	#219 : QNN.non_equivariance=3 QNN.p_err=0.1 GENERAL.seed=104
+Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   0%|          | 0/40 [00:00<?, ?it/s]Epoch:   2%|▎         | 1/40 [16:26:01<640:54:56, 59161.45s/it]Traceback (most recent call last):
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+           ^^^^^^
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/hydra/_internal/utils.py", line 466, in <lambda>
+    lambda: hydra.multirun(
+            ^^^^^^^^^^^^^^^
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/hydra/_internal/hydra.py", line 162, in multirun
+    ret = sweeper.sweep(arguments=task_overrides)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/hydra/_internal/core_plugins/basic_sweeper.py", line 177, in sweep
+    results = self.launcher.launch(batch, initial_job_idx=initial_job_idx)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/hydra_plugins/hydra_joblib_launcher/joblib_launcher.py", line 45, in launch
+    return _core.launch(
+           ^^^^^^^^^^^^^
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/hydra_plugins/hydra_joblib_launcher/_core.py", line 103, in launch
+    runs = Parallel(**joblib_cfg)(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/joblib/parallel.py", line 2072, in __call__
+    return output if self.return_generator else list(output)
+                                                ^^^^^^^^^^^^
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/joblib/parallel.py", line 1682, in _get_outputs
+    yield from self._retrieve()
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/joblib/parallel.py", line 1784, in _retrieve
+    self._raise_error_fast()
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/joblib/parallel.py", line 1859, in _raise_error_fast
+    error_job.get_result(self.timeout)
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/joblib/parallel.py", line 758, in get_result
+    return self._return_or_raise()
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/site-packages/joblib/parallel.py", line 773, in _return_or_raise
+    raise self._result
+joblib.externals.loky.process_executor.TerminatedWorkerError: A worker process managed by the executor was unexpectedly terminated. This could be caused by a segmentation fault while calling the function or by an excessive memory usage causing the Operating System to kill the worker.
+
+The exit codes of the workers are {SIGKILL(-9)}
+Detailed tracebacks of the workers should have been printed to stderr in the executor process if faulthandler was not disabled.
+/home/giuseppedambruoso/miniconda3/envs/eqnn_env/lib/python3.11/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 40 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

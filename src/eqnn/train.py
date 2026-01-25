@@ -128,7 +128,8 @@ def train_loop(
     val_loss_history = []
     val_acc_history = []
 
-    pbar = tqdm(range(epochs), desc="Epoch") if verbose else range(epochs)
+    pbar = tqdm(range(epochs), desc="Epoch")
+    # if verbose else range(epochs)
 
     for epoch in pbar:
         total_loss = 0.0
@@ -180,7 +181,8 @@ def train_loop(
 
         if verbose:
             pbar.set_postfix(
-                {
+                {   "p_err": "{p_err}",
+                    "non_equivariance": "{non_equivariance}",
                     "train loss": f"{epoch_train_loss:.4f}",
                     "train acc": f"{epoch_train_acc:.3f}",
                     "val loss": f"{epoch_val_loss:.4f}",

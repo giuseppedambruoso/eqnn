@@ -31,13 +31,13 @@ def main(cfg: DictConfig) -> None:
     learning_rate = cfg.TRAINING.learning_rate
     N = cfg.DATA.N
     dataset = cfg.DATA.dataset
-    batch_size = N
+    batch_size = N/10
     verbose = cfg.GENERAL.verbose
     dev = torch.device(cfg.GENERAL.dev)
     initialization_analysis = cfg.GENERAL.initialization_analysis
 
     if verbose:
-        logger.info("QNN training pipeline initialized")
+        logger.info(f"QNN training pipeline initialized with p_err={p_err} and non_equivariance={non_equivariance}")
 
     # DATA LOADING
     if dataset == "mnist":

@@ -69,7 +69,7 @@ def load_mnist_data(
         test_final, batch_size=batch_size, shuffle=False, num_workers=num_workers
     )
 
-    logger.info("Data loading complete.")
+    if verbose: logger.info("Data loading complete.")
     return train_loader, test_loader
 
 
