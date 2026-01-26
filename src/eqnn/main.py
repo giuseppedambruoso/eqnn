@@ -31,7 +31,7 @@ def main(cfg: DictConfig) -> None:
     learning_rate = cfg.TRAINING.learning_rate
     N = cfg.DATA.N
     dataset = cfg.DATA.dataset
-    batch_size = N/10
+    batch_size = int(N//10)
     verbose = cfg.GENERAL.verbose
     dev = torch.device(cfg.GENERAL.dev)
     initialization_analysis = cfg.GENERAL.initialization_analysis
