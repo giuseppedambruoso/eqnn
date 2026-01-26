@@ -1,0 +1,3 @@
+- QNN.non_equivariance=3
+- QNN.p_err=0.05
+- GENERAL.seed=42
