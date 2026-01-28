@@ -1,0 +1,3 @@
+- QNN.non_equivariance=1
+- QNN.p_err=0.1
+- GENERAL.seed=1234
