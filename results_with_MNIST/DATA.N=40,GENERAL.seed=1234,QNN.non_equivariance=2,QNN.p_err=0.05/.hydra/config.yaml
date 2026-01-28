@@ -1,0 +1,15 @@
+GENERAL:
+  seed: 1234
+  dev: cpu
+  verbose: false
+  initialization_analysis: false
+DATA:
+  'N': 40
+  dataset: mnist
+QNN:
+  device: default.mixed
+  non_equivariance: 2
+  p_err: 0.05
+TRAINING:
+  epochs: 40
+  learning_rate: 0.01
