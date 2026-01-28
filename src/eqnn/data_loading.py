@@ -69,7 +69,8 @@ def load_mnist_data(
         test_final, batch_size=batch_size, shuffle=False, num_workers=num_workers
     )
 
-    if verbose: logger.info("Data loading complete.")
+    if verbose:
+        logger.info("Data loading complete.")
     return train_loader, test_loader
 
 
@@ -106,7 +107,7 @@ def load_eurosat_data(
     train_filtered = Subset(train_set, train_idx)
     test_filtered = Subset(test_set, test_idx)
 
-    train_final = Subset(train_filtered, list(range(N)))
+    train_final = Subset(train_filtered, list(range(20)))
     test_final = Subset(test_filtered, list(range(int(0.5 * N))))
 
     train_loader = DataLoader(
@@ -119,7 +120,7 @@ def load_eurosat_data(
 
     test_loader = DataLoader(
         test_final,
-        batch_size=32,
+        batch_size=20,
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,

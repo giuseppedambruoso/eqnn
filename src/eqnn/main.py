@@ -22,7 +22,6 @@ def main(cfg: DictConfig) -> None:
     """
 
     SEED = cfg.GENERAL.seed
-    torch.manual_seed(SEED)
 
     device = cfg.QNN.device
     non_equivariance = cfg.QNN.non_equivariance
@@ -31,15 +30,18 @@ def main(cfg: DictConfig) -> None:
     learning_rate = cfg.TRAINING.learning_rate
     N = cfg.DATA.N
     dataset = cfg.DATA.dataset
-    batch_size = int(N//10)
+    batch_size = int(N // 10)
     verbose = cfg.GENERAL.verbose
     dev = torch.device(cfg.GENERAL.dev)
     initialization_analysis = cfg.GENERAL.initialization_analysis
 
     if verbose:
-        logger.info(f"QNN training pipeline initialized with p_err={p_err} and non_equivariance={non_equivariance}")
+        logger.info(
+            f"QNN training pipeline initialized with p_err={p_err} and non_equivariance={non_equivariance}"
+        )
 
     # DATA LOADING
+    torch.manual_seed(42)
     if dataset == "mnist":
         train_loader, test_loader = load_mnist_data(
             batch_size=batch_size, N=N, num_workers=0, verbose=verbose
@@ -51,8 +53,8 @@ def main(cfg: DictConfig) -> None:
     else:
         raise ValueError("dataset must be either 'mnist' or 'eurosat'")
 
+    torch.manual_seed(SEED)
     if initialization_analysis:
-        torch.manual_seed(SEED)
         images, labels = next(iter(train_loader))
         # take only the first sample
         image = images[0].unsqueeze(0)  # keep batch dim if model expects it

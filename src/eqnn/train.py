@@ -68,30 +68,6 @@ def execute_batch(
     return torch.stack(batch_predictions)
 
 
-# def execute_batch(
-#     qnn,
-#     batch_images: torch.Tensor,
-#     dev: torch.device,
-#     params: torch.Tensor,
-#     phi: torch.Tensor
-# ) -> torch.Tensor:
-#     """
-#     Esegue il QNN su un batch di immagini in parallelo usando tutti i thread CPU disponibili.
-#     """
-#     batch_images = batch_images.to(dev)
-#     num_threads = torch.get_num_threads()  # sfrutta tutti i thread disponibili
-
-#     def eval_image(image):
-#         output = qnn(image, params, phi)
-#         return torch.stack(output)
-
-#     # Parallelizzazione su più thread
-#     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-#         results = list(executor.map(eval_image, batch_images))
-
-#     return torch.stack(results)
-
-
 def train_loop(
     train_loader: torch.utils.data.DataLoader,
     val_loader: torch.utils.data.DataLoader,
@@ -181,7 +157,8 @@ def train_loop(
 
         if verbose:
             pbar.set_postfix(
-                {   "p_err": "{p_err}",
+                {
+                    "p_err": "{p_err}",
                     "non_equivariance": "{non_equivariance}",
                     "train loss": f"{epoch_train_loss:.4f}",
                     "train acc": f"{epoch_train_acc:.3f}",
