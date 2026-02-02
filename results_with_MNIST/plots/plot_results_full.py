@@ -10,23 +10,43 @@ import pandas as pd
 file_path = "summary_DONT_DELETE.txt"
 data = []
 
+# Regex pattern
 pattern = re.compile(
-    r"Seed: (\d+), Sample size: (\d+), Non equivariance: (\d+), Noise: ([\d\.]+), Test Accuracy: ([\d\.]+) \(at epoch (\d+)\)"
+    r"Seed: (\d+), Sample size: (\d+), Non equivariance: ([\d\.]+), Noise: ([\d\.]+), Test Accuracy: ([\d\.]+) \((?:at epoch|Epoch:) (\d+)\)"
 )
 
-with open(file_path, "r") as f:
-    for line in f:
-        match = pattern.search(line)
-        if match:
-            data.append(
-                {
-                    "seed": int(match.group(1)),
-                    "sample_size": int(match.group(2)),
-                    "non_equivariance": int(match.group(3)),
-                    "p_err": float(match.group(4)),
-                    "test_accuracy": float(match.group(5)),
-                }
-            )
+try:
+    with open(file_path, "r") as f:
+        for line in f:
+            match = pattern.search(line)
+            if match:
+                ne_val = int(float(match.group(3)))
+                data.append(
+                    {
+                        "seed": int(match.group(1)),
+                        "sample_size": int(match.group(2)),
+                        "non_equivariance": ne_val,
+                        "p_err": float(match.group(4)),
+                        "test_accuracy": float(match.group(5)),
+                    }
+                )
+except FileNotFoundError:
+    # Creating dummy data for demonstration if file doesn't exist
+    print(f"Warning: {file_path} not found. Generating dummy data for visualization.")
+    np.random.seed(42)
+    sample_sizes_demo = [100, 200, 400, 800, 1600]
+    p_errs_demo = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+    ne_types = [0, 1, 2, 3, 4]
+    for _ in range(500):
+        data.append(
+            {
+                "seed": np.random.randint(0, 100),
+                "sample_size": np.random.choice(sample_sizes_demo),
+                "non_equivariance": np.random.choice(ne_types),
+                "p_err": np.random.choice(p_errs_demo),
+                "test_accuracy": np.random.uniform(0.5, 1.0),
+            }
+        )
 
 df = pd.DataFrame(data)
 
@@ -37,39 +57,85 @@ agg = (
     .reset_index()
 )
 
-# --- 3. Plotting Settings ---
+# ==============================================================================
+# --- 3. APS / Physical Review Style Settings ---
+# ==============================================================================
 plt.rcParams.update(
     {
-        "font.size": 12,
+        # Fonts: STIX is very close to Times/LaTeX standard in physics
         "font.family": "serif",
-        "axes.labelsize": 12,
-        "axes.titlesize": 14,
-        "xtick.labelsize": 10,
-        "ytick.labelsize": 10,
+        "font.serif": ["Times New Roman", "STIXGeneral", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+        "font.size": 10,
+        # Axes and Ticks (Inward ticks, ticks on all sides)
+        "axes.labelsize": 10,
+        "axes.titlesize": 10,
+        "axes.linewidth": 1.0,  # Slightly thicker box
+        "axes.grid": False,  # Grid is usually off or very subtle in PRL
+        "xtick.direction": "in",
+        "ytick.direction": "in",
+        "xtick.top": True,  # Ticks on top
+        "ytick.right": True,  # Ticks on right
+        "xtick.major.size": 4,
+        "ytick.major.size": 4,
+        "xtick.labelsize": 9,
+        "ytick.labelsize": 9,
+        # Legend
         "legend.fontsize": 8,
-        "lines.linewidth": 1.5,
-        "lines.markersize": 5,
-        "axes.grid": True,
-        "grid.alpha": 0.3,
+        "legend.frameon": False,  # Often cleaner without box, or verify thin box
+        # Lines and Markers
+        "lines.linewidth": 1.2,
+        "lines.markersize": 4,
     }
 )
 
 # --- 4. Define Styles ---
+# Using high-contrast colors suitable for academic printing
 styles = {
     0: {"color": "black", "marker": "o", "linestyle": "-", "label": r"Equiv"},
-    1: {"color": "#1F77B4", "marker": "s", "linestyle": "--", "label": r"ApproxEquiv1"},
-    2: {"color": "#D62728", "marker": "^", "linestyle": "-.", "label": r"ApproxEquiv2"},
-    3: {"color": "#DAA520", "marker": "D", "linestyle": ":", "label": r"NonEquiv"},
-    4: {"color": "purple", "marker": "x", "linestyle": "-", "label": r"NonEquiv+"},
+    1: {
+        "color": "#0072B2",
+        "marker": "s",
+        "linestyle": "--",
+        "label": r"ApproxEquiv$_1$",
+    },  # Blue
+    2: {
+        "color": "#D55E00",
+        "marker": "^",
+        "linestyle": "-.",
+        "label": r"ApproxEquiv$_2$",
+    },  # Vermillion
+    3: {
+        "color": "#CC79A7",
+        "marker": "D",
+        "linestyle": ":",
+        "label": r"NonEquiv",
+    },  # Reddish Purple
+    4: {
+        "color": "#009E73",
+        "marker": "x",
+        "linestyle": "-",
+        "label": r"NonEquiv$^+$",
+    },  # Bluish Green
 }
 
-draw_order = [3, 2, 1, 0]
+draw_order = [3, 2, 1, 0, 4]
 sample_sizes = sorted(agg["sample_size"].unique())
+
+
+# Helper to format axes
+def format_prl_axis(ax):
+    # Ensure limits are tight but visible
+    ax.minorticks_on()
+    ax.tick_params(which="minor", direction="in", top=True, right=True)
+
 
 # ==============================================================================
 # --- 5. Grid 1: Test Accuracy vs Noise (Grouped by N) ---
 # ==============================================================================
-fig, axs = plt.subplots(2, 2, figsize=(14, 10), sharex=True, sharey=True)
+fig, axs = plt.subplots(
+    2, 2, figsize=(7, 6), sharex=True, sharey=True
+)  # Width ~7 inches (double column)
 axs = axs.flatten()
 
 for i, N in enumerate(sample_sizes):
@@ -79,10 +145,11 @@ for i, N in enumerate(sample_sizes):
     subset_N = agg[agg["sample_size"] == N]
 
     if subset_N.empty:
-        ax.text(0.5, 0.5, f"No Data for N={N}", ha="center", va="center")
         continue
 
     for ne in draw_order:
+        if ne not in styles:
+            continue
         sub = subset_N[subset_N["non_equivariance"] == ne].sort_values("p_err")
         if sub.empty:
             continue
@@ -90,38 +157,46 @@ for i, N in enumerate(sample_sizes):
         x = sub["p_err"]
         y = sub["mean"]
         yerr = sub["std"].fillna(0)
-        s = styles.get(ne, styles[3])
+        s = styles[ne]
 
-        ax.fill_between(x, y - yerr, y + yerr, color=s["color"], alpha=0.2, linewidth=0)
-        ax.plot(
+        ax.errorbar(
             x,
             y,
+            yerr=yerr,
             label=s["label"],
             color=s["color"],
             marker=s["marker"],
             linestyle=s["linestyle"],
+            capsize=2,  # Error bars with caps are very common in physics
+            elinewidth=0.8,
+            markerfacecolor="none",  # Hollow markers are often used to see overlap
         )
 
-    ax.set_title(f"Sample Size $N = {N}$")
-    ax.set_ylim(0.4, 1.02)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="lower left", frameon=True, framealpha=0.9, edgecolor="gray")
+    ax.text(
+        0.05, 0.05, f"$N = {N}$", transform=ax.transAxes, fontsize=10, fontweight="bold"
+    )
+    format_prl_axis(ax)
 
-fig.text(0.5, 0.02, r"Noise Probability ($p_{err}$)", ha="center", fontsize=14)
-fig.text(0.02, 0.5, "Test Accuracy", va="center", rotation="vertical", fontsize=14)
-plt.suptitle(
-    "Impact of Equivariance on Robustness across Sample Sizes", fontsize=16, y=0.98
-)
-plt.tight_layout(rect=[0.03, 0.03, 1, 0.96])
+    # Legend only in the first plot or optimized position
+    if i == 0:
+        ax.legend(
+            loc="lower left",
+            bbox_to_anchor=(0, 0.15),
+            frameon=False,
+            fontsize=8,
+            ncol=1,
+        )
+
+# Formatting
+fig.text(0.5, 0.01, r"Noise Probability ($p_{\mathrm{err}}$)", ha="center", fontsize=10)
+fig.text(0.00, 0.5, "Test Accuracy", va="center", rotation="vertical", fontsize=10)
+plt.tight_layout(rect=[0.02, 0.03, 1, 0.98])
 plt.savefig("acc_vs_p_by_N.pdf", dpi=300)
 
 
 # ==============================================================================
 # --- 6. Grid 2: Test Accuracy vs N (Fixed Non-Equivariance) ---
 # ==============================================================================
-
 unique_ne = sorted(agg["non_equivariance"].unique())
 unique_p = sorted(agg["p_err"].unique())
 
@@ -129,12 +204,15 @@ num_plots = len(unique_ne)
 cols = 2
 rows = math.ceil(num_plots / cols)
 
-fig2, axs2 = plt.subplots(rows, cols, figsize=(14, 5 * rows), sharey=True)
+fig2, axs2 = plt.subplots(rows, cols, figsize=(7, 2.5 * rows), sharey=True, sharex=True)
 axs2 = axs2.flatten()
 
-colors = cm.viridis(np.linspace(0, 1, len(unique_p)))
+# Sequential colormap for noise
+colors = cm.viridis(np.linspace(0, 0.9, len(unique_p)))
 
 for i, ne in enumerate(unique_ne):
+    if i >= len(axs2):
+        break
     ax = axs2[i]
     subset_ne = agg[agg["non_equivariance"] == ne]
 
@@ -147,70 +225,68 @@ for i, ne in enumerate(unique_ne):
         y = sub["mean"]
         yerr = sub["std"].fillna(0)
 
-        ax.plot(x, y, color=colors[j], marker="o", markersize=4)
-        ax.fill_between(x, y - yerr, y + yerr, color=colors[j], alpha=0.1, linewidth=0)
+        ax.errorbar(
+            x,
+            y,
+            yerr=yerr,
+            color=colors[j],
+            marker="o",
+            markersize=3,
+            linewidth=1,
+            capsize=2,
+            label=f"$p_{{err}}={p}$" if i == 0 else "",
+        )
 
-    # Log2 Scale
     ax.set_xscale("log", base=2)
     ax.set_xticks(sample_sizes)
     ax.set_xticklabels(sample_sizes)
-    ax.minorticks_off()
 
-    title_label = styles.get(ne, {}).get("label", f"Non-Equivariance {ne}")
-    ax.set_title(title_label)
-    ax.set_ylim(0.4, 1.05)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.grid(True, alpha=0.3)
+    title_label = styles.get(ne, {}).get("label", f"NE {ne}")
+    ax.text(0.5, 0.9, title_label, transform=ax.transAxes, ha="center", fontsize=9)
+    format_prl_axis(ax)
 
+# Remove empty axes
 for j in range(i + 1, len(axs2)):
     fig2.delaxes(axs2[j])
 
-fig2.text(0.5, 0.02, r"Sample Size $N$ (Log Scale)", ha="center", fontsize=14)
-fig2.text(0.02, 0.5, "Test Accuracy", va="center", rotation="vertical", fontsize=14)
+fig2.text(0.5, 0.01, r"Sample Size $N$", ha="center", fontsize=10)
+fig2.text(0.00, 0.5, "Test Accuracy", va="center", rotation="vertical", fontsize=10)
 
-legend_lines = [
-    plt.Line2D([0], [0], color=colors[j], lw=2) for j in range(len(unique_p))
-]
-legend_labels = [f"$p_{{err}}={p}$" for p in unique_p]
+# Legend (Outside or inside one plot)
+handles, labels = axs2[0].get_legend_handles_labels()
 fig2.legend(
-    legend_lines,
-    legend_labels,
-    loc="center right",
-    title="Noise ($p_{err}$)",
-    bbox_to_anchor=(0.98, 0.5),
-    fontsize=9,
+    handles,
+    labels,
+    loc="upper center",
+    bbox_to_anchor=(0.5, 1.02),
+    ncol=len(unique_p) // 2,
+    frameon=False,
+    fontsize=8,
 )
 
-plt.suptitle(
-    "Impact of Sample Size on Noise Robustness (Fixed Non-Equivariance)",
-    fontsize=16,
-    y=0.98,
-)
-plt.tight_layout(rect=[0.03, 0.03, 0.88, 0.96])
+plt.tight_layout(rect=[0.02, 0.03, 1, 0.95])
 plt.savefig("acc_vs_N_by_equiv.pdf", dpi=300)
 
 
 # ==============================================================================
-# --- 7. New Grid: Test Accuracy vs N (Fixed Noise, Varying Equivariance) ---
+# --- 7. New Grid: Test Accuracy vs N (Fixed Noise) ---
 # ==============================================================================
-
-# Calculate grid dimensions based on number of p_err values
 num_plots_3 = len(unique_p)
-cols_3 = 4  # Adjust columns as needed (4 looks good for ~11 plots)
+cols_3 = 3
 rows_3 = math.ceil(num_plots_3 / cols_3)
 
-fig3, axs3 = plt.subplots(rows_3, cols_3, figsize=(16, 4 * rows_3), sharey=True)
+fig3, axs3 = plt.subplots(
+    rows_3, cols_3, figsize=(7, 2.2 * rows_3), sharey=True, sharex=True
+)
 axs3 = axs3.flatten()
 
-# Iterate over each Noise Probability (p_err)
 for i, p in enumerate(unique_p):
     ax = axs3[i]
     subset_p = agg[agg["p_err"] == p]
 
-    # Iterate over Equivariance levels (lines)
-    # Using 'draw_order' (3,2,1,0) to keep layering consistent with Grid 1
     for ne in draw_order:
+        if ne not in styles:
+            continue
         sub = subset_p[subset_p["non_equivariance"] == ne].sort_values("sample_size")
 
         if sub.empty:
@@ -219,50 +295,54 @@ for i, p in enumerate(unique_p):
         x = sub["sample_size"]
         y = sub["mean"]
         yerr = sub["std"].fillna(0)
-        s = styles.get(ne, styles[3])  # Get style (color/marker/dash)
+        s = styles[ne]
 
-        # Plot lines
         ax.plot(
             x,
             y,
-            label=s["label"],
+            label=s["label"] if i == 0 else "",
             color=s["color"],
             marker=s["marker"],
             linestyle=s["linestyle"],
+            linewidth=1.2,
+            markersize=4,
         )
-        ax.fill_between(x, y - yerr, y + yerr, color=s["color"], alpha=0.1, linewidth=0)
+        # Optional: Light fill for confidence, though error bars are more strictly physics
+        # ax.fill_between(x, y - yerr, y + yerr, color=s["color"], alpha=0.1, linewidth=0)
 
-    # Styling
-    ax.set_title(f"Noise $p_{{err}} = {p}$")
+    ax.text(
+        0.95, 0.05, f"$p_{{err}} = {p}$", transform=ax.transAxes, ha="right", fontsize=9
+    )
+
     ax.set_xscale("log", base=2)
     ax.set_xticks(sample_sizes)
-    ax.set_xticklabels(sample_sizes)
-    ax.minorticks_off()
-    ax.set_ylim(0.4, 1.05)
+    # Only label bottom row
+    if i >= len(unique_p) - cols_3:
+        ax.set_xticklabels(sample_sizes)
+    else:
+        ax.set_xticklabels([])
 
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.grid(True, alpha=0.3)
-
-    # Add legend to the first plot only to save space
-    if i == 0:
-        ax.legend(
-            loc="lower right",
-            frameon=True,
-            framealpha=0.9,
-            edgecolor="gray",
-            fontsize=8,
-        )
+    format_prl_axis(ax)
 
 # Remove empty subplots
 for j in range(i + 1, len(axs3)):
     fig3.delaxes(axs3[j])
 
-# Global Labels for Grid 3
-fig3.text(0.5, 0.02, r"Sample Size $N$ (Log Scale)", ha="center", fontsize=14)
-fig3.text(0.02, 0.5, "Test Accuracy", va="center", rotation="vertical", fontsize=14)
-plt.suptitle("Impact of Sample Size on Accuracy (Fixed Noise)", fontsize=16, y=0.98)
-plt.tight_layout(rect=[0.03, 0.03, 1, 0.96])
+fig3.text(0.5, 0.01, r"Sample Size $N$", ha="center", fontsize=10)
+fig3.text(0.00, 0.5, "Test Accuracy", va="center", rotation="vertical", fontsize=10)
 
+# Legend at top
+handles, labels = axs3[0].get_legend_handles_labels()
+fig3.legend(
+    handles,
+    labels,
+    loc="upper center",
+    bbox_to_anchor=(0.5, 1.02),
+    ncol=5,
+    frameon=False,
+    fontsize=8,
+)
+
+plt.tight_layout(rect=[0.02, 0.03, 1, 0.95])
 plt.savefig("acc_vs_N_by_p.pdf", dpi=300)
 plt.show()
