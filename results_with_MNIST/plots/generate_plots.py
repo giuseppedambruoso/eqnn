@@ -6,10 +6,12 @@ import re
 
 # --- CONFIGURAZIONE PERCORSI ---
 RESULTS_DIR = os.path.join('..', 'results')
+EXTRA_FILE_PATH = os.path.join('old', 'test_accuracies_20.txt')
+
 OUTPUT_CSV = 'all_results.csv'
 OUTPUT_PLOT = 'summary_plot.pdf'
 
-# --- STILE PLOT (Physical Review Letters Standard) ---
+# --- STILE PLOT (PRL Style) ---
 plt.rcParams.update({
     'font.size': 10,
     'font.family': 'serif',
@@ -24,42 +26,30 @@ plt.rcParams.update({
     'xtick.top': True,
     'ytick.right': True,
     'lines.linewidth': 1.5,
-    'lines.markersize': 4,
+    'lines.markersize': 5,
     'axes.grid': True,
     'grid.alpha': 0.3,
     'grid.linestyle': ':'
 })
 
 def parse_folder_name_regex(folder_name):
-    """
-    Estrae i parametri usando Regex per gestire le inconsistenze nei nomi
-    (es: gestisce sia 'DATA.N=160' che 'N.DATA=160').
-    """
+    """Estrae parametri dai nomi delle cartelle."""
     params = {}
-    
-    # 1. Trova N: Cerca 'N=' preceduto opzionalmente da 'DATA.' o seguito da '.DATA'
     match_n = re.search(r'(?:DATA\.N|N\.DATA|N)\s*=\s*(\d+)', folder_name, re.IGNORECASE)
-    if match_n:
-        params['N'] = int(match_n.group(1))
+    if match_n: params['N'] = int(match_n.group(1))
     
-    # 2. Trova Seed
     match_seed = re.search(r'(?:GENERAL\.)?seed\s*=\s*(\d+)', folder_name, re.IGNORECASE)
-    if match_seed:
-        params['seed'] = int(match_seed.group(1))
+    if match_seed: params['seed'] = int(match_seed.group(1))
         
-    # 3. Trova Non-Equivariance
     match_ne = re.search(r'non[._]equivariance\s*=\s*(\d+)', folder_name, re.IGNORECASE)
-    if match_ne:
-        params['non_equivariance'] = int(match_ne.group(1))
+    if match_ne: params['non_equivariance'] = int(match_ne.group(1))
         
-    # 4. Trova p_err
     match_p = re.search(r'p[._]err\s*=\s*(\d+\.?\d*)', folder_name, re.IGNORECASE)
-    if match_p:
-        params['p_err'] = float(match_p.group(1))
-
+    if match_p: params['p_err'] = float(match_p.group(1))
     return params
 
-def extract_metrics(file_path):
+def extract_metrics_from_csv(file_path):
+    """Legge il csv metrics.csv."""
     try:
         df = pd.read_csv(file_path)
         if df.empty: return None
@@ -69,64 +59,67 @@ def extract_metrics(file_path):
     except Exception:
         return None
 
+def parse_txt_file(file_path):
+    """Legge il file di testo manuale per i dati mancanti."""
+    data = []
+    if not os.path.exists(file_path):
+        print(f"ATTENZIONE: File extra '{file_path}' non trovato.")
+        return data
+
+    print(f"Lettura file extra: {file_path}")
+    regex_pattern = r"Seed:\s*(\d+).*?Sample size:\s*(\d+).*?Non equivariance:\s*(\d+).*?Noise:\s*([\d\.]+).*?Test Accuracy:\s*([\d\.]+).*?epoch\s*(\d+)"
+    
+    with open(file_path, 'r') as f:
+        for line in f:
+            match = re.search(regex_pattern, line)
+            if match:
+                data.append({
+                    'seed': int(match.group(1)),
+                    'N': int(match.group(2)),
+                    'non_equivariance': int(match.group(3)),
+                    'p_err': float(match.group(4)),
+                    'max_val_acc': float(match.group(5)),
+                    'max_epoch': int(match.group(6))
+                })
+    return data
+
 def main():
     data = []
-    print(f"Scansione directory: {os.path.abspath(RESULTS_DIR)}")
     
-    if not os.path.exists(RESULTS_DIR):
-        print(f"ERRORE: La cartella {RESULTS_DIR} non esiste.")
-        return
-
-    subfolders = [f for f in os.listdir(RESULTS_DIR) if os.path.isdir(os.path.join(RESULTS_DIR, f))]
-    
-    print(f"Analisi di {len(subfolders)} cartelle...")
-
-    for folder in subfolders:
-        folder_path = os.path.join(RESULTS_DIR, folder)
-        metrics_path = os.path.join(folder_path, 'metrics.csv')
-        
-        if not os.path.exists(metrics_path):
-            continue
+    # 1. SCANSIONE CARTELLE
+    print(f"Scansione directory results: {os.path.abspath(RESULTS_DIR)}")
+    if os.path.exists(RESULTS_DIR):
+        subfolders = [f for f in os.listdir(RESULTS_DIR) if os.path.isdir(os.path.join(RESULTS_DIR, f))]
+        for folder in subfolders:
+            metrics_path = os.path.join(RESULTS_DIR, folder, 'metrics.csv')
+            if not os.path.exists(metrics_path): continue
             
-        # Parsing con Regex
-        params = parse_folder_name_regex(folder)
-        
-        # Verifica parametri
-        if 'N' not in params or 'p_err' not in params or 'non_equivariance' not in params:
-            continue
+            params = parse_folder_name_regex(folder)
+            if 'N' not in params or 'p_err' not in params or 'non_equivariance' not in params: continue
 
-        metrics = extract_metrics(metrics_path)
-        if metrics:
-            data.append({**params, **metrics})
+            metrics = extract_metrics_from_csv(metrics_path)
+            if metrics:
+                data.append({**params, **metrics})
 
-    # Creazione DataFrame
+    # 2. FILE EXTRA
+    data.extend(parse_txt_file(EXTRA_FILE_PATH))
+
+    # 3. DATAFRAME
     df = pd.DataFrame(data)
-    
     if df.empty:
-        print("Nessun dato valido trovato. Controlla i nomi delle cartelle.")
+        print("Nessun dato valido trovato.")
         return
 
-    # --- MODIFICA: ORDINAMENTO COLONNE E RIGHE ---
-    # 1. Definisci l'ordine esatto delle colonne
     desired_columns = ['seed', 'N', 'non_equivariance', 'p_err', 'max_val_acc', 'max_epoch']
-    
-    # Riordina le colonne del DataFrame (selezionando solo quelle desiderate)
-    # (Gestiamo il caso in cui qualche colonna manchi per evitare crash, anche se non dovrebbe accadere)
-    existing_cols = [c for c in desired_columns if c in df.columns]
-    df = df[existing_cols]
-
-    # 2. Ordina le righe secondo la gerarchia richiesta
+    df = df[[c for c in desired_columns if c in df.columns]]
     df = df.sort_values(by=['seed', 'N', 'non_equivariance', 'p_err'])
-
-    # Salva CSV
     df.to_csv(OUTPUT_CSV, index=False)
-    print(f"Creato '{OUTPUT_CSV}' con le colonne ordinate: {existing_cols}")
+    print(f"File '{OUTPUT_CSV}' creato.")
     
-    # Ordiniamo N per il plot (indipendente dal CSV)
     unique_Ns = sorted(df['N'].unique())
-    print(f"Valori di N trovati: {unique_Ns}") 
+    print(f"Valori di N totali: {unique_Ns}") 
 
-    # --- PLOTTING ---
+    # 4. PLOTTING
     num_plots = len(unique_Ns)
     cols = 3 
     rows = (num_plots + cols - 1) // cols
@@ -136,8 +129,16 @@ def main():
 
     unique_equiv = sorted(df['non_equivariance'].unique())
     cmap = plt.get_cmap('viridis', len(unique_equiv))
+    markers = ['o', 's', '^', 'D', 'v', 'p', '*'] 
 
-    # Calcolo range Y uniforme
+    legend_labels = {
+        0: "Equiv",
+        1: "ApproxEquiv1",
+        2: "ApproxEquiv2",
+        3: "NonEquiv",
+        4: "NonEquiv Equivariantized"
+    }
+
     y_min = df['max_val_acc'].min()
     y_max = df['max_val_acc'].max()
     margin = (y_max - y_min) * 0.1
@@ -153,15 +154,21 @@ def main():
             if subset.empty: continue
             
             color = cmap(j)
-            label = f"$NE = {eq_val}$"
+            marker = markers[j % len(markers)]
+            label = legend_labels.get(eq_val, f"NE={eq_val}")
             
-            ax.plot(subset['p_err'], subset['mean'], marker='o', markersize=3, 
+            ax.plot(subset['p_err'], subset['mean'], 
+                    marker=marker, markersize=5, 
                     label=label, color=color, alpha=0.9)
             
+            subset['std'] = subset['std'].fillna(0)
+            
+            # --- MODIFICA QUI: alpha ridotto a 0.1 per shades meno visibili ---
             ax.fill_between(subset['p_err'], 
                             subset['mean'] - subset['std'], 
                             subset['mean'] + subset['std'], 
-                            color=color, alpha=0.2, edgecolor='none')
+                            color=color, alpha=0.1, edgecolor='none')
+            # ------------------------------------------------------------------
 
         ax.set_title(f"$N = {n_val}$", fontsize=12)
         ax.set_ylim(y_min - margin, y_max + margin)
@@ -176,7 +183,7 @@ def main():
 
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 1.0), 
-               ncol=len(unique_equiv), frameon=False, title="Non-Equivariance (NE)")
+               ncol=len(unique_equiv), frameon=False)
 
     plt.tight_layout()
     plt.savefig(OUTPUT_PLOT, bbox_inches='tight')
