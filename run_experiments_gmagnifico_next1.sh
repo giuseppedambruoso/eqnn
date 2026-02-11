@@ -53,10 +53,10 @@ echo -e "${BLUE}[6/6] Avvio Job Hydra in parallelo...${NC}"
 echo "---------------------------------------------------------"
 
 poetry run python src/eqnn/main.py -m \
-    DATA.N=320 \
-    GENERAL.seed=101,1234,5678,999 \
-    QNN.non_equivariance=0,1,2,3 \
-    QNN.p_err=0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10,0.11,0.12,0.13,0.14,0.15,0.16,0.17,0.18,0.19,0.20 \
+    DATA.N=20,40,80,160,320 \
+    GENERAL.seed=42,101,1234,5678,999 \
+    QNN.non_equivariance=4 \
+    QNN.p_err=0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10 \
     hydra/launcher=joblib \
     hydra.launcher.n_jobs=10 &
 
