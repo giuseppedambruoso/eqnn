@@ -1,4 +1,4 @@
 - DATA.N=160
+- GENERAL.seed=104
 - QNN.non_equivariance=2
 - QNN.p_err=0.02
-- GENERAL.seed=104

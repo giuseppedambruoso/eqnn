@@ -104,6 +104,10 @@ def train_loop(
     val_loss_history = []
     val_acc_history = []
 
+    # --- NEW CODE: Initialize tracking variable for best accuracy ---
+    best_val_acc = -1.0
+    # --- END NEW CODE ---
+
     pbar = tqdm(range(epochs), desc="Epoch")
     # if verbose else range(epochs)
 
@@ -154,6 +158,29 @@ def train_loop(
         epoch_val_acc = total_correct / (total_samples + 1e-8)
         val_loss_history.append(epoch_val_loss)
         val_acc_history.append(epoch_val_acc)
+
+        # --- NEW CODE: Check performance and save best model ---
+        if epoch_val_acc > best_val_acc:
+            best_val_acc = epoch_val_acc
+            
+            # Get the current Hydra job directory
+            job_dir = HydraConfig.get().runtime.output_dir
+            os.makedirs(job_dir, exist_ok=True)
+            model_path = os.path.join(job_dir, "best_model.pt")
+            
+            # Save the tensors and metadata
+            torch.save({
+                'epoch': epoch,
+                'params': params.detach().cpu(),
+                'phi': phi.detach().cpu(),
+                'val_acc': best_val_acc,
+                'p_err': p_err,
+                'non_equivariance': non_equivariance
+            }, model_path)
+            
+            if verbose:
+                logger.info(f"New best model saved at epoch {epoch} with val acc {best_val_acc:.4f}")
+        # --- END NEW CODE ---
 
         if verbose:
             pbar.set_postfix(

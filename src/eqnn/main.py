@@ -1,10 +1,12 @@
-# main.py
+# main_new.py
 import csv
 import logging
+import random # > # --- NEW --- <
 import time
 
 import hydra
 import matplotlib.pyplot as plt
+import numpy as np # > # --- NEW --- <
 import torch
 from data_loading import load_eurosat_data, load_mnist_data
 from omegaconf import DictConfig
@@ -23,6 +25,14 @@ def main(cfg: DictConfig) -> None:
 
     SEED = cfg.GENERAL.seed
 
+    # > # --- NEW: Set Global Seeds for Absolute Reproducibility --- <
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(SEED)
+    # > # ---------------------------------------------------------- <
+
     device = cfg.QNN.device
     non_equivariance = cfg.QNN.non_equivariance
     p_err = cfg.QNN.p_err
@@ -30,6 +40,7 @@ def main(cfg: DictConfig) -> None:
     learning_rate = cfg.TRAINING.learning_rate
     N = cfg.DATA.N
     dataset = cfg.DATA.dataset
+    augment_test = cfg.DATA.get("augment_test", False) # > # --- NEW --- <
     batch_size = int(N // 10)
     verbose = cfg.GENERAL.verbose
     dev = torch.device(cfg.GENERAL.dev)
@@ -41,19 +52,20 @@ def main(cfg: DictConfig) -> None:
         )
 
     # DATA LOADING
-    torch.manual_seed(42)
+    # > # --- MODIFIED: Pass seed and augment_test to loaders --- <
     if dataset == "mnist":
         train_loader, test_loader = load_mnist_data(
-            batch_size=batch_size, N=N, num_workers=0, verbose=verbose
+            batch_size=batch_size, N=N, num_workers=0, seed=SEED, verbose=verbose, augment_test=augment_test
         )
     elif dataset == "eurosat":
         train_loader, test_loader = load_eurosat_data(
-            batch_size=batch_size, N=N, num_workers=0, verbose=verbose
+            batch_size=batch_size, N=N, num_workers=0, seed=SEED, verbose=verbose, augment_test=augment_test
         )
     else:
         raise ValueError("dataset must be either 'mnist' or 'eurosat'")
+    # > # ------------------------------------------------------- <
 
-    torch.manual_seed(SEED)
+    torch.manual_seed(SEED) # Keeping your original seed setting here
     if initialization_analysis:
         images, labels = next(iter(train_loader))
         # take only the first sample
