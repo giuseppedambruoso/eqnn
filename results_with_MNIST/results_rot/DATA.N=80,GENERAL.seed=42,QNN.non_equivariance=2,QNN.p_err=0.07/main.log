@@ -1,3 +1,3 @@
-[2026-02-19 12:31:42,492][train][INFO] - Training completed with maximum val acc equal to 0.6624999999171876, found at epoch 23
-[2026-02-19 12:31:42,714][plot][INFO] - Metrics saved at /data/giuseppedambruoso/eqnn/multirun/2026-02-18/16-44-42/DATA.N=80,GENERAL.seed=42,QNN.non_equivariance=2,QNN.p_err=0.07/metrics.csv
-[2026-02-19 12:31:43,884][plot][INFO] - Training and validation plots saved at /data/giuseppedambruoso/eqnn/multirun/2026-02-18/16-44-42/DATA.N=80,GENERAL.seed=42,QNN.non_equivariance=2,QNN.p_err=0.07/plot.png
+[2026-02-24 05:52:48,209][train][INFO] - Training completed with maximum val acc equal to 0.64999999991875, found at epoch 17
+[2026-02-24 05:52:48,512][plot][INFO] - Metrics saved at /data/giuseppedambruoso/eqnn/multirun/2026-02-23/11-25-33/DATA.N=80,GENERAL.seed=42,QNN.non_equivariance=2,QNN.p_err=0.07/metrics.csv
+[2026-02-24 05:52:49,875][plot][INFO] - Training and validation plots saved at /data/giuseppedambruoso/eqnn/multirun/2026-02-23/11-25-33/DATA.N=80,GENERAL.seed=42,QNN.non_equivariance=2,QNN.p_err=0.07/plot.png

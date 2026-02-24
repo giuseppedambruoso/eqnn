@@ -55,11 +55,11 @@ def main(cfg: DictConfig) -> None:
     # > # --- MODIFIED: Pass seed and augment_test to loaders --- <
     if dataset == "mnist":
         train_loader, test_loader = load_mnist_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=SEED, verbose=verbose, augment_test=augment_test
+            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=augment_test
         )
     elif dataset == "eurosat":
         train_loader, test_loader = load_eurosat_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=SEED, verbose=verbose, augment_test=augment_test
+            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=augment_test
         )
     else:
         raise ValueError("dataset must be either 'mnist' or 'eurosat'")

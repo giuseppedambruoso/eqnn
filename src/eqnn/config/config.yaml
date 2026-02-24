@@ -7,7 +7,7 @@ hydra:
     subdir: ${hydra.job.override_dirname}
 
 GENERAL:
-  seed: 42
+  seed: 1234
   dev: "cpu"
   verbose: False
   initialization_analysis: False
@@ -15,6 +15,7 @@ GENERAL:
 DATA:
   N: 160  # number of images in the training set
   dataset: "mnist"
+  augment_test: True
 
 QNN:
   device: "default.mixed"

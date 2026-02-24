@@ -6,6 +6,7 @@ GENERAL:
 DATA:
   'N': 80
   dataset: mnist
+  augment_test: true
 QNN:
   device: default.mixed
   non_equivariance: 2
