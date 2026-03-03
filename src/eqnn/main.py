@@ -12,8 +12,7 @@ from data_loading import load_eurosat_data, load_mnist_data
 from omegaconf import DictConfig
 from plot import plot_results
 from tqdm import tqdm
-from train import train_loop, train_loop_in
-
+from train import train_loop, train_loop_in, test_loop, load_model
 logger = logging.getLogger(__name__)
 
 
@@ -45,7 +44,6 @@ def main(cfg: DictConfig) -> None:
     verbose = cfg.GENERAL.verbose
     dev = torch.device(cfg.GENERAL.dev)
     initialization_analysis = cfg.GENERAL.initialization_analysis
-
     if verbose:
         logger.info(
             f"QNN training pipeline initialized with p_err={p_err} and non_equivariance={non_equivariance}"
@@ -57,6 +55,10 @@ def main(cfg: DictConfig) -> None:
         train_loader, test_loader = load_mnist_data(
             batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=augment_test
         )
+        aug_train_loader, aug_test_loader = load_mnist_data(
+            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
+        )
+
     elif dataset == "eurosat":
         train_loader, test_loader = load_eurosat_data(
             batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=augment_test
@@ -102,24 +104,39 @@ def main(cfg: DictConfig) -> None:
 
         logger.info(f"Saved gradient norms to {csv_path}")
     else:
-        # TRAINING
-        training_output = train_loop(
+        ## TRAINING
+        #training_output = train_loop(
+        #    device=device,
+        #    dev=dev,
+        #    train_loader=train_loader,
+        #    val_loader=test_loader,
+        #    epochs=epochs,
+        #    learning_rate=learning_rate,
+        #    seed=SEED,
+        #    N=N,
+        #    non_equivariance=non_equivariance,
+        #    p_err=p_err,
+        #    verbose=verbose,
+        #)
+
+        ## PLOT RESULTS
+        #plot_results(*training_output[2:6])
+        model_path = f"../../../results_with_MNIST/results_rot/DATA.N=20,GENERAL.seed=42,QNN.non_equivariance=1,QNN.p_err=0"
+        params, phi = load_model(model_path)
+        acc, aug_acc = test_loop(
             device=device,
             dev=dev,
-            train_loader=train_loader,
-            val_loader=test_loader,
-            epochs=epochs,
-            learning_rate=learning_rate,
-            seed=SEED,
+            test_loader=test_loader,
+            aug_test_loader=aug_test_loader,
+            params=params,
+            phi=phi,
             N=N,
             non_equivariance=non_equivariance,
             p_err=p_err,
             verbose=verbose,
         )
 
-        # PLOT RESULTS
-        plot_results(*training_output[2:6])
-
+        csv_path = f"normal_vs_aug_{non_equivariance}_{p_err}_{N}"
 
 if __name__ == "__main__":
     main()

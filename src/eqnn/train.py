@@ -249,3 +249,99 @@ def train_loop_in(
     grad_norm = torch.sqrt(torch.dot(params_grad, params_grad)).item()
 
     return grad_norm
+
+def test_loop(
+    test_loader: torch.utils.data.DataLoader,
+    aug_test_loader: torch.utils.data.DataLoader,
+    device: str,
+    dev: str,
+    params: torch.Tensor,
+    phi: torch.Tensor,
+    N: int,
+    non_equivariance: Literal[0, 1, 2],
+    p_err: float,
+    verbose: bool = False,
+) -> tuple[float, float]:
+
+    dev = torch.device(dev)
+    if verbose:
+        logger.info(f"Using device: {dev}")
+        logger.info("Starting QNN training and validation...")
+
+    # Initialize QNN
+    qnn = create_qnn(device, non_equivariance, p_err)
+    if verbose:
+        logger.info("QNode initialized successfully.")
+
+    total_correct = 0
+    total_samples = 0
+    for batch_images, batch_labels in test_loader:
+        batch_labels = batch_labels.to(dev)
+        batch_predictions = execute_batch(qnn, batch_images, dev, params, phi)
+        total_correct += (
+            (torch.argmax(batch_predictions.squeeze(), 1) == batch_labels)
+            .sum()
+            .item()
+        )
+        total_samples += batch_labels.size(0)
+    acc = total_correct / (total_samples + 1e-8)
+
+    total_correct = 0
+    total_samples = 0
+    for batch_images, batch_labels in aug_test_loader:
+        batch_labels = batch_labels.to(dev)
+        batch_predictions = execute_batch(qnn, batch_images, dev, params, phi)
+        total_correct += (
+            (torch.argmax(batch_predictions.squeeze(), 1) == batch_labels)
+            .sum()
+            .item()
+        )
+        total_samples += batch_labels.size(0)
+    aug_acc = total_correct / (total_samples + 1e-8)
+
+    return acc, aug_acc
+
+def load_model(file_path, device='cpu'):
+    """
+    Loads a PyTorch .pt file and extracts its weights into two 1D tensors.
+    
+    Args:
+        file_path (str): The path to the best_model.pt file.
+        device (str): The device to load the tensors onto (default: 'cpu').
+        
+    Returns:
+        tuple: (params, phi) where both are flattened 1D PyTorch tensors.
+    """
+    # 1. Load the file safely
+    # weights_only=False is used here to allow loading full models or dicts, 
+    # but be cautious with untrusted .pt files.
+    loaded_data = torch.load(file_path, map_location=device, weights_only=False)
+
+    # 2. Extract the state_dict properly
+    if isinstance(loaded_data, torch.nn.Module):
+        # If the whole model object was saved
+        state_dict = loaded_data.state_dict()
+    elif isinstance(loaded_data, dict):
+        # If it's a checkpoint dictionary, look for the standard model key
+        if 'model_state_dict' in loaded_data:
+            state_dict = loaded_data['model_state_dict']
+        else:
+            # Assume the dict itself is the state_dict
+            state_dict = loaded_data
+    else:
+        raise ValueError("Unrecognized file format. Expected a state_dict, model, or checkpoint dict.")
+
+    # 3. Get tensors and validate
+    all_tensors = list(state_dict.values())
+    
+    if len(all_tensors) < 2:
+        raise ValueError("The model file must contain at least two parameter tensors to split them.")
+
+    # 4. Split, flatten, and concatenate
+    rest_tensors = all_tensors[:-1]
+    phi_raw = all_tensors[-1]
+
+    params = torch.cat([p.flatten() for p in rest_tensors])
+    phi = phi_raw.flatten()
+
+    return params, phi
