@@ -560,3 +560,19 @@ Installing the current project: eqnn (0.1.0)
 [2026-03-03 17:58:42,432][train][INFO] - Training completed with maximum val acc equal to 0.7999999999749999, found at epoch 9
 [2026-03-03 17:58:42,542][plot][INFO] - Metrics saved at /data/giuseppedambruoso/eqnn/multirun/2026-03-02/10-51-04/DATA.N=320,GENERAL.seed=42,QNN.non_equivariance=4,QNN.p_err=0.06/metrics.csv
 [2026-03-03 17:58:43,893][plot][INFO] - Training and validation plots saved at /data/giuseppedambruoso/eqnn/multirun/2026-03-02/10-51-04/DATA.N=320,GENERAL.seed=42,QNN.non_equivariance=4,QNN.p_err=0.06/plot.png
+Epoch: 100%|██████████| 40/40 [15:17:52<00:00, 1354.94s/it]Epoch: 100%|██████████| 40/40 [15:17:52<00:00, 1376.82s/it]
+[2026-03-03 18:08:42,938][train][INFO] - Training completed with maximum val acc equal to 0.8031249999749023, found at epoch 9
+[2026-03-03 18:08:43,005][plot][INFO] - Metrics saved at /data/giuseppedambruoso/eqnn/multirun/2026-03-02/10-51-04/DATA.N=320,GENERAL.seed=42,QNN.non_equivariance=4,QNN.p_err=0.1/metrics.csv
+[2026-03-03 18:08:44,012][plot][INFO] - Training and validation plots saved at /data/giuseppedambruoso/eqnn/multirun/2026-03-02/10-51-04/DATA.N=320,GENERAL.seed=42,QNN.non_equivariance=4,QNN.p_err=0.1/plot.png
+Epoch: 100%|██████████| 40/40 [15:25:20<00:00, 1363.68s/it]Epoch: 100%|██████████| 40/40 [15:25:20<00:00, 1388.02s/it]
+[2026-03-03 18:10:55,856][train][INFO] - Training completed with maximum val acc equal to 0.8031249999749023, found at epoch 9
+[2026-03-03 18:10:55,953][plot][INFO] - Metrics saved at /data/giuseppedambruoso/eqnn/multirun/2026-03-02/10-51-04/DATA.N=320,GENERAL.seed=42,QNN.non_equivariance=4,QNN.p_err=0.09/metrics.csv
+[2026-03-03 18:10:56,974][plot][INFO] - Training and validation plots saved at /data/giuseppedambruoso/eqnn/multirun/2026-03-02/10-51-04/DATA.N=320,GENERAL.seed=42,QNN.non_equivariance=4,QNN.p_err=0.09/plot.png
+Epoch: 100%|██████████| 40/40 [15:34:50<00:00, 1365.37s/it]Epoch: 100%|██████████| 40/40 [15:34:50<00:00, 1402.27s/it]
+[2026-03-03 18:12:46,949][train][INFO] - Training completed with maximum val acc equal to 0.7687499999759766, found at epoch 39
+[2026-03-03 18:12:47,033][plot][INFO] - Metrics saved at /data/giuseppedambruoso/eqnn/multirun/2026-03-02/10-51-04/DATA.N=320,GENERAL.seed=42,QNN.non_equivariance=4,QNN.p_err=0.04/metrics.csv
+[2026-03-03 18:12:48,269][plot][INFO] - Training and validation plots saved at /data/giuseppedambruoso/eqnn/multirun/2026-03-02/10-51-04/DATA.N=320,GENERAL.seed=42,QNN.non_equivariance=4,QNN.p_err=0.04/plot.png
+Epoch: 100%|██████████| 40/40 [15:32:40<00:00, 1376.99s/it]Epoch: 100%|██████████| 40/40 [15:32:40<00:00, 1399.01s/it]
+[2026-03-03 18:14:25,144][train][INFO] - Training completed with maximum val acc equal to 0.7968749999750976, found at epoch 9
+[2026-03-03 18:14:25,297][plot][INFO] - Metrics saved at /data/giuseppedambruoso/eqnn/multirun/2026-03-02/10-51-04/DATA.N=320,GENERAL.seed=42,QNN.non_equivariance=4,QNN.p_err=0.07/metrics.csv
+[2026-03-03 18:14:26,359][plot][INFO] - Training and validation plots saved at /data/giuseppedambruoso/eqnn/multirun/2026-03-02/10-51-04/DATA.N=320,GENERAL.seed=42,QNN.non_equivariance=4,QNN.p_err=0.07/plot.png
