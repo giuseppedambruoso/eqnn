@@ -12,9 +12,9 @@ import torch
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-from data_loading import load_eurosat_data, load_mnist_data
+from data_loading import load_mnist_data
 from plot import plot_results
-from train import train_loop, train_loop_in, test_loop, load_model
+from train import train_loop, train_loop_in, test_loop
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +30,9 @@ def main(cfg: DictConfig) -> None:
     random.seed(SEED)
     np.random.seed(SEED)
     torch.manual_seed(SEED)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(SEED)
-    # > # ----------------------------------------------------- <
-
     device = cfg.QNN.device
     non_equivariance = cfg.QNN.non_equivariance
+    reps = cfg.QNN.reps
     p_err = cfg.QNN.p_err
     epochs = cfg.TRAINING.epochs
     learning_rate = cfg.TRAINING.learning_rate
@@ -44,7 +41,10 @@ def main(cfg: DictConfig) -> None:
     augment_test = cfg.DATA.get("augment_test", False)
     batch_size = int(N // 10)
     verbose = cfg.GENERAL.verbose
-    dev = torch.device(cfg.GENERAL.dev)
+    
+    # MODIFICATO: Manteniamo dev come stringa per non attivare il driver CUDA nel processo padre
+    dev = cfg.GENERAL.dev 
+    
     initialization_analysis = cfg.GENERAL.initialization_analysis
     
     if verbose:
@@ -62,19 +62,8 @@ def main(cfg: DictConfig) -> None:
         aug_train_loader, aug_test_loader = load_mnist_data(
             batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
         )
-
-    elif dataset == "eurosat":
-        # Loader normale (pulito)
-        train_loader, test_loader = load_eurosat_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=False
-        )
-        # Loader con augmentation
-        aug_train_loader, aug_test_loader = load_eurosat_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=augment_test
-        )
-        
     else:
-        raise ValueError("dataset must be either 'mnist' or 'eurosat'")
+        raise ValueError("dataset must be 'mnist'")
 
     torch.manual_seed(SEED) # Keeping your original seed setting here
     
@@ -83,12 +72,16 @@ def main(cfg: DictConfig) -> None:
         # take only the first sample
         image = images[0].unsqueeze(0)  # keep batch dim if model expects it
         label = labels[0].unsqueeze(0)
-        image = image.to(dev)
-        label = label.to(dev)
+        
+        # Inizializziamo il tensore CUDA qui localmente se necessario per l'analisi
+        local_dev = torch.device(dev)
+        image = image.to(local_dev)
+        label = label.to(local_dev)
+        
         grad_norms = []
         pbar = tqdm(range(1, 1000), desc="progress") if verbose else range(epochs)
-        
-        for seed_val in pbar: # Rinomato in seed_val per non sovrascrivere la variabile globale
+
+        for seed_val in pbar: 
             torch.manual_seed(seed_val)
             grad_norm = train_loop_in(
                 image=image,
@@ -114,52 +107,24 @@ def main(cfg: DictConfig) -> None:
                 writer.writerow([idx, grad_norm])
 
         logger.info(f"Saved gradient norms to {csv_path}")
-        
+
     else:
-       # TRAINING
-       training_output = train_loop(
+        # TRAINING
+        training_output = train_loop(
             device=device,
             dev=dev,
             train_loader=train_loader,
             val_loader=test_loader,
+            val_loader_aug=aug_test_loader,
             epochs=epochs,
             learning_rate=learning_rate,
             seed=SEED,
             N=N,
             non_equivariance=non_equivariance,
+            reps = reps,
             p_err=p_err,
             verbose=verbose,
         )
-
-        # PLOT RESULTS
-        plot_results(*training_output[2:6])
-
-        base_path = Path(__file__).resolve().parent
-        model_path = base_path.parents[1] / "results_with_MNIST" / "results_rot" / f"DATA.N={N},GENERAL.seed={SEED},QNN.non_equivariance={non_equivariance},QNN.p_err={p_err}" / "best_model.pt"
-        
-        params, phi = load_model(model_path)
-        
-        acc, aug_acc = test_loop(
-            device=device,
-            dev=dev,
-            test_loader=test_loader,
-            aug_test_loader=aug_test_loader,
-            params=params,
-            phi=phi,
-            N=N,
-            non_equivariance=non_equivariance,
-            p_err=p_err,
-            verbose=verbose,
-        )
-
-        csv_path = base_path.parents[1] / "results_with_MNIST" / "results_rot" / f"normal_vs_aug_{non_equivariance}_{p_err}_{N}_{SEED}.csv"
-
-        with open(csv_path, mode="w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["seed", "N", "non_equivariance", "p_err", "acc", "aug_acc"])  # header
-            writer.writerow([SEED, N, non_equivariance, p_err, acc, aug_acc])
-
-        logger.info(f"Saved acc comparison to {csv_path}")
 
 if __name__ == "__main__":
     main()

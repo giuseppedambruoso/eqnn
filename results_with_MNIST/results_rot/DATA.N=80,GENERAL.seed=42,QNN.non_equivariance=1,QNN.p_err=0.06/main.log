@@ -1,3 +1,0 @@
-[2026-02-24 02:23:02,992][train][INFO] - Training completed with maximum val acc equal to 0.6624999999171876, found at epoch 17
-[2026-02-24 02:23:03,195][plot][INFO] - Metrics saved at /data/giuseppedambruoso/eqnn/multirun/2026-02-23/11-25-33/DATA.N=80,GENERAL.seed=42,QNN.non_equivariance=1,QNN.p_err=0.06/metrics.csv
-[2026-02-24 02:23:04,233][plot][INFO] - Training and validation plots saved at /data/giuseppedambruoso/eqnn/multirun/2026-02-23/11-25-33/DATA.N=80,GENERAL.seed=42,QNN.non_equivariance=1,QNN.p_err=0.06/plot.png

@@ -9,7 +9,7 @@ hydra:
 GENERAL:
   seed: 1234
   dev: "cpu"
-  verbose: False
+  verbose: True
   initialization_analysis: False
 
 DATA:
@@ -18,10 +18,11 @@ DATA:
   augment_test: True
 
 QNN:
-  device: "default.mixed"
-  non_equivariance: 4
+  device: "default.qubit"
+  non_equivariance: 0
   p_err: 0.01
+  reps: 2
 
 TRAINING:
-  epochs: 40
+  epochs: 80
   learning_rate: 0.01
