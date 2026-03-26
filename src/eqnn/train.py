@@ -225,7 +225,7 @@ def train_loop(
         file_path = os.path.join(sweep_dir, "test_accuracies.txt")
         with open(file_path, "a") as f:
             f.write(
-                f"Seed: {seed}, Sample size: {N}, Non equivariance: {non_equivariance}, Noise: {p_err}, "
+                f"Seed: {seed}, Sample size: {N}, Non equivariance: {non_equivariance}, Reps: {reps}, Noise: {p_err}, "
                 f"Test Acc: {max_val_acc:.4f}, Aug Test Acc: {best_aug_acc:.4f} (at epoch {max_val_acc_idx})\n"
             )
     except Exception as e:

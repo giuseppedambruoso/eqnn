@@ -74,8 +74,8 @@ echo -e "${C_DIM}-------------------------------------------------------${C_RESE
 
 python src/eqnn/main.py -m \
     GENERAL.seed=1,2,3,4,5,6,7,8,9,10 \
-    DATA.N=20,40,80,160,320,640,1280 \
-    QNN.non_equivariance=3 \
+    DATA.N=1280 \
+    QNN.non_equivariance=4 \
     QNN.p_err=0 \
     QNN.reps=1,2,3 \
     hydra/launcher=joblib \
