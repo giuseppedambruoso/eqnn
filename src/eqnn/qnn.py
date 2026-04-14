@@ -8,6 +8,7 @@ import pennylane as qml
 import torch
 from torch.nn import functional as F
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,7 @@ def create_qnn(
             # Circuito base (non_equiv=3)
             for rep in range(reps):
                 for i in range(8):
-                    qml.RY(params[i], wires=i)
+                    qml.RY(params[i+8*rep], wires=i)
                     if p_err != 0: qml.DepolarizingChannel(p_err, wires=i)
                 for i in range(7):
                     qml.CNOT(wires=[i, i + 1])
@@ -159,7 +160,7 @@ def create_qnn(
         elif non_equivariance == 3:
             for rep in range(reps):
                 for i in range(8):
-                    qml.RY(params[i], wires=i)
+                    qml.RY(params[i+8*rep], wires=i)
                     if p_err != 0: qml.DepolarizingChannel(p_err, wires=i)
                 for i in range(7):
                     qml.CNOT(wires=[i, i + 1])
@@ -177,9 +178,17 @@ def create_qnn(
 
     def qnn_twirled(embedding_unitary: torch.Tensor, params: torch.Tensor, phi: torch.Tensor) -> Any:
         if non_equivariance == 4:
-            # Twirling esatto su tutti gli 8 elementi
-            results = [qnn_base(embedding_unitary, params, phi, g) for g in range(8)]
+            # Eseguiamo gli 8 circuiti uno dopo l'altro in modo sequenziale.
+            # Questo evita il "QuantumFunctionError" perché PennyLane 
+            # finisce un circuito prima di iniziare il successivo.
+            results = []
+            for g in range(8):
+                res = qnn_base(embedding_unitary, params, phi, g)
+                results.append(res)
+        
+            # Stack dei risultati e media
             return torch.stack(results).mean(dim=0)
+        
+        # Per tutti gli altri casi (0, 1, 2, 3), eseguiamo il circuito una sola volta
         return qnn_base(embedding_unitary, params, phi, 0)
-
     return qnn_twirled

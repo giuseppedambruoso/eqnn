@@ -1,0 +1,7 @@
+- GENERAL.seed=2
+- DATA.N=1280
+- QNN.non_equivariance=4
+- QNN.p_err=0
+- QNN.reps=3
+- TRAINING.epochs=60
+- DATA.dataset=mnist

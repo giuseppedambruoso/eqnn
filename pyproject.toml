@@ -112,6 +112,7 @@ pandas = "^2.3.3"
 scikit-learn = "^1.7.2"
 hydra-joblib-launcher = "^1.2.0"
 seaborn = "^0.13.2"
+kagglehub = "^1.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.8.0"

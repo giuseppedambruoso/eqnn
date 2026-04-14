@@ -1,0 +1,6 @@
+- GENERAL.seed=3
+- DATA.N=160
+- QNN.non_equivariance=3
+- QNN.p_err=0
+- QNN.reps=2
+- TRAINING.epochs=80

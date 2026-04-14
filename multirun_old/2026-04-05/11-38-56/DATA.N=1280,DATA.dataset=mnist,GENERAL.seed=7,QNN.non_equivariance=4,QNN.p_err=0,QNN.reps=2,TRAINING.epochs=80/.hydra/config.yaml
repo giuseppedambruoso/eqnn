@@ -1,0 +1,17 @@
+GENERAL:
+  seed: 7
+  dev: cpu
+  verbose: true
+  initialization_analysis: false
+DATA:
+  'N': 1280
+  dataset: mnist
+  augment_test: true
+QNN:
+  device: lightning.qubit
+  non_equivariance: 4
+  p_err: 0
+  reps: 2
+TRAINING:
+  epochs: 80
+  learning_rate: 0.05

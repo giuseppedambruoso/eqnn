@@ -22,7 +22,7 @@ log_error() { echo -e "  ${C_RED}✖${C_RESET} $1"; }
 # ==============================================================================
 clear
 echo -e "${C_BOLD}${C_BLUE}=======================================================${C_RESET}"
-echo -e "${C_BOLD}             EQNN EXPERIMENT PIPELINE                  ${C_RESET}"
+echo -e "${C_BOLD}            EQNN EXPERIMENT PIPELINE                   ${C_RESET}"
 echo -e "${C_BOLD}${C_BLUE}=======================================================${C_RESET}"
 
 log_header "1" "Configurazione Ambiente Conda"
@@ -57,7 +57,7 @@ export MKL_NUM_THREADS=1
 export TORCH_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 
-log_header "5" "Validazione Modello (Unit Testing Silenzioso)"
+log_header "5" "Unit Testing"
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src/eqnn
 log_info "Esecuzione test p4m in parallelo..."
 
@@ -68,18 +68,21 @@ else
     exit 1
 fi
 
-log_header "6" "Esecuzione Esperimenti (Hydra)"
-log_info "Avvio job batch..."
+log_header "6" "Esecuzione Esperimenti (Hydra) - Run Nuove e Rimanenti"
+log_info "Avvio job batch divisi per N..."
 echo -e "${C_DIM}-------------------------------------------------------${C_RESET}\n"
 
+log_info "Esecuzione N=1280 (Seed 3-10)"
 python src/eqnn/main.py -m \
-    GENERAL.seed=1,2,3,4,5,6,7,8,9,10 \
-    DATA.N=1280 \
-    QNN.non_equivariance=4 \
+    GENERAL.seed=5,6,7,8,9,10 \
+    DATA.N=640 \
+    QNN.non_equivariance=3,4 \
     QNN.p_err=0 \
     QNN.reps=1,2,3 \
+    TRAINING.epochs=60 \
+    DATA.dataset='mnist','nwpu' \
     hydra/launcher=joblib \
-    hydra.launcher.n_jobs=30 \
+    hydra.launcher.n_jobs=36 \
     hydra.hydra_logging.root.level=ERROR \
     hydra.job_logging.root.level=ERROR
 

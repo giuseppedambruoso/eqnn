@@ -1,4 +1,5 @@
 import logging
+import os
 import random
 import numpy as np
 import torch
@@ -102,9 +103,9 @@ def load_mnist_data(
     switch = {3: 0, 4: 1, 0: 3, 1: 4}
     tar_transform = lambda y: switch.get(y, y)
 
-    train_full = torchvision.datasets.MNIST(root="../../data", train=True, download=True,
+    train_full = torchvision.datasets.MNIST(root="data", train=True, download=True,
                                             transform=train_transform, target_transform=tar_transform)
-    test_full = torchvision.datasets.MNIST(root="../../data", train=False, download=True,
+    test_full = torchvision.datasets.MNIST(root="data", train=False, download=True,
                                            transform=test_transform, target_transform=tar_transform)
 
     target_labels = torch.tensor([3, 4])
@@ -118,6 +119,188 @@ def load_mnist_data(
 
     train_final = Subset(Subset(train_full, train_idx), train_perm[:N])
     test_final = Subset(Subset(test_full, test_idx), test_perm[:N])
+
+    # DataLoaders
+    g_loader = torch.Generator().manual_seed(seed)
+    
+    train_loader = DataLoader(train_final, batch_size=batch_size, shuffle=True, 
+                              num_workers=num_workers, worker_init_fn=seed_worker, generator=g_loader)
+    
+    test_loader = DataLoader(test_final, batch_size=batch_size, shuffle=False, 
+                             num_workers=num_workers, worker_init_fn=seed_worker)
+
+    return train_loader, test_loader
+
+def load_eurosat_data(
+    batch_size: int, 
+    N: int, 
+    num_workers: int, 
+    seed: int = 42, 
+    verbose: bool = False, 
+    augment_test: bool = False
+) -> tuple[DataLoader, DataLoader]:
+    """
+    Loads EuroSAT data in grayscale (1 channel) for classes 7 (Residential) 
+    and 9 (SeaLake), with manual train/test split, deterministic subset 
+    selection, and optional p4m symmetry augmentation on the test set.
+    """
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
+    if verbose:
+        logger.info(f"Loading data... Subsampling N={N}, Augment Test={augment_test}")
+
+    # Transformation Pipeline
+    base_transforms = [
+        transforms.Resize(16),
+        transforms.Grayscale(num_output_channels=1), # Converte in bianco e nero (1 canale)
+        transforms.ToTensor(),
+    ]
+    
+    post_transforms = [
+        L2Normalize(),
+        transforms.Lambda(lambda x: x.squeeze(0)),
+        transforms.Lambda(lambda x: embedding_unitary(x)),
+    ]
+
+    train_transform = transforms.Compose(base_transforms + post_transforms)
+
+    # Apply p4m augmentation to 50% of the test set
+    test_transform_list = list(base_transforms)
+    if augment_test:
+        test_transform_list.append(QuantumTestAugmentation(p=0.5))
+    test_transform = transforms.Compose(test_transform_list + post_transforms)
+
+    # Class selection and filtering: 7 (Residential) -> 0, 9 (SeaLake) -> 1
+    switch = {7: 0, 9: 1}
+    tar_transform = lambda y: switch.get(y, y)
+
+    # Carica il dataset completo due volte per applicare le diverse trasformazioni
+    # Rimosso l'argomento 'train' che causava il TypeError
+    dataset_full_train = torchvision.datasets.EuroSAT(
+        root="data", download=True, transform=train_transform, target_transform=tar_transform
+    )
+    dataset_full_test = torchvision.datasets.EuroSAT(
+        root="data", download=True, transform=test_transform, target_transform=tar_transform
+    )
+
+    # Trova gli indici di tutte le immagini che appartengono alle classi 7 e 9
+    target_labels = torch.tensor([7, 9])
+    all_targets = torch.tensor(dataset_full_train.targets)
+    valid_idx = torch.isin(all_targets, target_labels).nonzero(as_tuple=True)[0]
+
+    # Split manuale: mescola gli indici validi e dividi 80% Train / 20% Test
+    g_split = torch.Generator().manual_seed(seed)
+    shuffled_idx = valid_idx[torch.randperm(len(valid_idx), generator=g_split)]
+    
+    split_point = int(0.8 * len(shuffled_idx))
+    train_idx = shuffled_idx[:split_point]
+    test_idx = shuffled_idx[split_point:]
+
+    # Subsampling deterministico per selezionare esattamente 'N' campioni
+    g_select = torch.Generator().manual_seed(seed)
+    train_perm = torch.randperm(len(train_idx), generator=g_select).tolist()
+    test_perm = torch.randperm(len(test_idx), generator=g_select).tolist()
+
+    # Mappa la permutazione ristretta a 'N' agli indici originali del dataset
+    final_train_idx = [train_idx[i].item() for i in train_perm[:N]]
+    final_test_idx = [test_idx[i].item() for i in test_perm[:N]]
+
+    train_final = Subset(dataset_full_train, final_train_idx)
+    test_final = Subset(dataset_full_test, final_test_idx)
+
+    # Creazione dei DataLoaders
+    g_loader = torch.Generator().manual_seed(seed)
+    
+    train_loader = DataLoader(
+        train_final, batch_size=batch_size, shuffle=True, 
+        num_workers=num_workers, worker_init_fn=seed_worker, generator=g_loader
+    )
+    
+    test_loader = DataLoader(
+        test_final, batch_size=batch_size, shuffle=False, 
+        num_workers=num_workers, worker_init_fn=seed_worker
+    )
+
+    return train_loader, test_loader
+
+def load_kaggle_nwpu_data(
+    batch_size: int, 
+    N: int, 
+    num_workers: int, 
+    seed: int = 42, 
+    verbose: bool = False, 
+    augment_test: bool = False
+) -> tuple[DataLoader, DataLoader]:
+    """
+    Loads NWPU-RESISC45 data from Kaggle (pre-split train/test folders) 
+    for airplane and ship classes.
+    """
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
+    # Costruiamo i path esatti basandoci sulla struttura dello screenshot
+    # NOTA: Controlla se sul tuo PC la cartella si chiama "Dataset" o se estrai direttamente "train" e "test"
+    data_dir = "data/NWPU-RESISC45"
+    train_dir = os.path.join(data_dir, "train", "train")
+    test_dir = os.path.join(data_dir, "test", "test")
+
+    if verbose:
+        logger.info(f"Loading NWPU data... Train dir: {train_dir}, Test dir: {test_dir}")
+
+    # Transformation Pipeline
+    base_transforms = [
+        transforms.Resize((16, 16)),
+        transforms.Grayscale(num_output_channels=1),
+        transforms.ToTensor(),
+    ]
+    
+    post_transforms = [
+        L2Normalize(),
+        transforms.Lambda(lambda x: x.squeeze(0)),
+        transforms.Lambda(lambda x: embedding_unitary(x)),
+    ]
+
+    train_transform = transforms.Compose(base_transforms + post_transforms)
+
+    # Apply p4m augmentation to 50% of the test set
+    test_transform_list = list(base_transforms)
+    if augment_test:
+        test_transform_list.append(QuantumTestAugmentation(p=0.5))
+    test_transform = transforms.Compose(test_transform_list + post_transforms)
+
+    # Estraiamo la mappatura delle classi dalla cartella di train
+    temp_dataset = torchvision.datasets.ImageFolder(root=train_dir)
+    airplane_idx = temp_dataset.class_to_idx.get('airplane')
+    ship_idx = temp_dataset.class_to_idx.get('ship')
+
+    if airplane_idx is None or ship_idx is None:
+        raise ValueError(f"Classi 'airplane' o 'ship' non trovate in {train_dir}. Controlla la struttura delle cartelle.")
+
+    # Class selection and filtering: Airplane -> 0, Ship -> 1
+    switch = {airplane_idx: 0, ship_idx: 1}
+    tar_transform = lambda y: switch.get(y, y)
+
+    # Carichiamo i due dataset separatamente dalle rispettive cartelle
+    train_full = torchvision.datasets.ImageFolder(root=train_dir, transform=train_transform, target_transform=tar_transform)
+    test_full = torchvision.datasets.ImageFolder(root=test_dir, transform=test_transform, target_transform=tar_transform)
+
+    # Filtriamo solo le classi di interesse e peschiamo gli indici validi
+    target_labels = torch.tensor([airplane_idx, ship_idx])
+    
+    train_valid_idx = torch.isin(torch.tensor(train_full.targets), target_labels).nonzero(as_tuple=True)[0]
+    test_valid_idx = torch.isin(torch.tensor(test_full.targets), target_labels).nonzero(as_tuple=True)[0]
+
+    # Mescoliamo gli indici validi in modo deterministico
+    g_split = torch.Generator().manual_seed(seed)
+    train_shuffled = train_valid_idx[torch.randperm(len(train_valid_idx), generator=g_split)]
+    test_shuffled = test_valid_idx[torch.randperm(len(test_valid_idx), generator=g_split)]
+
+    # Subsampling fino a N elementi
+    train_final = Subset(train_full, train_shuffled[:N].tolist())
+    test_final = Subset(test_full, test_shuffled[:N].tolist())
 
     # DataLoaders
     g_loader = torch.Generator().manual_seed(seed)

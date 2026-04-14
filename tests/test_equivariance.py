@@ -16,7 +16,7 @@ def device_and_tensors():
     torch_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Inizializzazione parametri
-    params = torch.empty(8, device=torch_device).uniform_(-0.1, 0.1)
+    params = torch.empty(8*REPS, device=torch_device).uniform_(-0.1, 0.1)
     params.requires_grad_()
     phi = torch.empty(1, device=torch_device).uniform_(-0.1, 0.1)
     phi.requires_grad_()

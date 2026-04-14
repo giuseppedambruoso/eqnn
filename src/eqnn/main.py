@@ -12,9 +12,9 @@ import torch
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-from data_loading import load_mnist_data
+from data_loading import load_mnist_data, load_eurosat_data, load_kaggle_nwpu_data
 from plot import plot_results
-from train import train_loop, train_loop_in, test_loop
+from train import train_loop
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +62,26 @@ def main(cfg: DictConfig) -> None:
         aug_train_loader, aug_test_loader = load_mnist_data(
             batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
         )
+    elif dataset == "eurosat":
+        # Loader normale (pulito)
+        train_loader, test_loader = load_eurosat_data(
+            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=False
+        )
+        # Loader con augmentation (usato per calcolare aug_acc)
+        aug_train_loader, aug_test_loader = load_eurosat_data(
+            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
+        )
+    elif dataset == "nwpu":
+        # Loader normale (pulito)
+        train_loader, test_loader = load_kaggle_nwpu_data(
+            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=False
+        )
+        # Loader con augmentation (usato per calcolare aug_acc)
+        aug_train_loader, aug_test_loader = load_kaggle_nwpu_data(
+            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
+        )
     else:
-        raise ValueError("dataset must be 'mnist'")
+        raise ValueError("dataset must be either 'mnist' or 'eurosat'")
 
     torch.manual_seed(SEED) # Keeping your original seed setting here
     
@@ -123,6 +141,7 @@ def main(cfg: DictConfig) -> None:
             non_equivariance=non_equivariance,
             reps = reps,
             p_err=p_err,
+            dataset=dataset,
             verbose=verbose,
         )
 

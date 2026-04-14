@@ -1,0 +1,7 @@
+- GENERAL.seed=5
+- DATA.N=20
+- QNN.non_equivariance=3
+- QNN.p_err=0
+- QNN.reps=1
+- TRAINING.epochs=80
+- DATA.dataset=eurosat

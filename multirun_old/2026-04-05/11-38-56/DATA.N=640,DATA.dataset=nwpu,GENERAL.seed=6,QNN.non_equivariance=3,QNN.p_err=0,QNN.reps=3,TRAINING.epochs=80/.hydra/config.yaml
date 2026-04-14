@@ -1,0 +1,17 @@
+GENERAL:
+  seed: 6
+  dev: cpu
+  verbose: true
+  initialization_analysis: false
+DATA:
+  'N': 640
+  dataset: nwpu
+  augment_test: true
+QNN:
+  device: lightning.qubit
+  non_equivariance: 3
+  p_err: 0
+  reps: 3
+TRAINING:
+  epochs: 80
+  learning_rate: 0.05

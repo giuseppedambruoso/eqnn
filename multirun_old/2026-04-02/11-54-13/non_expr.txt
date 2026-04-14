@@ -1,0 +1,1 @@
+In questo caso ci sono solo 8 parametri addestrabili.

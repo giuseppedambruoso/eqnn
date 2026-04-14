@@ -14,11 +14,11 @@ GENERAL:
 
 DATA:
   N: 20  # number of images in the training set
-  dataset: "mnist"
+  dataset: "mnsit"
   augment_test: True
 
 QNN:
-  device: "default.qubit"
+  device: "lightning.qubit"
   non_equivariance: 0
   p_err: 0.01
   reps: 2
