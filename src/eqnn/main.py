@@ -3,6 +3,7 @@ import csv
 import logging
 import random
 import time
+import os
 from pathlib import Path
 
 import hydra
@@ -10,11 +11,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from omegaconf import DictConfig
+from hydra.core.hydra_config import HydraConfig
 from tqdm import tqdm
 
-from data_loading import load_mnist_data, load_eurosat_data, load_kaggle_nwpu_data
+from data_loading import load_mnist_data, load_eurosat_data, load_kaggle_nwpu_data, load_aug_mnist_data, save_raw_dataset_samples
 from plot import plot_results
-from train import train_loop
+from train import train_loop, study_gradients
 
 logger = logging.getLogger(__name__)
 
@@ -80,51 +82,37 @@ def main(cfg: DictConfig) -> None:
         aug_train_loader, aug_test_loader = load_kaggle_nwpu_data(
             batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
         )
+    elif dataset == "aug_mnist":
+        # Loader normale (pulito)
+        train_loader, test_loader = load_aug_mnist_data(
+            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=False
+        )
+        # Loader con augmentation (usato per calcolare aug_acc)
+        aug_train_loader, aug_test_loader = load_aug_mnist_data(
+            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
+        )
     else:
         raise ValueError("dataset must be either 'mnist' or 'eurosat'")
 
-    torch.manual_seed(SEED) # Keeping your original seed setting here
+    # ---------------------------------------------------------
+    # VISUALIZE 30 TRAINING IMAGES
+    # ---------------------------------------------------------
+    torch.manual_seed(SEED)
     
     if initialization_analysis:
-        images, labels = next(iter(train_loader))
-        # take only the first sample
-        image = images[0].unsqueeze(0)  # keep batch dim if model expects it
-        label = labels[0].unsqueeze(0)
+        logger.info("Avvio analisi di inizializzazione massiva...")
         
-        # Inizializziamo il tensore CUDA qui localmente se necessario per l'analisi
-        local_dev = torch.device(dev)
-        image = image.to(local_dev)
-        label = label.to(local_dev)
-        
-        grad_norms = []
-        pbar = tqdm(range(1, 1000), desc="progress") if verbose else range(epochs)
-
-        for seed_val in pbar: 
-            torch.manual_seed(seed_val)
-            grad_norm = train_loop_in(
-                image=image,
-                label=labels,
-                device=device,
-                dev=dev,
-                learning_rate=learning_rate,
-                non_equivariance=non_equivariance,
-                p_err=p_err,
-            )
-            grad_norms.append(grad_norm)
-
-        plt.hist(grad_norms, bins=50)
-        plt.savefig(f"histo_{non_equivariance}")
-        plt.show()
-
-        csv_path = f"grad_norms_{non_equivariance}.csv"
-
-        with open(csv_path, mode="w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["seed", "grad_norm"])  # header
-            for idx, grad_norm in enumerate(grad_norms, start=1):
-                writer.writerow([idx, grad_norm])
-
-        logger.info(f"Saved gradient norms to {csv_path}")
+        # Passiamo le liste direttamente alla funzione
+        study_gradients(
+            datasets=["nwpu", "aug_mnist"],
+            non_equivariances=[3, 4],
+            device=device,
+            dev=dev,
+            p_err=p_err,
+            reps=reps,
+            num_inits=300,
+            verbose=verbose
+        )
 
     else:
         # TRAINING
