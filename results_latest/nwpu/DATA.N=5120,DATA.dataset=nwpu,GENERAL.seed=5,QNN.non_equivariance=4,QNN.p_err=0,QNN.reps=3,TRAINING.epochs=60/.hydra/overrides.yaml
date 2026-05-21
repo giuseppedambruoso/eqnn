@@ -1,0 +1,7 @@
+- GENERAL.seed=5
+- DATA.N=5120
+- QNN.non_equivariance=4
+- QNN.p_err=0
+- QNN.reps=3
+- TRAINING.epochs=60
+- DATA.dataset=nwpu

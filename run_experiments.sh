@@ -48,7 +48,7 @@ trap 'echo -e "\n  ${C_RED}╰─ ✖ Pipeline interrupted by user.${C_RESET}"; 
 # ==============================================================================
 clear
 echo -e "${C_CYAN}╭──────────────────────────────────────────────────╮${C_RESET}"
-echo -e "${C_CYAN}│${C_RESET}${C_BOLD}             EQNN EXPERIMENT PIPELINE             ${C_RESET}${C_CYAN}│${C_RESET}"
+echo -e "${C_CYAN}│${C_RESET}${C_BOLD}              EQNN EXPERIMENT PIPELINE             ${C_RESET}${C_CYAN}│${C_RESET}"
 echo -e "${C_CYAN}╰──────────────────────────────────────────────────╯${C_RESET}"
 
 # --- PHASE 1 ---
@@ -59,6 +59,12 @@ if ! conda info --envs | grep -q "eqnn_env"; then
     conda create -n eqnn_env python=3.11 -y > /dev/null 2>&1
 fi
 conda activate eqnn_env
+
+# Forza Poetry a usare l'interprete Python dell'ambiente Conda appena attivato
+if command -v poetry &> /dev/null; then
+    poetry env use "$(which python)" > /dev/null 2>&1 || true
+fi
+
 PYTHON_VER=$(python --version 2>&1 | awk '{print $2}')
 log_success "Environment active (Python $PYTHON_VER)"
 
@@ -67,6 +73,7 @@ log_step "2" "📦 Build System Check (Poetry)"
 if ! command -v poetry &> /dev/null; then
     log_info "Poetry not found. Installing..."
     pip install poetry > /dev/null 2>&1
+    poetry env use "$(which python)" > /dev/null 2>&1 || true
 fi
 log_success "Poetry is ready to use"
 
@@ -89,10 +96,19 @@ log_step "5" "🧪 Unit Testing"
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src/eqnn
 log_info "Checking invariance and dataset balance..."
 
-if pytest tests/ -n 4 --quiet --disable-warnings > /dev/null 2>&1; then
+# Creazione di un file temporaneo per salvare l'output dei test
+TMP_TEST_LOG=$(mktemp)
+
+# Esecuzione di pytest salvando i dettagli nel file temporaneo
+if pytest tests/ -n 4 --disable-warnings > "$TMP_TEST_LOG" 2>&1; then
     log_success "All tests passed successfully"
+    rm -f "$TMP_TEST_LOG"
 else
-    log_error "Tests failed. Run pytest manually for details."
+    log_error "Tests failed! Ecco il report dettagliato del fallimento:"
+    echo -e "${C_RED}┌────────────────────────────────────────────────────────────────────────────┐${C_RESET}"
+    cat "$TMP_TEST_LOG"
+    echo -e "${C_RED}└────────────────────────────────────────────────────────────────────────────┘${C_RESET}"
+    rm -f "$TMP_TEST_LOG"
     exit 1
 fi
 
@@ -103,16 +119,16 @@ log_info "Please wait, this operation will take some time."
 
 python src/eqnn/main.py -m \
     GENERAL.seed=1,2,3,4,5,6,7,8,9,10 \
-    DATA.N=20,40,80,160,320,640,1280,2560,5120 \
+    DATA.N=320 \
     QNN.non_equivariance=3,4 \
-    QNN.p_err=0 \
-    QNN.reps=1,2,3 \
+    QNN.p_err=0,0.001,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05 \
+    QNN.reps=2 \
     TRAINING.epochs=60 \
     DATA.dataset='mnist' \
     hydra/launcher=joblib \
-    hydra.launcher.n_jobs=27 \
+    hydra.launcher.n_jobs=30 \
     hydra.hydra_logging.root.level=ERROR \
-    hydra.job_logging.root.level=ERROR > /dev/null 2>&1
+    hydra.job_logging.root.level=ERROR > jobs_execution.log 2>&1
 
 log_success "Training completed"
 
@@ -125,6 +141,6 @@ MINUTES=$(( ELAPSED / 60 ))
 SECONDS=$(( ELAPSED % 60 ))
 
 echo -e "\n${C_GREEN}╭──────────────────────────────────────────────────╮${C_RESET}"
-echo -e "${C_GREEN}│${C_BOLD}  ✨ PIPELINE COMPLETED SUCCESSFULLY              ${C_RESET}${C_GREEN}│${C_RESET}"
+echo -e "${C_GREEN}│${C_BOLD}   ✨ PIPELINE COMPLETED SUCCESSFULLY               ${C_RESET}${C_GREEN}│${C_RESET}"
 echo -e "${C_GREEN}╰──────────────────────────────────────────────────╯${C_RESET}"
-echo -e "   ⏱️  Total time  : ${C_BOLD}${MINUTES}m ${SECONDS}s${C_RESET}\n"
+echo -e "    ⏱️  Total time  : ${C_BOLD}${MINUTES}m ${SECONDS}s${C_RESET}\n"

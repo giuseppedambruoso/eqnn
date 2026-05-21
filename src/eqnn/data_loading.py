@@ -416,6 +416,163 @@ def load_aug_mnist_data(
 
     return train_loader, test_loader
 
+import logging
+import os
+import glob
+import random
+import numpy as np
+import torch
+import torchvision.transforms as transforms
+import torchvision.transforms.functional as TF
+from torch.utils.data import DataLoader, Subset, Dataset
+from PIL import Image
+import kagglehub
+
+# Ensure logger is defined (assuming it's set up elsewhere in your file)
+logger = logging.getLogger(__name__)
+
+class ShipsPlanesDataset(Dataset):
+    """
+    Custom Dataset to handle the loaded file paths for Ships and Planes.
+    Assigns Class 0 to Ships and Class 1 to Planes.
+    """
+    def __init__(self, ships_files: list[str], planes_files: list[str], transform=None):
+        # Create samples list with (file_path, label)
+        self.samples = [(f, 0) for f in ships_files] + [(f, 1) for f in planes_files]
+        self.targets = [0] * len(ships_files) + [1] * len(planes_files)
+        self.transform = transform
+        
+    def __len__(self):
+        return len(self.samples)
+        
+    def __getitem__(self, idx):
+        img_path, label = self.samples[idx]
+        # Open image and convert to RGB (transforms will handle grayscale)
+        image = Image.open(img_path).convert('RGB')
+        
+        if self.transform:
+            image = self.transform(image)
+            
+        return image, label
+
+def add_sat_data(
+    batch_size: int, 
+    N: int, 
+    num_workers: int, 
+    seed: int = 42, 
+    verbose: bool = False, 
+    augment_test: bool = False
+) -> tuple[DataLoader, DataLoader]:
+    """
+    Loads Ships (Class 0) and Planes (Class 1) datasets via kagglehub,
+    with manual balanced train/test split and deterministic balanced subset selection. 
+    No training augmentation is applied.
+    """
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
+    if verbose:
+        logger.info(f"Downloading datasets via kagglehub...")
+
+    # Download datasets
+    ships_path = kagglehub.dataset_download("rhammell/ships-in-satellite-imagery")
+    planes_path = kagglehub.dataset_download("rhammell/planesnet")
+
+    if verbose:
+        logger.info(f"Loading data... Subsampling N={N} (Balanced), Augment Test={augment_test}")
+
+    # Gather positive class images (files prefixed with '1_')
+    ships_files = glob.glob(os.path.join(ships_path, '**', '1_*.png'), recursive=True)
+    planes_files = glob.glob(os.path.join(planes_path, '**', '1_*.png'), recursive=True)
+
+    if not ships_files or not planes_files:
+        logger.warning("Could not find enough '1_*.png' images in the downloaded datasets!")
+
+    # --- Base Transformations ---
+    base_transforms = [
+        transforms.Resize(16),
+        transforms.Grayscale(num_output_channels=1),
+        transforms.ToTensor(),
+    ]
+    
+    # --- Post Transformations (Normalization & Embedding) ---
+    post_transforms = [
+        L2Normalize(),
+        transforms.Lambda(lambda x: x.squeeze(0)),
+        transforms.Lambda(lambda x: embedding_unitary(x)),
+    ]
+
+    # --- Training Transform (No Augmentation) ---
+    train_transform = transforms.Compose(base_transforms + post_transforms)
+
+    # --- Test Transform ---
+    test_transform_list = list(base_transforms)
+    if augment_test:
+        test_transform_list.append(QuantumTestAugmentation(p=1))
+    test_transform = transforms.Compose(test_transform_list + post_transforms)
+
+    # Initialize datasets using the custom class
+    dataset_full_train = ShipsPlanesDataset(ships_files, planes_files, transform=train_transform)
+    dataset_full_test = ShipsPlanesDataset(ships_files, planes_files, transform=test_transform)
+
+    all_targets = torch.as_tensor(dataset_full_train.targets)
+
+    # Separate classes before splitting to guarantee structural balance
+    idx_class1 = (all_targets == 0).nonzero(as_tuple=True)[0] # Ships
+    idx_class2 = (all_targets == 1).nonzero(as_tuple=True)[0] # Planes
+
+    g_split = torch.Generator().manual_seed(seed)
+    shuffled_1 = idx_class1[torch.randperm(len(idx_class1), generator=g_split)]
+    shuffled_2 = idx_class2[torch.randperm(len(idx_class2), generator=g_split)]
+    
+    split_1 = int(0.8 * len(shuffled_1))
+    split_2 = int(0.8 * len(shuffled_2))
+
+    # Balanced Manual Split
+    train_idx_1, test_idx_1 = shuffled_1[:split_1], shuffled_1[split_1:]
+    train_idx_2, test_idx_2 = shuffled_2[:split_2], shuffled_2[split_2:]
+
+    # Balanced Subsampling 
+    n1 = N // 2
+    n2 = N - n1
+    
+    # Graceful fallback if N requested is larger than available samples
+    if n1 > len(train_idx_1) or n2 > len(train_idx_2):
+        logger.warning(f"Requested N={N} ({n1}/{n2}) exceeds available train samples. Adjusting.")
+        n1 = min(n1, len(train_idx_1), len(train_idx_2))
+        n2 = n1
+
+    g_select = torch.Generator().manual_seed(seed)
+
+    sel_train_1 = train_idx_1[torch.randperm(len(train_idx_1), generator=g_select)[:n1]]
+    sel_train_2 = train_idx_2[torch.randperm(len(train_idx_2), generator=g_select)[:n2]]
+    train_comb = torch.cat((sel_train_1, sel_train_2))
+    final_train_idx = train_comb[torch.randperm(len(train_comb), generator=g_select)].tolist()
+
+    sel_test_1 = test_idx_1[torch.randperm(len(test_idx_1), generator=g_select)[:n1]]
+    sel_test_2 = test_idx_2[torch.randperm(len(test_idx_2), generator=g_select)[:n2]]
+    test_comb = torch.cat((sel_test_1, sel_test_2))
+    final_test_idx = test_comb[torch.randperm(len(test_comb), generator=g_select)].tolist()
+
+    train_final = Subset(dataset_full_train, final_train_idx)
+    test_final = Subset(dataset_full_test, final_test_idx)
+
+    # DataLoaders
+    g_loader = torch.Generator().manual_seed(seed)
+    
+    train_loader = DataLoader(
+        train_final, batch_size=batch_size, shuffle=True, 
+        num_workers=num_workers, worker_init_fn=seed_worker, generator=g_loader
+    )
+    
+    test_loader = DataLoader(
+        test_final, batch_size=batch_size, shuffle=False, 
+        num_workers=num_workers, worker_init_fn=seed_worker
+    )
+
+    return train_loader, test_loader
+
 def save_raw_dataset_samples(dataset_name: str, seed: int = 42, data_dir: str = "data/NWPU-RESISC45"):
     """
     Loads 15 sample images from the dataset and saves them as '{dataset_name}_before_after.pdf'.
@@ -520,3 +677,93 @@ def save_raw_dataset_samples(dataset_name: str, seed: int = 42, data_dir: str = 
     plt.close()
     
     logger.info(f"✅ Saved {pdf_path} with 15 before/after sample pairs")
+
+def show_dataset(N_per_class: int = 5):
+    """
+    Generates two separate PDFs (nwpu and eurosat).
+    Row 1: Original images (no resize).
+    Row 2: 16x16 resized images.
+    Labels: Residential, SeaLake, Airplane, Ship.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, "../../"))
+    data_root = os.path.join(project_root, "data")
+
+    # Define transforms
+    # Row 1 uses only Grayscale and ToTensor (Original Dimensions)
+    no_resize_transform = transforms.Compose([
+        transforms.Grayscale(num_output_channels=1),
+        transforms.ToTensor(),
+    ])
+
+    # Row 2 uses the 16x16 pipeline
+    low_res_transform = transforms.Compose([
+        transforms.Resize((16, 16)),
+        transforms.Grayscale(num_output_channels=1),
+        transforms.ToTensor(),
+    ])
+
+    dataset_configs = [
+        {
+            "name": "eurosat", 
+            "class_labels": (7, 9), 
+            "display_names": {7: "Residential", 9: "SeaLake"},
+            "path": data_root
+        },
+        {
+            "name": "nwpu", 
+            "class_names": ["airplane", "ship"], 
+            "display_names": {}, # Populated dynamically
+            "path": os.path.join(data_root, "NWPU-RESISC45", "train", "train")
+        }
+    ]
+
+    for config in dataset_configs:
+        name = config["name"]
+        pdf_path = f"dataset_{name}_comparison.pdf"
+        
+        if name == "eurosat":
+            ds_orig = torchvision.datasets.EuroSAT(root=config["path"], download=True, transform=no_resize_transform)
+            ds_low = torchvision.datasets.EuroSAT(root=config["path"], download=True, transform=low_res_transform)
+            targets = torch.as_tensor(ds_orig.targets)
+            c1, c2 = config["class_labels"]
+            label_map = config["display_names"]
+        else:
+            if not os.path.exists(config["path"]):
+                print(f"Skipping {name}: Path not found.")
+                continue
+            ds_orig = torchvision.datasets.ImageFolder(root=config["path"], transform=no_resize_transform)
+            ds_low = torchvision.datasets.ImageFolder(root=config["path"], transform=low_res_transform)
+            targets = torch.as_tensor(ds_orig.targets)
+            c1 = ds_orig.class_to_idx["airplane"]
+            c2 = ds_orig.class_to_idx["ship"]
+            label_map = {c1: "Airplane", c2: "Ship"}
+
+        # Select indices
+        idx1 = (targets == c1).nonzero(as_tuple=True)[0][:N_per_class]
+        idx2 = (targets == c2).nonzero(as_tuple=True)[0][:N_per_class]
+        selected_indices = torch.cat((idx1, idx2))
+
+        fig, axes = plt.subplots(2, 10, figsize=(20, 6))
+        fig.suptitle(f"Dataset: {name.upper()} - Original vs 16x16", fontsize=16)
+
+        for i, idx in enumerate(selected_indices):
+            img_orig, label = ds_orig[idx]
+            img_low, _ = ds_low[idx]
+            
+            # Row 1: Original size
+            axes[0, i].imshow(img_orig.squeeze(), cmap='gray')
+            axes[0, i].set_title(f"{label_map[label]}\n(Original {img_orig.shape[1]}x{img_orig.shape[2]})", fontsize=9)
+            axes[0, i].axis('off')
+
+            # Row 2: 16x16
+            axes[1, i].imshow(img_low.squeeze(), cmap='gray')
+            axes[1, i].set_title(f"16x16", fontsize=9)
+            axes[1, i].axis('off')
+
+        plt.tight_layout()
+        with PdfPages(pdf_path) as pdf:
+            pdf.savefig(fig)
+        plt.close(fig)
+        
+        print(f"Generated: {os.path.abspath(pdf_path)}")

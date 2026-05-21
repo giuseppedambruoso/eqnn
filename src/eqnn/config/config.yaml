@@ -18,7 +18,7 @@ DATA:
   augment_test: True
 
 QNN:
-  device: "lightning.qubit"
+  device: "default.mixed"
   non_equivariance: 0
   p_err: 0.01
   reps: 2

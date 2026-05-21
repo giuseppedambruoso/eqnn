@@ -14,7 +14,7 @@ from omegaconf import DictConfig
 from hydra.core.hydra_config import HydraConfig
 from tqdm import tqdm
 
-from data_loading import load_mnist_data, load_eurosat_data, load_kaggle_nwpu_data, load_aug_mnist_data, save_raw_dataset_samples
+from data_loading import load_mnist_data, load_eurosat_data, load_kaggle_nwpu_data, load_aug_mnist_data, save_raw_dataset_samples, add_sat_data
 from plot import plot_results
 from train import train_loop, study_gradients
 
@@ -89,6 +89,15 @@ def main(cfg: DictConfig) -> None:
         )
         # Loader con augmentation (usato per calcolare aug_acc)
         aug_train_loader, aug_test_loader = load_aug_mnist_data(
+            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
+        )
+    elif dataset == "sat_data":
+        # Loader normale (pulito)
+        train_loader, test_loader = add_sat_data(
+            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=False
+        )
+        # Loader con augmentation (usato per calcolare aug_acc)
+        aug_train_loader, aug_test_loader = add_sat_data(
             batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
         )
     else:
