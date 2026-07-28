@@ -1,4 +1,3 @@
-# config/config.yaml
 hydra:
   job_logging:
     root:
@@ -14,14 +13,16 @@ GENERAL:
 
 DATA:
   N: 20  # number of images in the training set
-  dataset: "mnsit"
+  dataset: "mnist"
   augment_test: True
 
 QNN:
   device: "default.mixed"
-  non_equivariance: 0
-  p_err: 0.01
+  p_err: 0
   reps: 2
+  equivariance: True
+  twirling: False
+  remove_cross_edge: True
 
 TRAINING:
   epochs: 80

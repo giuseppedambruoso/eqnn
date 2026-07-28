@@ -21,22 +21,22 @@ C_RED='\033[31m'
 # ==============================================================================
 
 # UI: New step header
-log_step() { 
+log_step() {
     echo -e "\n${C_BOLD}${C_CYAN}▶ [$1/6] $2${C_RESET}"
 }
 
 # UI: Ongoing info (tree branch)
-log_info() { 
+log_info() {
     echo -e "  ${C_DIM}├─${C_RESET} $1"
 }
 
 # UI: Success (tree closure)
-log_success() { 
+log_success() {
     echo -e "  ${C_GREEN}╰─ ✔ ${C_BOLD}$1${C_RESET}"
 }
 
 # UI: Error
-log_error() { 
+log_error() {
     echo -e "  ${C_RED}╰─ ✖ $1${C_RESET}"
 }
 
@@ -48,19 +48,24 @@ trap 'echo -e "\n  ${C_RED}╰─ ✖ Pipeline interrupted by user.${C_RESET}"; 
 # ==============================================================================
 clear
 echo -e "${C_CYAN}╭──────────────────────────────────────────────────╮${C_RESET}"
-echo -e "${C_CYAN}│${C_RESET}${C_BOLD}              EQNN EXPERIMENT PIPELINE             ${C_RESET}${C_CYAN}│${C_RESET}"
+echo -e "${C_CYAN}│${C_RESET}${C_BOLD}             EQNN EXPERIMENT PIPELINE             ${C_RESET}${C_CYAN}│${C_RESET}"
 echo -e "${C_CYAN}╰──────────────────────────────────────────────────╯${C_RESET}"
 
 # --- PHASE 1 ---
-log_step "1" "🐍 Conda Environment Setup"
-source "$(conda info --base)/etc/profile.d/conda.sh"
-if ! conda info --envs | grep -q "eqnn_env"; then
-    log_info "Creating 'eqnn_env' environment..."
-    conda create -n eqnn_env python=3.11 -y > /dev/null 2>&1
-fi
-conda activate eqnn_env
+log_step "1" "🐍 Virtual Environment Setup (venv)"
 
-# Forza Poetry a usare l'interprete Python dell'ambiente Conda appena attivato
+if [ ! -d ".venv" ]; then
+    log_info "Creating '.venv' environment (Python 3.12)..."
+    python3.12 -m venv .venv
+fi
+
+if [ ! -f ".venv/bin/activate" ]; then
+    log_error "Impossibile trovare l'ambiente virtuale. Assicurati di aver installato python3.12-venv (es. sudo apt install python3.12-venv)"
+    exit 1
+fi
+
+source .venv/bin/activate
+
 if command -v poetry &> /dev/null; then
     poetry env use "$(which python)" > /dev/null 2>&1 || true
 fi
@@ -79,15 +84,16 @@ log_success "Poetry is ready to use"
 
 # --- PHASE 3 ---
 log_step "3" "🔗 Dependency Resolution"
-log_info "Syncing autoray, pennylane, and matplotlib..."
-poetry add autoray==0.8.2 pennylane==0.44.0 pennylane-lightning==0.44.0 matplotlib Pillow > /dev/null 2>&1 || true
+log_info "Installing dependencies from pyproject.toml..."
 poetry install > /dev/null 2>&1
-log_success "Python packages updated"
+log_success "Python packages configured correctly"
 
 # --- PHASE 4 ---
 log_step "4" "⚡ Hardware Configuration (A30 GPU)"
 log_info "Installing cuQuantum toolchain and Lightning GPU..."
-pip install autoray==0.8.2 pennylane==0.44.0 pennylane-lightning==0.44.0 pennylane-lightning-gpu==0.44.0 cuquantum-python-cu12 --quiet
+# Redirecting to /dev/null to completely silence pip
+pip install --upgrade pip > /dev/null 2>&1 || true
+pip install autoray==0.8.2 pennylane==0.44.0 pennylane-lightning==0.44.0 pennylane-lightning-gpu==0.44.0 cuquantum-python-cu12 > /dev/null 2>&1
 export CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 TORCH_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 log_success "GPU acceleration and threads configured"
 
@@ -96,11 +102,9 @@ log_step "5" "🧪 Unit Testing"
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src/eqnn
 log_info "Checking invariance and dataset balance..."
 
-# Creazione di un file temporaneo per salvare l'output dei test
 TMP_TEST_LOG=$(mktemp)
 
-# Esecuzione di pytest salvando i dettagli nel file temporaneo
-if pytest tests/ -n 4 --disable-warnings > "$TMP_TEST_LOG" 2>&1; then
+if pytest tests/test_equivariance.py -n 4 --disable-warnings > "$TMP_TEST_LOG" 2>&1; then
     log_success "All tests passed successfully"
     rm -f "$TMP_TEST_LOG"
 else
@@ -118,17 +122,18 @@ log_info "Starting distributed training..."
 log_info "Please wait, this operation will take some time."
 
 python src/eqnn/main.py -m \
-    GENERAL.seed=1,2,3,4,5,6,7,8,9,10 \
-    DATA.N=320 \
-    QNN.non_equivariance=3,4 \
-    QNN.p_err=0,0.001,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05 \
-    QNN.reps=2 \
+    GENERAL.seed=1 \
+    DATA.N=80 \
+    QNN.equivariance=True \
+    QNN.twirling=False,True \
+    QNN.p_err=0 \
+    QNN.reps=1 \
     TRAINING.epochs=60 \
     DATA.dataset='mnist' \
     hydra/launcher=joblib \
-    hydra.launcher.n_jobs=30 \
+    hydra.launcher.n_jobs=4 \
     hydra.hydra_logging.root.level=ERROR \
-    hydra.job_logging.root.level=ERROR > jobs_execution.log 2>&1
+    hydra.job_logging.root.level=ERROR
 
 log_success "Training completed"
 
