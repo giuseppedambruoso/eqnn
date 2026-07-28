@@ -3,7 +3,7 @@ import logging
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Literal
+from typing import Any
 
 import matplotlib.pyplot as plt
 import pennylane as qml
@@ -23,19 +23,31 @@ logger = logging.getLogger(__name__)
 def loss_function(predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     """
     Computes binary cross-entropy loss for a batch of probability predictions vs labels.
+    Includes diagnostic prints to catch NaNs or out-of-bounds values.
     """
     predictions = predictions.squeeze()
+
+    # -------------------------------------------------------------
+    # DIAGNOSTIC CHECK: Intercept bad values before BCE crashes
+    # -------------------------------------------------------------
+    is_nan = torch.isnan(predictions).any()
+    out_of_bounds = (predictions < 0).any() or (predictions > 1).any()
+
+    if is_nan or out_of_bounds:
+        print("\n" + "!"*60)
+        print("CRITICAL ERROR: INVALID PREDICTIONS DETECTED IN LOSS FUNCTION")
+        print(f"Contains NaNs: {is_nan}")
+        print(f"Out of [0, 1] bounds: {out_of_bounds}")
+        print(f"Predictions Tensor: \n{predictions}")
+        print(f"Targets Tensor: \n{targets}")
+        print("!"*60 + "\n")
+    # -------------------------------------------------------------
+
     loss = F.binary_cross_entropy(predictions, targets.to(predictions.dtype))
     return loss
 
-def loss_function_single(prediction: torch.Tensor, target: int) -> torch.Tensor:
-    prediction = prediction.squeeze()
-    target_tensor = torch.tensor(target, dtype=prediction.dtype, device=prediction.device)
-    loss = F.binary_cross_entropy(prediction, target_tensor)
-    return loss
-
 def execute_batch(
-    qnn: qml.QNode,
+    qnn: Any,
     batch_images: torch.Tensor,
     dev: torch.device,
     params: torch.Tensor,
@@ -47,12 +59,30 @@ def execute_batch(
     batch_images = batch_images.to(dev)
 
     batch_predictions = []
-    for image in batch_images:
-        output = qnn(image, params, phi)
-        output = (1.0 + output)/2
-        batch_predictions.append(output)
+    for i, image in enumerate(batch_images):
+        raw_output = qnn(image, params, phi)
 
-    # Impila gli scalari per ottenere un tensore 1D per il batch
+        # Scale expectation [-1, 1] to probability [0, 1]
+        output = (1.0 + raw_output) / 2.0
+
+        # STRICT CLAMPING
+        clamped_output = torch.clamp(output, min=1e-7, max=1.0 - 1e-7)
+
+        # -------------------------------------------------------------
+        # DIAGNOSTIC CHECK: Trace the exact image that generated NaN
+        # -------------------------------------------------------------
+        if torch.isnan(raw_output) or torch.isnan(clamped_output):
+            print("\n" + "-"*50)
+            print(f"[DEBUG] QNN Output is NaN at Image Index {i}!")
+            print(f"Raw Expectation Value: {raw_output}")
+            print(f"Scaled & Clamped Val : {clamped_output}")
+            print(f"Current Params       : {params.detach().cpu().numpy()}")
+            print("-"*50 + "\n")
+        # -------------------------------------------------------------
+
+        batch_predictions.append(clamped_output)
+
+    # Stack the scalars to obtain a 1D tensor for the batch
     return torch.stack(batch_predictions)
 
 
@@ -66,10 +96,12 @@ def train_loop(
     dev: str,
     seed: int,
     N: int,
-    non_equivariance: Literal[0, 1, 2],
-    reps : int,
+    equivariance: bool,
+    reps: int,
     p_err: float,
-    dataset: str,  # <-- Added dataset parameter
+    dataset: str,
+    twirling: bool = False,
+    remove_cross_edge: bool = False,
     verbose: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, list[float], list[float], list[float], list[float], list[float], list[float]]:
 
@@ -79,47 +111,41 @@ def train_loop(
         logger.info("Starting QNN training...")
 
     # Initialize QNN
-    qnn = create_qnn(device, non_equivariance, p_err, reps)
+    qnn = create_qnn(device, p_err, reps, equivariance, twirling, remove_cross_edge)
     if verbose:
         logger.info("QNode initialized successfully.")
 
-    # --- REPRODUCIBILITY FIX: Use a seeded generator for parameter initialization ---
+    # Use a seeded generator for parameter initialization
     g = torch.Generator(device=dev)
     g.manual_seed(seed)
 
     params = torch.empty(8*reps, device=dev).uniform_(-0.1, 0.1, generator=g)
     params.requires_grad_()
-#   phi = torch.empty(1, device=dev).uniform_(-0.1, 0.1, generator=g)
-#   phi.requires_grad_()
     phi = torch.tensor(0.0, requires_grad=False)
-
-    # -----------------------------------------------------------------------------
 
     opt = torch.optim.Adam([params, phi], lr=learning_rate, betas=(0.5, 0.99))
 
     train_loss_history = []
     train_acc_history = []
-    
-    # We will just append the final values to these lists to maintain your return signature
+
     val_loss_history = []
     val_acc_history = []
-    val_aug_loss_history = [] 
-    val_aug_acc_history = []   
-    
-    # Track parameters per epoch
+    val_aug_loss_history = []
+    val_aug_acc_history = []
+
     params_history = []
 
     if verbose:
         try:
             job_idx = HydraConfig.get().job.num
         except Exception:
-            job_idx = 0 
+            job_idx = 0
 
         pbar = tqdm(
-            range(epochs), 
-            desc=f"Job {job_idx} (Eq={non_equivariance})", 
-            position=job_idx, 
-            leave=True
+            range(epochs),
+            desc=f"Job {job_idx} (Eq={equivariance}, Twirl={twirling}, NoCross={remove_cross_edge})",
+            leave=False,
+            mininterval=2.0
         )
     else:
         pbar = range(epochs)
@@ -177,7 +203,7 @@ def train_loop(
 
             assert torch.equal(batch_labels, batch_labels_aug), "FATAL: Standard and Augmented validation labels do not match!"
 
-            # --- 1. Standard Prediction ---
+            # 1. Standard Prediction
             batch_predictions = execute_batch(qnn, batch_images, dev, params, phi)
             loss = loss_function(batch_predictions, batch_labels)
 
@@ -185,7 +211,7 @@ def train_loop(
             total_correct += (((batch_predictions.squeeze() > 0.5).long() == batch_labels).sum().item())
             total_samples += batch_labels.size(0)
 
-            # --- 2. Augmented Prediction ---
+            # 2. Augmented Prediction
             batch_predictions_aug = execute_batch(qnn, batch_images_aug, dev, params, phi)
             loss_aug = loss_function(batch_predictions_aug, batch_labels)
 
@@ -207,23 +233,23 @@ def train_loop(
         logger.info(f"Validation completed. Val Acc: {final_val_acc:.4f}, Aug Val Acc: {final_val_aug_acc:.4f}")
 
     # --- CALCULATE CONVERGENCE EPOCH ---
-    patience = 5           # Number of epochs to wait for an improvement
-    min_delta = 1e-4       # Minimum significant decrease in loss
+    patience = 5
+    min_delta = 1e-4
     best_loss = float('inf')
     epochs_no_improve = 0
-    convergence_epoch = epochs  # Default to total epochs if no early convergence detected
+    convergence_epoch = epochs
 
     for epoch_idx, current_loss in enumerate(train_loss_history):
         if current_loss < best_loss - min_delta:
             best_loss = current_loss
             epochs_no_improve = 0
-            convergence_epoch = epoch_idx + 1 # +1 to make it 1-indexed like standard epoch counting
+            convergence_epoch = epoch_idx + 1
         else:
             epochs_no_improve += 1
-            
+
         if epochs_no_improve >= patience:
             break
-    
+
     if verbose:
         logger.info(f"Calculated convergence at epoch: {convergence_epoch}")
     # -----------------------------------
@@ -232,11 +258,11 @@ def train_loop(
     try:
         job_dir = HydraConfig.get().runtime.output_dir
     except Exception:
-        job_dir = os.getcwd() # Fallback if not running strictly through Hydra
-    
+        job_dir = os.getcwd()
+
     os.makedirs(job_dir, exist_ok=True)
 
-    # 1. Save loss_history.csv in the job folder
+    # 1. Save loss_history.csv
     loss_csv_path = os.path.join(job_dir, "loss_history.csv")
     with open(loss_csv_path, "w", newline="") as f:
         writer = csv.writer(f)
@@ -244,17 +270,16 @@ def train_loop(
         for e, l in enumerate(train_loss_history):
             writer.writerow([e, l])
 
-    # 2. Save params_history.csv in the job folder
+    # 2. Save params_history.csv
     params_csv_path = os.path.join(job_dir, "params_history.csv")
     with open(params_csv_path, "w", newline="") as f:
         writer = csv.writer(f)
-        # Create a header: epoch, param_0, param_1, ..., param_N, phi
         header = ["epoch"] + [f"param_{i}" for i in range(len(current_params))] + ["phi"]
         writer.writerow(header)
         for row in params_history:
             writer.writerow(row)
 
-    # 3. Save loss_history.jpg in the job folder
+    # 3. Save loss_history.jpg
     loss_jpg_path = os.path.join(job_dir, "loss_history.jpg")
     plt.figure()
     plt.plot(range(epochs), train_loss_history, label='Train Loss', color='blue')
@@ -278,28 +303,24 @@ def train_loop(
 
     # 4. Accumulate results.txt in the sweep/common directory
     try:
-        # If using hydra multi-run, this grabs the parent sweep directory
         sweep_dir = HydraConfig.get().sweep.dir
     except Exception:
-        # Fallback to the parent directory of the current job directory
         sweep_dir = os.path.dirname(job_dir)
-    
+
     os.makedirs(sweep_dir, exist_ok=True)
     results_path = os.path.join(sweep_dir, "results.txt")
 
     file_exists = os.path.isfile(results_path)
     with open(results_path, "a", newline="") as f:
         writer = csv.writer(f)
-        # Write header if the file is newly created (added "dataset" and "convergence_epoch")
         if not file_exists:
             writer.writerow([
-                "dataset", "N", "seed", "p_err", "non_equivariance", "reps",  
-                "val_acc", "val_aug_acc", "training_time", "epoch_time", "convergence_epoch"
+                "dataset", "N", "seed", "p_err", "equivariance", "reps",
+                "val_acc", "val_aug_acc", "training_time", "epoch_time", "convergence_epoch", "remove_cross_edge"
             ])
-        # Append the results for this specific configuration
         writer.writerow([
-            dataset, N, seed, p_err, non_equivariance, reps, 
-            final_val_acc, final_val_aug_acc, training_time, epoch_time, convergence_epoch
+            dataset, N, seed, p_err, equivariance, reps,
+            final_val_acc, final_val_aug_acc, training_time, epoch_time, convergence_epoch, remove_cross_edge
         ])
 
     return (
@@ -315,31 +336,33 @@ def train_loop(
 
 def study_gradients(
     datasets: list[str],
-    non_equivariances: list[int],
+    equivariances: list[bool],
     device: str,
     dev: str,
     p_err: float,
     reps: int,
+    twirling: bool = False,
+    remove_cross_edge: bool = False,
     num_inits: int = 100,
     verbose: bool = True
 ):
     """
-    Studia la norma del gradiente al variare di N, per diversi dataset e 
-    valori di non_equivariance, salvando i grafici per ogni dataset.
+    Studia la norma del gradiente al variare di N, per diversi dataset e
+    valori di equivariance, salvando i grafici per ogni dataset.
     """
     N_values = [20, 40, 80, 160, 320, 640, 1280, 2560, 5120]
     local_dev = torch.device(dev)
-    
-    # Struttura dati per salvare i risultati: results[dataset][neq][N] = [grad_norm_1, ...]
-    results = {ds: {neq: {n: [] for n in N_values} for neq in non_equivariances} for ds in datasets}
-    
+
+    # Struttura dati per salvare i risultati: results[dataset][eq][N] = [grad_norm_1, ...]
+    results = {ds: {eq: {n: [] for n in N_values} for eq in equivariances} for ds in datasets}
+
     pbar_ds = tqdm(datasets, desc="Datasets", position=0, leave=True) if verbose else datasets
-    
+
     for ds in pbar_ds:
         pbar_N = tqdm(N_values, desc=f"Valori di N ({ds})", position=1, leave=False) if verbose else N_values
 
         for N in pbar_N:
-            # --- 1. Carica il dato UNA sola volta per questo (dataset, N) ---
+            # Carica il dato UNA sola volta per questo (dataset, N)
             if ds == "mnist":
                 train_loader, _ = load_mnist_data(batch_size=N, N=N, num_workers=0, seed=42, augment_test=False)
             elif ds == "nwpu":
@@ -353,11 +376,11 @@ def study_gradients(
             batch_images = batch_images.to(local_dev)
             batch_labels = batch_labels.to(local_dev)
 
-            # --- 2. Analizza per i diversi valori di non_equivariance ---
-            for neq in non_equivariances:
-                qnn = create_qnn(device, neq, p_err, reps)
+            # Analizza per i diversi valori di equivariance
+            for eq in equivariances:
+                qnn = create_qnn(device, p_err, reps, eq, twirling, remove_cross_edge)
 
-                pbar_inits = tqdm(range(num_inits), desc=f"Eq={neq}", position=2, leave=False) if verbose else range(num_inits)
+                pbar_inits = tqdm(range(num_inits), desc=f"Eq={eq}", position=2, leave=False) if verbose else range(num_inits)
 
                 for _ in pbar_inits:
                     params = torch.empty(8*reps, device=local_dev).uniform_(-0.1, 0.1)
@@ -377,24 +400,23 @@ def study_gradients(
                     if phi.grad is not None:
                         grad_norm_sq += phi.grad.norm(2).item() ** 2
 
-                    results[ds][neq][N].append(math.sqrt(grad_norm_sq))
+                    results[ds][eq][N].append(math.sqrt(grad_norm_sq))
 
-        # --- 3. GENERAZIONE GRAFICI PER IL DATASET CORRENTE ---
+        # --- GENERAZIONE GRAFICI PER IL DATASET CORRENTE ---
         if verbose:
             print(f"\nSalvataggio grafici per {ds}...")
 
-        colors = ['skyblue', 'salmon', 'lightgreen', 'plum'] # Colori per i diversi neq
+        colors = ['skyblue', 'salmon', 'lightgreen', 'plum']
 
-        # Plot A: Grid di Istogrammi per il dataset corrente
+        # Plot A: Grid di Istogrammi
         fig, axes = plt.subplots(3, 3, figsize=(18, 18))
         axes = axes.flatten()
 
         for i, N in enumerate(N_values):
-            for idx, neq in enumerate(non_equivariances):
-                data = results[ds][neq][N]
-                # Usa alpha=0.6 per permettere di vedere l'istogramma sottostante
-                axes[i].hist(data, bins=50, alpha=0.6, color=colors[idx % len(colors)], 
-                             edgecolor='black', label=f'Eq = {neq}', density=True)
+            for idx, eq in enumerate(equivariances):
+                data = results[ds][eq][N]
+                axes[i].hist(data, bins=50, alpha=0.6, color=colors[idx % len(colors)],
+                             edgecolor='black', label=f'Eq = {eq}', density=True)
 
             axes[i].set_title(f'N = {N}')
             axes[i].set_xlabel('Gradient Norm')
@@ -406,15 +428,15 @@ def study_gradients(
         plt.savefig(f"histo_grid_{ds}.pdf")
         plt.close()
 
-        # Plot B: Media +- Varianza vs N per il dataset corrente
+        # Plot B: Media +- Varianza vs N
         plt.figure(figsize=(10, 6))
-        for idx, neq in enumerate(non_equivariances):
-            means = [np.mean(results[ds][neq][n]) for n in N_values]
-            variances = [np.var(results[ds][neq][n]) for n in N_values]
+        for idx, eq in enumerate(equivariances):
+            means = [np.mean(results[ds][eq][n]) for n in N_values]
+            variances = [np.var(results[ds][eq][n]) for n in N_values]
 
-            plt.errorbar(N_values, means, yerr=variances, fmt='-o', 
-                         color=colors[idx % len(colors)], ecolor='black', 
-                         capsize=5, alpha=0.8, label=f'Eq = {neq} (Media $\pm$ Var)')
+            plt.errorbar(N_values, means, yerr=variances, fmt='-o',
+                         color=colors[idx % len(colors)], ecolor='black',
+                         capsize=5, alpha=0.8, label=f'Eq = {eq} (Media $\\pm$ Var)')
 
         plt.xscale('log', base=2)
         plt.xticks(N_values, labels=[str(n) for n in N_values])
