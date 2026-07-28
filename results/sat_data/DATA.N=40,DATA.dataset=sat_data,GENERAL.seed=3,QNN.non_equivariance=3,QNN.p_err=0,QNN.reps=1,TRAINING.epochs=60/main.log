@@ -1,0 +1,13 @@
+[2026-05-26 10:16:10,024][__main__][INFO] - QNN training pipeline initialized with p_err=0 and non_equivariance=3
+[2026-05-26 10:16:10,024][data_loading][INFO] - Downloading datasets via kagglehub...
+[2026-05-26 10:16:11,683][data_loading][INFO] - Data loaded. Subsampling N=40 (Balanced), Test Augmentation=False
+[2026-05-26 10:16:11,773][data_loading][INFO] - Training samples allocated -> Ships: 20 | Planes: 20
+[2026-05-26 10:16:11,774][data_loading][INFO] - Downloading datasets via kagglehub...
+[2026-05-26 10:16:13,391][data_loading][INFO] - Data loaded. Subsampling N=40 (Balanced), Test Augmentation=True
+[2026-05-26 10:16:13,478][data_loading][INFO] - Training samples allocated -> Ships: 20 | Planes: 20
+[2026-05-26 10:16:13,479][train][INFO] - Using device: cpu
+[2026-05-26 10:16:13,479][train][INFO] - Starting QNN training...
+[2026-05-26 10:16:13,480][train][INFO] - QNode initialized successfully.
+[2026-05-26 10:25:32,530][train][INFO] - Training completed in 559.05s. Starting validation...
+[2026-05-26 10:25:49,981][train][INFO] - Validation completed. Val Acc: 0.6500, Aug Val Acc: 0.4750
+[2026-05-26 10:25:49,981][train][INFO] - Calculated convergence at epoch: 17

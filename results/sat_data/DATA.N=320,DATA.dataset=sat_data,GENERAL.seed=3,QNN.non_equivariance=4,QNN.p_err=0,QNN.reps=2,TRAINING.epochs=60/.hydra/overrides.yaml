@@ -1,0 +1,7 @@
+- GENERAL.seed=3
+- DATA.N=320
+- QNN.non_equivariance=4
+- QNN.reps=2
+- QNN.p_err=0
+- TRAINING.epochs=60
+- DATA.dataset=sat_data

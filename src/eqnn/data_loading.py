@@ -431,29 +431,54 @@ import kagglehub
 # Ensure logger is defined (assuming it's set up elsewhere in your file)
 logger = logging.getLogger(__name__)
 
+import logging
+import os
+import glob
+import random
+import numpy as np
+import torch
+import torchvision.transforms as transforms
+import torchvision.transforms.functional as TF
+from torch.utils.data import DataLoader, Subset, Dataset
+from PIL import Image
+import kagglehub
+
+# Initialize logger for module-level tracking
+logger = logging.getLogger(__name__)
+
 class ShipsPlanesDataset(Dataset):
     """
-    Custom Dataset to handle the loaded file paths for Ships and Planes.
-    Assigns Class 0 to Ships and Class 1 to Planes.
+    Custom PyTorch Dataset for binary classification of satellite imagery.
+    
+    This class handles the loading of image paths for Ships (Class 0) and 
+    Planes (Class 1). Images are loaded lazily and converted to RGB upon access.
+    
+    Args:
+        ships_files (list[str]): File paths to ship images (positive class from Kaggle).
+        planes_files (list[str]): File paths to plane images (positive class from Kaggle).
+        transform (callable, optional): Optional transform to be applied on a sample.
     """
     def __init__(self, ships_files: list[str], planes_files: list[str], transform=None):
-        # Create samples list with (file_path, label)
+        # Construct sample list as tuples of (file_path, class_label)
         self.samples = [(f, 0) for f in ships_files] + [(f, 1) for f in planes_files]
         self.targets = [0] * len(ships_files) + [1] * len(planes_files)
         self.transform = transform
-        
-    def __len__(self):
+
+    def __len__(self) -> int:
         return len(self.samples)
-        
-    def __getitem__(self, idx):
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
         img_path, label = self.samples[idx]
-        # Open image and convert to RGB (transforms will handle grayscale)
-        image = Image.open(img_path).convert('RGB')
         
+        # Ensure consistent channel dimensions by converting to RGB initially.
+        # Downstream transforms (e.g., Grayscale) will handle specific channel requirements.
+        image = Image.open(img_path).convert('RGB')
+
         if self.transform:
             image = self.transform(image)
-            
+
         return image, label
+
 
 def add_sat_data(
     batch_size: int, 
@@ -464,306 +489,219 @@ def add_sat_data(
     augment_test: bool = False
 ) -> tuple[DataLoader, DataLoader]:
     """
-    Loads Ships (Class 0) and Planes (Class 1) datasets via kagglehub,
-    with manual balanced train/test split and deterministic balanced subset selection. 
-    No training augmentation is applied.
+    Retrieves, processes, and splits the Ships and Planes satellite datasets.
+    
+    This function guarantees a perfectly balanced 50/50 train-test split and 
+    maintains strict class parity based on the requested sample size (N). 
+    All random operations are seeded for full experimental reproducibility.
+    
+    Args:
+        batch_size (int): Number of samples per batch in the DataLoaders.
+        N (int): Total number of training samples requested (N/2 per class). 
+                 The test set will mirror this size.
+        num_workers (int): Number of subprocesses to use for data loading.
+        seed (int): Global random seed for reproducibility. Defaults to 42.
+        verbose (bool): If True, outputs detailed logging information.
+        augment_test (bool): If True, applies quantum test-time augmentation.
+        
+    Returns:
+        tuple[DataLoader, DataLoader]: Training and Testing DataLoaders.
+        
+    Raises:
+        ValueError: If the requested N exceeds the available images in the 50% split.
     """
+    # 1. Enforce deterministic behavior across all random number generators
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
 
     if verbose:
-        logger.info(f"Downloading datasets via kagglehub...")
+        logger.info("Downloading datasets via kagglehub...")
 
-    # Download datasets
+    # 2. Ingest datasets (requires internet connection on first run)
     ships_path = kagglehub.dataset_download("rhammell/ships-in-satellite-imagery")
     planes_path = kagglehub.dataset_download("rhammell/planesnet")
 
     if verbose:
-        logger.info(f"Loading data... Subsampling N={N} (Balanced), Augment Test={augment_test}")
+        logger.info(f"Data loaded. Subsampling N={N} (Balanced), Test Augmentation={augment_test}")
 
-    # Gather positive class images (files prefixed with '1_')
+    # Extract strictly the positive class images (prefixed with '1_')
     ships_files = glob.glob(os.path.join(ships_path, '**', '1_*.png'), recursive=True)
     planes_files = glob.glob(os.path.join(planes_path, '**', '1_*.png'), recursive=True)
 
     if not ships_files or not planes_files:
-        logger.warning("Could not find enough '1_*.png' images in the downloaded datasets!")
+        logger.warning("Insufficient '1_*.png' images found in the downloaded datasets.")
 
-    # --- Base Transformations ---
+    # 3. Define Data Transformation Pipelines
     base_transforms = [
         transforms.Resize(16),
         transforms.Grayscale(num_output_channels=1),
         transforms.ToTensor(),
     ]
     
-    # --- Post Transformations (Normalization & Embedding) ---
+    # Note: Ensure custom classes (L2Normalize, embedding_unitary) are imported/defined
     post_transforms = [
         L2Normalize(),
         transforms.Lambda(lambda x: x.squeeze(0)),
         transforms.Lambda(lambda x: embedding_unitary(x)),
     ]
 
-    # --- Training Transform (No Augmentation) ---
     train_transform = transforms.Compose(base_transforms + post_transforms)
 
-    # --- Test Transform ---
     test_transform_list = list(base_transforms)
     if augment_test:
+        # Note: Ensure QuantumTestAugmentation is imported/defined
         test_transform_list.append(QuantumTestAugmentation(p=1))
     test_transform = transforms.Compose(test_transform_list + post_transforms)
 
-    # Initialize datasets using the custom class
+    # Instantiate full datasets
     dataset_full_train = ShipsPlanesDataset(ships_files, planes_files, transform=train_transform)
     dataset_full_test = ShipsPlanesDataset(ships_files, planes_files, transform=test_transform)
-
     all_targets = torch.as_tensor(dataset_full_train.targets)
 
-    # Separate classes before splitting to guarantee structural balance
-    idx_class1 = (all_targets == 0).nonzero(as_tuple=True)[0] # Ships
-    idx_class2 = (all_targets == 1).nonzero(as_tuple=True)[0] # Planes
+    # 4. Stratified Data Splitting Strategy
+    # Isolate classes to ensure balanced representation
+    idx_class1 = (all_targets == 0).nonzero(as_tuple=True)[0]  # Ships
+    idx_class2 = (all_targets == 1).nonzero(as_tuple=True)[0]  # Planes
 
+    # Shuffle intra-class indices deterministically
     g_split = torch.Generator().manual_seed(seed)
     shuffled_1 = idx_class1[torch.randperm(len(idx_class1), generator=g_split)]
     shuffled_2 = idx_class2[torch.randperm(len(idx_class2), generator=g_split)]
     
-    split_1 = int(0.8 * len(shuffled_1))
-    split_2 = int(0.8 * len(shuffled_2))
+    # Define a strict 50/50 empirical split
+    split_1 = int(0.5 * len(shuffled_1))
+    split_2 = int(0.5 * len(shuffled_2))
 
-    # Balanced Manual Split
+    # Allocate to training and testing pools
     train_idx_1, test_idx_1 = shuffled_1[:split_1], shuffled_1[split_1:]
     train_idx_2, test_idx_2 = shuffled_2[:split_2], shuffled_2[split_2:]
 
-    # Balanced Subsampling 
+    # 5. Balanced Subsampling based on requested N
     n1 = N // 2
     n2 = N - n1
     
-    # Graceful fallback if N requested is larger than available samples
+    # Strict validation: prevent Out-of-Bounds errors by explicitly raising an exception
     if n1 > len(train_idx_1) or n2 > len(train_idx_2):
-        logger.warning(f"Requested N={N} ({n1}/{n2}) exceeds available train samples. Adjusting.")
-        n1 = min(n1, len(train_idx_1), len(train_idx_2))
-        n2 = n1
+        raise ValueError(
+            f"Requested N={N} requires {n1} samples per class, but only "
+            f"{len(train_idx_1)} Ships and {len(train_idx_2)} Planes are available "
+            f"in the 50% split pool. Please reduce N."
+        )
 
+    # Log operational sample usage
+    msg = f"Training samples allocated -> Ships: {n1} | Planes: {n2}"
+    if verbose:
+        logger.info(msg)
+    else:
+        print(msg)
+
+    # Sample exactly n1/n2 indices from the allocated pools
     g_select = torch.Generator().manual_seed(seed)
-
+    
+    # Train set construction
     sel_train_1 = train_idx_1[torch.randperm(len(train_idx_1), generator=g_select)[:n1]]
     sel_train_2 = train_idx_2[torch.randperm(len(train_idx_2), generator=g_select)[:n2]]
     train_comb = torch.cat((sel_train_1, sel_train_2))
     final_train_idx = train_comb[torch.randperm(len(train_comb), generator=g_select)].tolist()
 
+    # Test set construction (mirrors train size)
     sel_test_1 = test_idx_1[torch.randperm(len(test_idx_1), generator=g_select)[:n1]]
     sel_test_2 = test_idx_2[torch.randperm(len(test_idx_2), generator=g_select)[:n2]]
     test_comb = torch.cat((sel_test_1, sel_test_2))
     final_test_idx = test_comb[torch.randperm(len(test_comb), generator=g_select)].tolist()
 
+    # Wrap selected indices into PyTorch Subsets
     train_final = Subset(dataset_full_train, final_train_idx)
     test_final = Subset(dataset_full_test, final_test_idx)
 
-    # DataLoaders
+    # 6. DataLoader Initialization
     g_loader = torch.Generator().manual_seed(seed)
     
+    # Note: Ensure seed_worker function is imported/defined to maintain multiprocess seeding
     train_loader = DataLoader(
-        train_final, batch_size=batch_size, shuffle=True, 
-        num_workers=num_workers, worker_init_fn=seed_worker, generator=g_loader
+        train_final, 
+        batch_size=batch_size, 
+        shuffle=True, 
+        num_workers=num_workers, 
+        worker_init_fn=seed_worker, 
+        generator=g_loader
     )
     
     test_loader = DataLoader(
-        test_final, batch_size=batch_size, shuffle=False, 
-        num_workers=num_workers, worker_init_fn=seed_worker
+        test_final, 
+        batch_size=batch_size, 
+        shuffle=False, 
+        num_workers=num_workers, 
+        worker_init_fn=seed_worker
     )
 
     return train_loader, test_loader
 
-def save_raw_dataset_samples(dataset_name: str, seed: int = 42, data_dir: str = "data/NWPU-RESISC45"):
+import torch
+import torchvision
+import random
+import numpy as np
+from torch.utils.data import DataLoader, Subset
+import torchvision.transforms as transforms
+
+def get_multiple_mnist_test_loaders(
+    batch_size: int, 
+    N: int, 
+    num_workers: int, 
+    seeds: list[int] = [1],
+    augment_test: bool = False
+) -> list[DataLoader]:
     """
-    Loads 15 sample images from the dataset and saves them as '{dataset_name}_before_after.pdf'.
-    Shows a side-by-side 'Before' and 'After' transformation for each image.
+    Crea molteplici DataLoader di test.
+    Garantisce zero sovrapposizione con i loader di training originati con train=True.
     """
-    # --- 1. Define 'Before' transforms (Basic formatting only) ---
-    base = [transforms.Resize((16, 16))]
-    
-    if dataset_name in ("eurosat", "nwpu"):
-        base.append(transforms.Grayscale(num_output_channels=1))
-
-    base.append(transforms.ToTensor())
-    transform_before = transforms.Compose(base)
-
-    # --- 2. Define 'After' transforms (Including augmentations) ---
-    after = list(base)
-    if dataset_name == "aug_mnist":
-        after.append(
-            transforms.RandomAffine(degrees=180, scale=(0.5, 1.5))
-        )
-    transform_after = transforms.Compose(after)
-
-    # --- 3. Load dataset WITHOUT transforms to get raw PIL images ---
-    if dataset_name == "mnist" or dataset_name == "aug_mnist":
-        ds = torchvision.datasets.MNIST(
-            root="data", train=True, download=True, transform=None
-        )
-        class_map = {3: "3", 4: "4"}
-        targets = ds.targets
-        mask = (targets == 3) | (targets == 4)
-        idxs = mask.nonzero(as_tuple=True)[0]
-        labels = [class_map[int(targets[i])] for i in idxs]
-
-    elif dataset_name == "eurosat":
-        ds = torchvision.datasets.EuroSAT(
-            root="data", download=True, transform=None
-        )
-        targets = torch.as_tensor(ds.targets)
-        mask = (targets == 7) | (targets == 9)
-        idxs = mask.nonzero(as_tuple=True)[0]
-        class_map = {7: "Residential", 9: "SeaLake"}
-        labels = [class_map[int(targets[i])] for i in idxs]
-
-    elif dataset_name == "nwpu":
-        train_dir = os.path.join(data_dir, "train", "train")
-        ds = torchvision.datasets.ImageFolder(root=train_dir, transform=None)
-        airplane_idx = ds.class_to_idx.get("airplane")
-        ship_idx = ds.class_to_idx.get("ship")
-
-        if airplane_idx is None or ship_idx is None:
-            raise ValueError(
-                f"Classes 'airplane'/'ship' not found in {train_dir}"
-            )
-
-        targets = torch.as_tensor(ds.targets)
-        mask = (targets == airplane_idx) | (targets == ship_idx)
-        idxs = mask.nonzero(as_tuple=True)[0]
-        class_map = {airplane_idx: "Airplane", ship_idx: "Ship"}
-        labels = [class_map[int(targets[i])] for i in idxs]
-
-    else:
-        raise ValueError(f"Unknown dataset name: {dataset_name}")
-
-    # --- 4. Deterministic selection of 15 samples ---
-    g = torch.Generator().manual_seed(seed)
-    perm = torch.randperm(len(idxs), generator=g)[:15]
-
-    # --- 5. Plot 5x6 grid (15 pairs of Before/After) ---
-    fig, axes = plt.subplots(5, 6, figsize=(12, 10))
-    axes = axes.flatten()
-
-    for i, idx in enumerate(perm):
-        # Extract the raw PIL image
-        raw_img, _ = ds[idxs[idx]]
-
-        # Process the image through both pipelines
-        img_before = transform_before(raw_img)
-        img_after = transform_after(raw_img)
-
-        # Map to adjacent axes (e.g., axes 0 & 1 for the first image pair)
-        ax_b = axes[2 * i]
-        ax_a = axes[2 * i + 1]
-
-        ax_b.imshow(img_before.squeeze(), cmap="gray")
-        ax_b.set_title(f"Before ({labels[idx]})", fontsize=9)
-        ax_b.axis("off")
-
-        ax_a.imshow(img_after.squeeze(), cmap="gray")
-        ax_a.set_title(f"After", fontsize=9)
-        ax_a.axis("off")
-
-    # Hide any remaining subplots if we requested fewer than 15 samples
-    for i in range(2 * len(perm), len(axes)):
-        axes[i].axis("off")
-
-    suptitle = f"{dataset_name.upper()} - 15 Samples (Before & After Augmentation)"
-    plt.suptitle(suptitle, fontsize=14, y=1.02)
-    plt.tight_layout()
-
-    pdf_path = f"{dataset_name}_before_after.pdf"
-    plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
-    plt.close()
-    
-    logger.info(f"✅ Saved {pdf_path} with 15 before/after sample pairs")
-
-def show_dataset(N_per_class: int = 5):
-    """
-    Generates two separate PDFs (nwpu and eurosat).
-    Row 1: Original images (no resize).
-    Row 2: 16x16 resized images.
-    Labels: Residential, SeaLake, Airplane, Ship.
-    """
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.abspath(os.path.join(script_dir, "../../"))
-    data_root = os.path.join(project_root, "data")
-
-    # Define transforms
-    # Row 1 uses only Grayscale and ToTensor (Original Dimensions)
-    no_resize_transform = transforms.Compose([
-        transforms.Grayscale(num_output_channels=1),
+    # 1. Setup delle trasformazioni
+    base_transforms = [
+        transforms.Resize(16),
         transforms.ToTensor(),
-    ])
-
-    # Row 2 uses the 16x16 pipeline
-    low_res_transform = transforms.Compose([
-        transforms.Resize((16, 16)),
-        transforms.Grayscale(num_output_channels=1),
-        transforms.ToTensor(),
-    ])
-
-    dataset_configs = [
-        {
-            "name": "eurosat", 
-            "class_labels": (7, 9), 
-            "display_names": {7: "Residential", 9: "SeaLake"},
-            "path": data_root
-        },
-        {
-            "name": "nwpu", 
-            "class_names": ["airplane", "ship"], 
-            "display_names": {}, # Populated dynamically
-            "path": os.path.join(data_root, "NWPU-RESISC45", "train", "train")
-        }
+    ]
+    post_transforms = [
+        L2Normalize(),
+        transforms.Lambda(lambda x: x.squeeze(0)),
+        transforms.Lambda(lambda x: embedding_unitary(x)),
     ]
 
-    for config in dataset_configs:
-        name = config["name"]
-        pdf_path = f"dataset_{name}_comparison.pdf"
+    test_transform_list = list(base_transforms)
+    if augment_test:
+        test_transform_list.append(QuantumTestAugmentation(p=1))
+    test_transform = transforms.Compose(test_transform_list + post_transforms)
+
+    switch = {3: 0, 4: 1, 0: 3, 1: 4}
+    tar_transform = lambda y: switch.get(y, y)
+
+    # 2. Carica il dataset di TEST una sola volta
+    test_full = torchvision.datasets.MNIST(
+        root="data", train=False, download=True,
+        transform=test_transform, target_transform=tar_transform
+    )
+
+    test_loaders = []
+
+    # 3. Genera un DataLoader per ogni seed
+    for seed in seeds:
+        torch.manual_seed(seed)
+        random.seed(seed)
+        np.random.seed(seed)
         
-        if name == "eurosat":
-            ds_orig = torchvision.datasets.EuroSAT(root=config["path"], download=True, transform=no_resize_transform)
-            ds_low = torchvision.datasets.EuroSAT(root=config["path"], download=True, transform=low_res_transform)
-            targets = torch.as_tensor(ds_orig.targets)
-            c1, c2 = config["class_labels"]
-            label_map = config["display_names"]
-        else:
-            if not os.path.exists(config["path"]):
-                print(f"Skipping {name}: Path not found.")
-                continue
-            ds_orig = torchvision.datasets.ImageFolder(root=config["path"], transform=no_resize_transform)
-            ds_low = torchvision.datasets.ImageFolder(root=config["path"], transform=low_res_transform)
-            targets = torch.as_tensor(ds_orig.targets)
-            c1 = ds_orig.class_to_idx["airplane"]
-            c2 = ds_orig.class_to_idx["ship"]
-            label_map = {c1: "Airplane", c2: "Ship"}
-
-        # Select indices
-        idx1 = (targets == c1).nonzero(as_tuple=True)[0][:N_per_class]
-        idx2 = (targets == c2).nonzero(as_tuple=True)[0][:N_per_class]
-        selected_indices = torch.cat((idx1, idx2))
-
-        fig, axes = plt.subplots(2, 10, figsize=(20, 6))
-        fig.suptitle(f"Dataset: {name.upper()} - Original vs 16x16", fontsize=16)
-
-        for i, idx in enumerate(selected_indices):
-            img_orig, label = ds_orig[idx]
-            img_low, _ = ds_low[idx]
-            
-            # Row 1: Original size
-            axes[0, i].imshow(img_orig.squeeze(), cmap='gray')
-            axes[0, i].set_title(f"{label_map[label]}\n(Original {img_orig.shape[1]}x{img_orig.shape[2]})", fontsize=9)
-            axes[0, i].axis('off')
-
-            # Row 2: 16x16
-            axes[1, i].imshow(img_low.squeeze(), cmap='gray')
-            axes[1, i].set_title(f"16x16", fontsize=9)
-            axes[1, i].axis('off')
-
-        plt.tight_layout()
-        with PdfPages(pdf_path) as pdf:
-            pdf.savefig(fig)
-        plt.close(fig)
+        g_select = torch.Generator().manual_seed(seed)
         
-        print(f"Generated: {os.path.abspath(pdf_path)}")
+        # Estrae i target bilanciati per questo specifico seed
+        test_balanced_idx = get_balanced_subset_indices(test_full.targets, 3, 4, N, g_select)
+        test_final = Subset(test_full, test_balanced_idx)
+
+        loader = DataLoader(
+            test_final, 
+            batch_size=batch_size, 
+            shuffle=False, 
+            num_workers=num_workers, 
+            worker_init_fn=seed_worker
+        )
+        test_loaders.append(loader)
+        
+    return test_loaders

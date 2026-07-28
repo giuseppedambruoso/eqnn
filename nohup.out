@@ -1,5 +1,5 @@
 [H[2J[3J[36m╭──────────────────────────────────────────────────╮[0m
-[36m│[0m[1m             EQNN EXPERIMENT PIPELINE             [0m[36m│[0m
+[36m│[0m[1m              EQNN EXPERIMENT PIPELINE            [0m[36m│[0m
 [36m╰──────────────────────────────────────────────────╯[0m
 
 [1m[36m▶ [1/6] 🐍 Conda Environment Setup[0m
@@ -16,135 +16,13 @@
   [2m├─[0m Installing cuQuantum toolchain and Lightning GPU...
   [32m╰─ ✔ [1mGPU acceleration and threads configured[0m
 
-[1m[36m▶ [5/6] 🧪 Unit Testing[0m
-  [2m├─[0m Checking invariance and dataset balance...
-  [32m╰─ ✔ [1mAll tests passed successfully[0m
-
-[1m[36m▶ [6/6] 🚀 Experiment Execution (Hydra)[0m
+[1m[36m▶ [5/6] 🚀 Experiment Execution (Hydra)[0m
   [2m├─[0m Starting distributed training...
   [2m├─[0m Please wait, this operation will take some time.
-[H[2J[3J[36m╭──────────────────────────────────────────────────╮[0m
-[36m│[0m[1m             EQNN EXPERIMENT PIPELINE             [0m[36m│[0m
-[36m╰──────────────────────────────────────────────────╯[0m
+  [32m╰─ ✔ [1mTraining completed[0m
 
-[1m[36m▶ [1/6] 🐍 Conda Environment Setup[0m
-  [32m╰─ ✔ [1mEnvironment active (Python 3.11.14)[0m
+[32m╭──────────────────────────────────────────────────╮[0m
+[32m│[1m   ✨ PIPELINE COMPLETED SUCCESSFULLY               [0m[32m│[0m
+[32m╰──────────────────────────────────────────────────╯[0m
+    ⏱️  Total time  : [1m2757m 47s[0m
 
-[1m[36m▶ [2/6] 📦 Build System Check (Poetry)[0m
-  [32m╰─ ✔ [1mPoetry is ready to use[0m
-
-[1m[36m▶ [3/6] 🔗 Dependency Resolution[0m
-  [2m├─[0m Syncing autoray, pennylane, and matplotlib...
-  [32m╰─ ✔ [1mPython packages updated[0m
-
-[1m[36m▶ [4/6] ⚡ Hardware Configuration (A30 GPU)[0m
-  [2m├─[0m Installing cuQuantum toolchain and Lightning GPU...
-  [32m╰─ ✔ [1mGPU acceleration and threads configured[0m
-
-[1m[36m▶ [5/6] 🧪 Unit Testing[0m
-  [2m├─[0m Checking invariance and dataset balance...
-  [32m╰─ ✔ [1mAll tests passed successfully[0m
-
-[1m[36m▶ [6/6] 🚀 Experiment Execution (Hydra)[0m
-  [2m├─[0m Starting distributed training...
-  [2m├─[0m Please wait, this operation will take some time.
-[H[2J[3J[36m╭──────────────────────────────────────────────────╮[0m
-[36m│[0m[1m              EQNN EXPERIMENT PIPELINE             [0m[36m│[0m
-[36m╰──────────────────────────────────────────────────╯[0m
-
-[1m[36m▶ [1/6] 🐍 Conda Environment Setup[0m
-  [32m╰─ ✔ [1mEnvironment active (Python 3.11.14)[0m
-
-[1m[36m▶ [2/6] 📦 Build System Check (Poetry)[0m
-  [32m╰─ ✔ [1mPoetry is ready to use[0m
-
-[1m[36m▶ [3/6] 🔗 Dependency Resolution[0m
-  [2m├─[0m Syncing autoray, pennylane, and matplotlib...
-  [32m╰─ ✔ [1mPython packages updated[0m
-
-[1m[36m▶ [4/6] ⚡ Hardware Configuration (A30 GPU)[0m
-  [2m├─[0m Installing cuQuantum toolchain and Lightning GPU...
-  [32m╰─ ✔ [1mGPU acceleration and threads configured[0m
-
-[1m[36m▶ [5/6] 🧪 Unit Testing[0m
-  [2m├─[0m Checking invariance and dataset balance...
-  [32m╰─ ✔ [1mAll tests passed successfully[0m
-
-[1m[36m▶ [6/6] 🚀 Experiment Execution (Hydra)[0m
-  [2m├─[0m Starting distributed training...
-  [2m├─[0m Please wait, this operation will take some time.
-[H[2J[3J[36m╭──────────────────────────────────────────────────╮[0m
-[36m│[0m[1m              EQNN EXPERIMENT PIPELINE             [0m[36m│[0m
-[36m╰──────────────────────────────────────────────────╯[0m
-
-[1m[36m▶ [1/6] 🐍 Conda Environment Setup[0m
-  [32m╰─ ✔ [1mEnvironment active (Python 3.11.14)[0m
-
-[1m[36m▶ [2/6] 📦 Build System Check (Poetry)[0m
-  [32m╰─ ✔ [1mPoetry is ready to use[0m
-
-[1m[36m▶ [3/6] 🔗 Dependency Resolution[0m
-  [2m├─[0m Syncing autoray, pennylane, and matplotlib...
-  [32m╰─ ✔ [1mPython packages updated[0m
-
-[1m[36m▶ [4/6] ⚡ Hardware Configuration (A30 GPU)[0m
-  [2m├─[0m Installing cuQuantum toolchain and Lightning GPU...
-  [32m╰─ ✔ [1mGPU acceleration and threads configured[0m
-
-[1m[36m▶ [5/6] 🧪 Unit Testing[0m
-  [2m├─[0m Checking invariance and dataset balance...
-  [32m╰─ ✔ [1mAll tests passed successfully[0m
-
-[1m[36m▶ [6/6] 🚀 Experiment Execution (Hydra)[0m
-  [2m├─[0m Starting distributed training...
-  [2m├─[0m Please wait, this operation will take some time.
-[H[2J[3J[36m╭──────────────────────────────────────────────────╮[0m
-[36m│[0m[1m              EQNN EXPERIMENT PIPELINE             [0m[36m│[0m
-[36m╰──────────────────────────────────────────────────╯[0m
-
-[1m[36m▶ [1/6] 🐍 Conda Environment Setup[0m
-  [32m╰─ ✔ [1mEnvironment active (Python 3.11.14)[0m
-
-[1m[36m▶ [2/6] 📦 Build System Check (Poetry)[0m
-  [32m╰─ ✔ [1mPoetry is ready to use[0m
-
-[1m[36m▶ [3/6] 🔗 Dependency Resolution[0m
-  [2m├─[0m Syncing autoray, pennylane, and matplotlib...
-  [32m╰─ ✔ [1mPython packages updated[0m
-
-[1m[36m▶ [4/6] ⚡ Hardware Configuration (A30 GPU)[0m
-  [2m├─[0m Installing cuQuantum toolchain and Lightning GPU...
-  [32m╰─ ✔ [1mGPU acceleration and threads configured[0m
-
-[1m[36m▶ [5/6] 🧪 Unit Testing[0m
-  [2m├─[0m Checking invariance and dataset balance...
-  [32m╰─ ✔ [1mAll tests passed successfully[0m
-
-[1m[36m▶ [6/6] 🚀 Experiment Execution (Hydra)[0m
-  [2m├─[0m Starting distributed training...
-  [2m├─[0m Please wait, this operation will take some time.
-[H[2J[3J[36m╭──────────────────────────────────────────────────╮[0m
-[36m│[0m[1m              EQNN EXPERIMENT PIPELINE             [0m[36m│[0m
-[36m╰──────────────────────────────────────────────────╯[0m
-
-[1m[36m▶ [1/6] 🐍 Conda Environment Setup[0m
-  [32m╰─ ✔ [1mEnvironment active (Python 3.11.14)[0m
-
-[1m[36m▶ [2/6] 📦 Build System Check (Poetry)[0m
-  [32m╰─ ✔ [1mPoetry is ready to use[0m
-
-[1m[36m▶ [3/6] 🔗 Dependency Resolution[0m
-  [2m├─[0m Syncing autoray, pennylane, and matplotlib...
-  [32m╰─ ✔ [1mPython packages updated[0m
-
-[1m[36m▶ [4/6] ⚡ Hardware Configuration (A30 GPU)[0m
-  [2m├─[0m Installing cuQuantum toolchain and Lightning GPU...
-  [32m╰─ ✔ [1mGPU acceleration and threads configured[0m
-
-[1m[36m▶ [5/6] 🧪 Unit Testing[0m
-  [2m├─[0m Checking invariance and dataset balance...
-  [32m╰─ ✔ [1mAll tests passed successfully[0m
-
-[1m[36m▶ [6/6] 🚀 Experiment Execution (Hydra)[0m
-  [2m├─[0m Starting distributed training...
-  [2m├─[0m Please wait, this operation will take some time.

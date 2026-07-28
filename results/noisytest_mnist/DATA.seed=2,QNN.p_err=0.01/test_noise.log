@@ -1,0 +1,2 @@
+[2026-06-04 16:21:03,070][__main__][INFO] - Initiating evaluation job: Target p_err = 0.01, Seed = 2
+[2026-06-04 16:44:38,577][__main__][INFO] - Evaluation process concluded. Data serialized successfully to noise_robustness_mnist/noise_robustness_mnist_seed2_perr0.01.csv

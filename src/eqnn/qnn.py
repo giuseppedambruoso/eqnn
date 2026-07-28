@@ -170,6 +170,21 @@ def create_qnn(
             phi = torch.tensor(0.0, requires_grad=False)
             approx_equiv_measure(torch.tensor(0.0),p_err)
 
+        elif non_equivariance == 5:
+            for rep in range(reps):
+                for i in range(8):
+                    qml.RY(params[i + 16 * rep], wires=i)
+                    if p_err != 0:
+                        qml.DepolarizingChannel(p_err, wires=i)
+                for i in range(8):
+                    wires = [(i + j) % 8 for j in range(4)]
+                    qml.PauliRot(params[i + 8 + 16 * rep], 'XXXX', wires=wires) 
+                    if p_err != 0:
+                        for w in wires:
+                            qml.DepolarizingChannel(p_err, wires=w)
+            phi = torch.tensor(0.0, requires_grad=False)
+            approx_equiv_measure(torch.tensor(0.0),p_err)
+
         # Misurazione Invariante
         coeffs = [1.0 / 8.0] * 8
         observables = [qml.Z(i) for i in range(8)]

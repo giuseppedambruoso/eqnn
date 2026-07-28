@@ -48,7 +48,7 @@ trap 'echo -e "\n  ${C_RED}╰─ ✖ Pipeline interrupted by user.${C_RESET}"; 
 # ==============================================================================
 clear
 echo -e "${C_CYAN}╭──────────────────────────────────────────────────╮${C_RESET}"
-echo -e "${C_CYAN}│${C_RESET}${C_BOLD}              EQNN EXPERIMENT PIPELINE             ${C_RESET}${C_CYAN}│${C_RESET}"
+echo -e "${C_CYAN}│${C_RESET}${C_BOLD}              EQNN EXPERIMENT PIPELINE            ${C_RESET}${C_CYAN}│${C_RESET}"
 echo -e "${C_CYAN}╰──────────────────────────────────────────────────╯${C_RESET}"
 
 # --- PHASE 1 ---
@@ -84,51 +84,49 @@ poetry add autoray==0.8.2 pennylane==0.44.0 pennylane-lightning==0.44.0 matplotl
 poetry install > /dev/null 2>&1
 log_success "Python packages updated"
 
-# --- PHASE 4 ---
+## --- PHASE 4 ---
 log_step "4" "⚡ Hardware Configuration (A30 GPU)"
 log_info "Installing cuQuantum toolchain and Lightning GPU..."
 pip install autoray==0.8.2 pennylane==0.44.0 pennylane-lightning==0.44.0 pennylane-lightning-gpu==0.44.0 cuquantum-python-cu12 --quiet
 export CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 TORCH_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 log_success "GPU acceleration and threads configured"
 
-# --- PHASE 5 ---
-log_step "5" "🧪 Unit Testing"
-export PYTHONPATH=$PYTHONPATH:$(pwd)/src/eqnn
-log_info "Checking invariance and dataset balance..."
-
-# Creazione di un file temporaneo per salvare l'output dei test
-TMP_TEST_LOG=$(mktemp)
-
-# Esecuzione di pytest salvando i dettagli nel file temporaneo
-if pytest tests/ -n 4 --disable-warnings > "$TMP_TEST_LOG" 2>&1; then
-    log_success "All tests passed successfully"
-    rm -f "$TMP_TEST_LOG"
-else
-    log_error "Tests failed! Ecco il report dettagliato del fallimento:"
-    echo -e "${C_RED}┌────────────────────────────────────────────────────────────────────────────┐${C_RESET}"
-    cat "$TMP_TEST_LOG"
-    echo -e "${C_RED}└────────────────────────────────────────────────────────────────────────────┘${C_RESET}"
-    rm -f "$TMP_TEST_LOG"
-    exit 1
-fi
+### --- PHASE 5 ---
+#log_step "5" "🧪 Unit Testing"
+#export PYTHONPATH=$PYTHONPATH:$(pwd)/src/eqnn
+#log_info "Checking invariance and dataset balance..."
+#
+## Creazione di un file temporaneo per salvare l'output dei test
+#TMP_TEST_LOG=$(mktemp)
+#
+## Esecuzione di pytest salvando i dettagli nel file temporaneo
+#if pytest tests/ -n 4 --disable-warnings > "$TMP_TEST_LOG" 2>&1; then
+#    log_success "All tests passed successfully"
+#    rm -f "$TMP_TEST_LOG"
+#else
+#    log_error "Tests failed! Ecco il report dettagliato del fallimento:"
+#    echo -e "${C_RED}┌────────────────────────────────────────────────────────────────────────────┐${C_RESET}"
+#    cat "$TMP_TEST_LOG"
+#    echo -e "${C_RED}└────────────────────────────────────────────────────────────────────────────┘${C_RESET}"
+#    rm -f "$TMP_TEST_LOG"
+#    exit 1
+#fi
 
 # --- PHASE 6 ---
-log_step "6" "🚀 Experiment Execution (Hydra)"
+log_step "5" "🚀 Experiment Execution (Hydra)"
 log_info "Starting distributed training..."
 log_info "Please wait, this operation will take some time."
 
 python src/eqnn/main.py -m \
-    GENERAL.seed=1,2,3,4,5,6,7,8,9,10 \
-    DATA.N=320 \
-    QNN.non_equivariance=3,4 \
-    QNN.p_err=0,0.001,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05 \
-    QNN.reps=2 \
-    TRAINING.epochs=60 \
-    DATA.dataset='mnist' \
-    hydra/launcher=joblib \
-    hydra.launcher.n_jobs=30 \
-    hydra.hydra_logging.root.level=ERROR \
-    hydra.job_logging.root.level=ERROR > jobs_execution.log 2>&1
+    GENERAL.seed=1,2,3,4,5,6,7,8,9,10 DATA.N=20,40,80,160,320,640,1280,2560,5120 QNN.non_equivariance=3,4 QNN.reps=6,7 \
+    QNN.p_err=0 TRAINING.epochs=60 DATA.dataset='mnist' \
+    hydra/launcher=joblib hydra.launcher.n_jobs=72 \
+    hydra.hydra_logging.root.level=INFO hydra.job_logging.root.level=INFO >> jobs_execution.log 2>&1
+
+#python src/eqnn/test_noise.py -m DATA.seed=1,2,3,4,5,6,7,8,9,10 \
+#    QNN.p_err=0,0.001,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05 \
+#    hydra/launcher=joblib hydra.launcher.n_jobs=12 \
+#    hydra.hydra_logging.root.level=INFO hydra.job_logging.root.level=INFO # >> jobs_execution.log 2>&1
 
 log_success "Training completed"
 

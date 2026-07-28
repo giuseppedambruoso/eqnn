@@ -6,7 +6,7 @@ hydra:
     subdir: ${hydra.job.override_dirname}
   launcher:
     _target_: hydra_plugins.hydra_joblib_launcher.joblib_launcher.JoblibLauncher
-    n_jobs: 72
+    n_jobs: 27
     backend: null
     prefer: processes
     require: null
@@ -122,21 +122,22 @@ hydra:
   overrides:
     hydra:
     - hydra/launcher=joblib
-    - hydra.launcher.n_jobs=72
+    - hydra.launcher.n_jobs=27
     - hydra.hydra_logging.root.level=ERROR
     - hydra.job_logging.root.level=ERROR
     - hydra.mode=MULTIRUN
     task:
-    - GENERAL.seed=2,3,4,5
-    - DATA.N=20,40,80,160,320,640
+    - GENERAL.seed=1,2,3,4,5,6,7,8,9,10
+    - DATA.N=20,40,80,160,320,640,1280,2560,5120
     - QNN.non_equivariance=3,4
     - QNN.p_err=0
     - QNN.reps=1,2,3
-    - TRAINING.epochs=80
+    - TRAINING.epochs=60
+    - DATA.dataset=nwpu
   job:
     name: main
     chdir: null
-    override_dirname: DATA.N=20,40,80,160,320,640,GENERAL.seed=2,3,4,5,QNN.non_equivariance=3,4,QNN.p_err=0,QNN.reps=1,2,3,TRAINING.epochs=80
+    override_dirname: DATA.N=20,40,80,160,320,640,1280,2560,5120,DATA.dataset=nwpu,GENERAL.seed=1,2,3,4,5,6,7,8,9,10,QNN.non_equivariance=3,4,QNN.p_err=0,QNN.reps=1,2,3,TRAINING.epochs=60
     id: ???
     num: ???
     config_name: config
@@ -188,5 +189,5 @@ QNN:
   p_err: 0
   reps: 2
 TRAINING:
-  epochs: 80
+  epochs: 60
   learning_rate: 0.05

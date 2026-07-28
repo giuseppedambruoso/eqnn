@@ -1,0 +1,18 @@
+GENERAL:
+  seed: 1234
+  dev: cpu
+  verbose: true
+  initialization_analysis: false
+DATA:
+  'N': 20
+  dataset: mnsit
+  augment_test: true
+  seed: 2
+QNN:
+  device: lightning.qubit
+  non_equivariance: 0
+  p_err: 0.001
+  reps: 2
+TRAINING:
+  epochs: 80
+  learning_rate: 0.05

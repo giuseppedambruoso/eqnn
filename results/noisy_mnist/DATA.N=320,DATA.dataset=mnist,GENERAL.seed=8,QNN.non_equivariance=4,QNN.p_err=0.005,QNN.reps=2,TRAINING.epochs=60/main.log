@@ -1,0 +1,9 @@
+[2026-05-31 22:56:31,805][__main__][INFO] - QNN training pipeline initialized with p_err=0.005 and non_equivariance=4
+[2026-05-31 22:56:31,806][data_loading][INFO] - Loading data... Subsampling N=320 (Balanced), Augment Test=False
+[2026-05-31 22:56:31,825][data_loading][INFO] - Loading data... Subsampling N=320 (Balanced), Augment Test=True
+[2026-05-31 22:56:31,842][train][INFO] - Using device: cpu
+[2026-05-31 22:56:31,843][train][INFO] - Starting QNN training...
+[2026-05-31 22:56:31,843][train][INFO] - QNode initialized successfully.
+[2026-06-01 16:04:04,787][train][INFO] - Training completed in 61652.94s. Starting validation...
+[2026-06-01 16:21:20,158][train][INFO] - Validation completed. Val Acc: 0.9000, Aug Val Acc: 0.9000
+[2026-06-01 16:21:20,159][train][INFO] - Calculated convergence at epoch: 24

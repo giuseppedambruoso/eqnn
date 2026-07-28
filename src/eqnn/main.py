@@ -14,7 +14,7 @@ from omegaconf import DictConfig
 from hydra.core.hydra_config import HydraConfig
 from tqdm import tqdm
 
-from data_loading import load_mnist_data, load_eurosat_data, load_kaggle_nwpu_data, load_aug_mnist_data, save_raw_dataset_samples, add_sat_data
+from data_loading import load_mnist_data, load_eurosat_data, load_kaggle_nwpu_data, load_aug_mnist_data, add_sat_data
 from plot import plot_results
 from train import train_loop, study_gradients
 
@@ -36,6 +36,7 @@ def main(cfg: DictConfig) -> None:
     non_equivariance = cfg.QNN.non_equivariance
     reps = cfg.QNN.reps
     p_err = cfg.QNN.p_err
+    data_seed = cfg.DATA.seed
     epochs = cfg.TRAINING.epochs
     learning_rate = cfg.TRAINING.learning_rate
     N = cfg.DATA.N
@@ -58,56 +59,51 @@ def main(cfg: DictConfig) -> None:
     if dataset == "mnist":
         # Loader normale (pulito)
         train_loader, test_loader = load_mnist_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=False
+            batch_size=batch_size, N=N, num_workers=0, seed=data_seed, verbose=verbose, augment_test=False
         )
         # Loader con augmentation (usato per calcolare aug_acc)
         aug_train_loader, aug_test_loader = load_mnist_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
+            batch_size=batch_size, N=N, num_workers=0, seed=data_seed, verbose=verbose, augment_test=True
         )
     elif dataset == "eurosat":
         # Loader normale (pulito)
         train_loader, test_loader = load_eurosat_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=False
+            batch_size=batch_size, N=N, num_workers=0, seed=data_seed, verbose=verbose, augment_test=False
         )
         # Loader con augmentation (usato per calcolare aug_acc)
         aug_train_loader, aug_test_loader = load_eurosat_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
+            batch_size=batch_size, N=N, num_workers=0, seed=data_seed, verbose=verbose, augment_test=True
         )
     elif dataset == "nwpu":
         # Loader normale (pulito)
         train_loader, test_loader = load_kaggle_nwpu_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=False
+            batch_size=batch_size, N=N, num_workers=0, seed=data_seed, verbose=verbose, augment_test=False
         )
         # Loader con augmentation (usato per calcolare aug_acc)
         aug_train_loader, aug_test_loader = load_kaggle_nwpu_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
+            batch_size=batch_size, N=N, num_workers=0, seed=data_seed, verbose=verbose, augment_test=True
         )
     elif dataset == "aug_mnist":
         # Loader normale (pulito)
         train_loader, test_loader = load_aug_mnist_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=False
+            batch_size=batch_size, N=N, num_workers=0, seed=data_seed, verbose=verbose, augment_test=False
         )
         # Loader con augmentation (usato per calcolare aug_acc)
         aug_train_loader, aug_test_loader = load_aug_mnist_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
+            batch_size=batch_size, N=N, num_workers=0, seed=data_seed, verbose=verbose, augment_test=True
         )
     elif dataset == "sat_data":
         # Loader normale (pulito)
         train_loader, test_loader = add_sat_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=False
+            batch_size=batch_size, N=N, num_workers=0, seed=data_seed, verbose=verbose, augment_test=False
         )
         # Loader con augmentation (usato per calcolare aug_acc)
         aug_train_loader, aug_test_loader = add_sat_data(
-            batch_size=batch_size, N=N, num_workers=0, seed=42, verbose=verbose, augment_test=True
+            batch_size=batch_size, N=N, num_workers=0, seed=data_seed, verbose=verbose, augment_test=True
         )
     else:
-        raise ValueError("dataset must be either 'mnist' or 'eurosat'")
+        raise ValueError("dataset must be either 'mnist', 'eurosat', 'sat_data', 'aug_mnist' or 'nwpu'")
 
-    # ---------------------------------------------------------
-    # VISUALIZE 30 TRAINING IMAGES
-    # ---------------------------------------------------------
-    torch.manual_seed(SEED)
-    
     if initialization_analysis:
         logger.info("Avvio analisi di inizializzazione massiva...")
         
@@ -141,6 +137,5 @@ def main(cfg: DictConfig) -> None:
             dataset=dataset,
             verbose=verbose,
         )
-
 if __name__ == "__main__":
     main()
