@@ -17,7 +17,7 @@ DATA:
   augment_test: True
 
 QNN:
-  device: "default.mixed"
+  device: "lightning.gpu"
   p_err: 0
   reps: 2
   equivariance: True
