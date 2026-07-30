@@ -7,6 +7,15 @@ license = "MIT"
 readme = "README.md"
 packages = [{ include = "src" }]
 
+# The project only ever runs on CPU (PennyLane's default.qubit simulator,
+# GENERAL.dev="cpu"): the default PyPI torch wheel pulls ~4GB of unused
+# nvidia-*-cu12 CUDA packages, which is what made cold Docker builds hang
+# for tens of minutes. This index serves CPU-only wheels instead.
+[[tool.poetry.source]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
+
 [tool.poetry.dependencies]
 python = ">=3.11,<3.13"
 
@@ -92,8 +101,8 @@ tensorboard-data-server = "0.7.2"
 termcolor = "3.2.0"
 tinycss2 = "1.4.0"
 tomlkit = "0.13.3"
-torch = "2.9.1"
-torchvision = "0.24.1"
+torch = {version = "2.9.1+cpu", source = "pytorch-cpu"}
+torchvision = {version = "0.24.1+cpu", source = "pytorch-cpu"}
 tqdm = "4.67.1"
 typing-extensions = "4.15.0"
 urllib3 = "^2.7.0"
@@ -119,6 +128,7 @@ pre-commit = "^3.8.0"
 black = "^26.3.1"
 mypy = "^1.18.2"
 ruff = "^0.9.0"
+httpx2 = "^2.9.1" # required by starlette.testclient, used in tests/test_api.py
 
 # ---------------------------------------------------------------------------
 # Formatting tools
