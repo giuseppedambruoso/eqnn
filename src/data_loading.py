@@ -13,14 +13,14 @@ from src.data_encoding import embedding_unitary
 logger = logging.getLogger(__name__)
 
 
-def seed_worker(worker_id):
+def seed_worker(worker_id: int) -> None:
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
 
 def get_balanced_subset_indices(
-    targets, class1: int, class2: int, N: int, generator: torch.Generator
+    targets: torch.Tensor, class1: int, class2: int, N: int, generator: torch.Generator
 ) -> list[int]:
     targets_tensor = torch.as_tensor(targets)
     idx1 = (targets_tensor == class1).nonzero(as_tuple=True)[0]
@@ -97,7 +97,7 @@ def load_mnist_data(
 
     switch = {3: 0, 4: 1, 0: 3, 1: 4}
 
-    def tar_transform(y):
+    def tar_transform(y: int) -> int:
         return switch.get(y, y)
 
     train_full = torchvision.datasets.MNIST(

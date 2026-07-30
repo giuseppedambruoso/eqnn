@@ -10,6 +10,7 @@ import torch
 import wandb
 from hydra.core.hydra_config import HydraConfig
 from torch.nn import functional as F
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.data_loading import load_mnist_data
@@ -55,7 +56,15 @@ def execute_batch(
     return torch.stack(batch_predictions)
 
 
-def train_one_epoch(loader, qnn, opt, dev, params, phi, pbar=None):
+def train_one_epoch(
+    loader: DataLoader,
+    qnn: Any,
+    opt: torch.optim.Optimizer,
+    dev: torch.device,
+    params: torch.Tensor,
+    phi: torch.Tensor,
+    pbar: tqdm | None = None,
+) -> tuple[float, float]:
     total_loss, total_correct, total_samples = 0.0, 0, 0
     for batch_images, batch_labels in loader:
         batch_labels = batch_labels.to(dev)
@@ -76,7 +85,13 @@ def train_one_epoch(loader, qnn, opt, dev, params, phi, pbar=None):
     return total_loss / (total_samples + 1e-8), total_correct / (total_samples + 1e-8)
 
 
-def validate(loader, qnn, dev, params, phi):
+def validate(
+    loader: DataLoader,
+    qnn: Any,
+    dev: torch.device,
+    params: torch.Tensor,
+    phi: torch.Tensor,
+) -> tuple[float, float]:
     total_loss, total_correct, total_samples = 0.0, 0, 0
     with torch.no_grad():
         for batch_images, batch_labels in loader:
@@ -95,9 +110,9 @@ def validate(loader, qnn, dev, params, phi):
 
 
 def train_loop(
-    train_loader,
-    val_loader,
-    val_loader_aug,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    val_loader_aug: DataLoader,
     epochs: int,
     learning_rate: float,
     patience: int,
@@ -115,7 +130,16 @@ def train_loop(
     remove_cross_edge: bool = False,
     verbose: bool = False,
     img_size: int = 16,
-):
+) -> tuple[
+    torch.Tensor,
+    torch.Tensor,
+    list[float],
+    list[float],
+    list[float],
+    list[float],
+    list[float],
+    list[float],
+]:
     torch_dev = torch.device(dev)
     qnn = create_qnn(
         device, num_qubits, p_err, reps, equivariance, twirling, remove_cross_edge
@@ -278,18 +302,18 @@ def train_loop(
 
 
 def study_gradients(
-    datasets,
-    equivariances,
-    num_qubits,
-    device,
-    dev,
-    p_err,
-    reps,
-    twirling,
-    remove_cross_edge,
-    num_inits,
-    verbose,
-):
+    datasets: list[str],
+    equivariances: list[bool],
+    num_qubits: int,
+    device: str,
+    dev: str,
+    p_err: float,
+    reps: int,
+    twirling: bool,
+    remove_cross_edge: bool,
+    num_inits: int,
+    verbose: bool,
+) -> None:
     try:
         out_dir = HydraConfig.get().runtime.output_dir
     except Exception:

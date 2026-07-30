@@ -10,6 +10,22 @@ Ogni sezione qui sotto è spiegata in due modi:
 - 🔰 **Se non hai esperienza di programmazione** — segui questi passi alla lettera, copiando i comandi così come sono.
 - 👩‍💻 **Se sei uno sviluppatore** — versione sintetica con i dettagli tecnici.
 
+## Architettura
+
+```mermaid
+flowchart TD
+    A["MNIST (cifre 3 e 4)"] --> B["resize + L2-normalize<br/>data_loading.py"]
+    B --> C["embedding_unitary<br/>data_encoding.py"]
+    C --> D["circuito QNN<br/>qnn.py: create_qnn"]
+    Cfg["config.yaml + Hydra overrides<br/>main.py"] --> D
+    Cfg --> E
+    D --> E["train_loop<br/>train.py"]
+    E --> F["W&B: metriche, loss plot,<br/>modello come Artifact"]
+    E --> G["outputs/&lt;data&gt;/&lt;ora&gt;/<br/>final_model.pt (pesi + config)"]
+    G --> H["FastAPI /predict<br/>api.py"]
+    H --> I["client HTTP"]
+```
+
 ---
 
 ## 1. Installazione
@@ -139,13 +155,58 @@ In alternativa, tutti questi risultati (grafici, metriche, e il modello) sono vi
 ### 👩‍💻 Versione sviluppatori
 
 - Gli output Hydra vanno in `outputs/<date>/<time>/` per un run singolo, `multirun/<date>/<time>/<override_dirname>/` per uno sweep (`sweep.subdir` in `config.yaml`) — entrambe le cartelle sono montate come volumi Docker (vedi `docker-compose.yml`), quindi persistono sull'host anche se il container viene distrutto.
-- Ogni run directory contiene ([train.py](src/train.py:171)): `loss_history.csv` (loss per epoca, raw), `loss_history.jpg` (plot), `final_model.pt` (`state_dict`-like: `{'params': tensor, 'val_acc': float}`, caricabile con `torch.load`), `main.log`, `.hydra/{config,overrides,hydra}.yaml` (config esatta usata, per riprodurre il run).
+- Ogni run directory contiene ([train.py](src/train.py:171)): `loss_history.csv` (loss per epoca, raw), `loss_history.jpg` (plot), `final_model.pt` (checkpoint self-contained: `{'params': tensor, 'val_acc': float, 'config': {...iperparametri QNN...}}`, caricabile con `torch.load` senza bisogno della run directory Hydra — usato anche da `src/api.py`, vedi sezione 6), `main.log`, `.hydra/{config,overrides,hydra}.yaml` (config esatta usata, per riprodurre il run).
 - Su wandb: stessa `loss_history.jpg` loggata come `wandb.Image`, più il modello versionato come **Artifact** (`model-<run_id>`, tipo `model`, tab "Artifacts" della run) — scaricabile e ricaricabile con l'API wandb, utile per non dipendere dal filesystem locale.
 - La cache di MNIST è in `./data` (montata come volume) — scaricata una sola volta, riusata dai run successivi.
 
 ---
 
-## 5. Sviluppo
+## 5. Provare un modello addestrato via API
+
+### 🔰 Guida per chi parte da zero
+
+Dopo aver addestrato almeno un modello, puoi avviare un piccolo servizio web che risponde alle domande "questa immagine è un 3 o un 4?":
+```bash
+docker compose up api
+```
+Lascialo acceso e apri nel browser http://localhost:8000/docs: è una pagina interattiva generata automaticamente dove puoi caricare un'immagine (tasto "Try it out" sotto `/predict`) e vedere subito la risposta del modello.
+
+### 👩‍💻 Versione sviluppatori
+
+`src/api.py` è un servizio FastAPI che carica un checkpoint self-contained (vedi sezione 4) e lo serve su tre endpoint:
+- `GET /health` — liveness check
+- `GET /model/info` — path/val_acc/img_size del checkpoint caricato
+- `POST /predict` — multipart upload di un'immagine, ritorna `{predicted_digit, probability_digit_4, raw_expectation}`
+
+```bash
+# usa MODEL_PATH per puntare a un checkpoint specifico, altrimenti prende
+# il final_model.pt più recente sotto outputs/ o multirun/
+MODEL_PATH=outputs/2026-07-30/10-32-14/final_model.pt docker compose up api
+
+curl -F "file=@digit.png" http://localhost:8000/predict
+```
+Nota: il modello è un classificatore binario (cifra 3 vs 4), non un riconoscitore generico di cifre — riflette il dataset bilanciato usato in training ([data_loading.py](src/data_loading.py:86)).
+
+---
+
+## 6. Release e pubblicazione dell'immagine Docker
+
+### 🔰 Guida per chi parte da zero
+
+Quando una versione del progetto è pronta per essere "rilasciata ufficialmente", crea un tag Git con il numero di versione (es. `v1.0.0`) e inviarlo su GitHub. In automatico, senza fare altro, GitHub costruirà l'immagine Docker e la pubblicherà pubblicamente — chiunque potrà scaricarla senza dover ricompilare nulla.
+
+### 👩‍💻 Versione sviluppatori
+
+Il workflow [.github/workflows/release.yml](.github/workflows/release.yml) si attiva su push di tag `v*.*.*` (semver) e pubblica l'immagine su GHCR con tag multipli (`vX.Y.Z`, `vX.Y`, `vX`, `latest`):
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+Immagine risultante: `ghcr.io/giuseppedambruoso/eqnn:v1.0.0`. Nessun secret da configurare: usa il `GITHUB_TOKEN` automatico con permesso `packages: write`.
+
+---
+
+## 7. Sviluppo
 
 Per contribuire codice (non necessario solo per lanciare esperimenti):
 
@@ -154,6 +215,8 @@ poetry install --with dev
 poetry run pytest tests/ --disable-warnings --cov=src
 poetry run ruff check .
 poetry run black --check .
+poetry run mypy src
+poetry run pre-commit run --all-files
 ```
 
-La CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) esegue automaticamente lint, test e build dell'immagine Docker ad ogni push/PR.
+La CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) esegue automaticamente lint, type-check, test, gli hook pre-commit, un controllo di vulnerabilità delle dipendenze (`pip-audit`) e la build + scansione di sicurezza (Trivy) dell'immagine Docker ad ogni push/PR.

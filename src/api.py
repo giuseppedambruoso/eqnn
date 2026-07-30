@@ -8,6 +8,7 @@ self-contained `final_model.pt` checkpoint produced by `src.train.train_loop`
 import io
 import logging
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -86,7 +87,7 @@ def load_model(model_path: str | None = None) -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     load_model(os.environ.get("MODEL_PATH"))
     yield
     _MODEL.clear()

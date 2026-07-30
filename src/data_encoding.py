@@ -55,5 +55,8 @@ def embedding_unitary(image: torch.Tensor) -> torch.Tensor:
     coords = [(i, j) for i in range(rows) for j in range(cols)]
 
     parts = [coordinate_to_unitary(i, j, image) for i, j in coords]
+    non_null_parts = [p for p in parts if p is not None]
+    if len(non_null_parts) != len(parts):
+        raise ValueError("coordinate_to_unitary returned None for a valid coordinate")
 
-    return torch.stack(parts).sum(dim=0)
+    return torch.stack(non_null_parts).sum(dim=0)

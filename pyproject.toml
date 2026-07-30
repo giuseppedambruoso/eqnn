@@ -180,13 +180,19 @@ indent-style = "space"
 python_version = "3.10"
 ignore_missing_imports = true
 warn_unused_configs = true
-disallow_untyped_defs = false
-strict_optional = false
+disallow_untyped_defs = true
+strict_optional = true
 # src/ and tests/ both have __init__.py, so this project has no legitimate
 # namespace packages. Disabling them stops mypy from treating the local
 # ./wandb/ run-log directory (gitignored, no __init__.py) as a namespace
 # package that shadows the real installed `wandb` library.
 namespace_packages = false
+
+# Test functions/fixtures (tmp_path, monkeypatch, parametrize IDs, ...) aren't
+# held to the same annotation bar as production code in src/.
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
 
 # ---------------------------------------------------------------------------
 # Build system
