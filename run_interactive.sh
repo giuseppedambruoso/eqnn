@@ -19,8 +19,8 @@ read -rp "Architettura (config1-config5) [config1]: " ARCHITECTURE
 ARCHITECTURE=${ARCHITECTURE:-config1}
 read -rp "Ripetizioni circuito (reps) [2]: " REPS
 REPS=${REPS:-2}
-read -rp "Numero immagini training (N) [20]: " N
-N=${N:-20}
+read -rp "Numero immagini training (N) [80]: " N
+N=${N:-80}
 read -rp "Dataset [mnist]: " DATASET
 DATASET=${DATASET:-mnist}
 read -rp "Epoche [80]: " EPOCHS

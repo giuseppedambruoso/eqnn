@@ -123,9 +123,13 @@ Parametri configurabili: `GENERAL.{seed,dev}`, `DATA.{N,dataset,img_size,augment
 |---|---|---|---|---|
 | `config1` | RY | CNOT | No | No |
 | `config2` | RY | CNOT | Sì | Sì |
-| `config3` | RX | CNOT | No | No |
-| `config4` | RX | CNOT | Sì | Sì |
+| `config3` | RX | RXY (parametro fisso π/2, non allenabile) | No | No |
+| `config4` | RX | RXY (parametro fisso π/2, non allenabile) | Sì | Sì |
 | `config5` | RX | RYY/RYYYY (parametro fisso π/2, non allenabile) | Sì | Sì |
+
+**Nota su config3/config4**: con un entangler CNOT (o qualunque gate costruito solo da I/X, es. RXX), le rotazioni RX avrebbero gradiente *esattamente* zero — CNOT propaga operatori di tipo X solo in altri operatori di tipo X, e RX(θ) è a sua volta una combinazione di I e X, quindi commutano sempre e il valore misurato risulta costante in θ (verificato numericamente: stesso output al variare di θ da −2 a 3 radianti). L'entangler RXY rompe questa invarianza per quasi tutti i qubit, tranne il primo della catena (indice 0), che gioca sempre il ruolo "X" nella convenzione usata e resta quindi con parametro fisso — testato esplicitamente in `tests/test_training.py`.
+
+Ogni parametro allenabile (uno per qubit per rep) viene loggato singolarmente su wandb ad ogni epoca come `params/rep{r}_q{i}`, così puoi vederne l'andamento durante il training direttamente nella dashboard.
 
 Per disattivare wandb (es. in CI o debug locale): `WANDB_MODE=disabled` in `.env`, oppure `-e WANDB_MODE=disabled` sulla riga di comando.
 

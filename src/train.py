@@ -199,12 +199,19 @@ def train_loop(
             + [phi.detach().cpu().item()]
         )
 
+        param_values = params.detach().cpu().tolist()
+        params_log = {
+            f"params/rep{rep_idx}_q{i}": param_values[i + num_qubits * rep_idx]
+            for rep_idx in range(reps)
+            for i in range(num_qubits)
+        }
+
         wandb.log(
             {
                 "epoch": epoch,
                 "train/loss": epoch_loss,
                 "train/accuracy": epoch_acc,
-                "params/phi": phi.detach().cpu().item(),
+                **params_log,
             },
             step=epoch,
         )

@@ -61,20 +61,40 @@ def approx_equiv_measure(phi: torch.Tensor, p_err: float, num_qubits: int) -> No
 
 # --- QNode Factory ---
 
-# Fixed (non-trainable) rotation angle for the frozen-RYY/RYYYY entangler
-# used by config5.
+# Fixed (non-trainable) rotation angle for the frozen entanglers (RXY for
+# config3/4, RYY/RYYYY for config5).
 FROZEN_ENTANGLER_ANGLE = math.pi / 2
 
 # The 5 supported architectures. "twirled" wraps the ansatz in explicit p4m
 # group-twirling, averaged over the 8 group elements in qnn_forward — that's
 # what actually makes config2/4/5 p4m-equivariant (config1/3 are not).
+#
+# config3/4 use a frozen RXY entangler rather than CNOT: with a CNOT (or any
+# entangler built only from I/X, e.g. RXX) the RX rotations get an *exactly*
+# zero gradient — CNOT's Heisenberg conjugation maps X-type Paulis to X-type
+# Paulis only, and RX(theta) is itself an I/X combination, so two operators
+# built purely from I and X always commute, making the measured expectation
+# value provably constant in theta (verified numerically: identical output
+# to 1e-10 across a full sweep of theta). RXY breaks this for every qubit
+# except the very first one in the chain (which only ever plays the "X" role
+# in the wires=[i, i+1] convention below, so it still gets zero gradient).
 ARCHITECTURES: dict[str, dict[str, Any]] = {
     "config1": {"rotation_gate": "RY", "entangler": "cnot", "twirled": False},
     "config2": {"rotation_gate": "RY", "entangler": "cnot", "twirled": True},
-    "config3": {"rotation_gate": "RX", "entangler": "cnot", "twirled": False},
-    "config4": {"rotation_gate": "RX", "entangler": "cnot", "twirled": True},
+    "config3": {"rotation_gate": "RX", "entangler": "frozen_rxy", "twirled": False},
+    "config4": {"rotation_gate": "RX", "entangler": "frozen_rxy", "twirled": True},
     "config5": {"rotation_gate": "RX", "entangler": "frozen_ryy", "twirled": True},
 }
+
+
+def frozen_rxy_cascade(num_qubits: int, p_err: float) -> None:
+    """Cascade of fixed-angle XY rotations (PauliRot(pi/2, "XY")) over
+    adjacent qubits — the entangler for config3/config4."""
+    for i in range(num_qubits - 1):
+        qml.PauliRot(FROZEN_ENTANGLER_ANGLE, "XY", wires=[i, i + 1])
+        if p_err != 0:
+            qml.DepolarizingChannel(p_err, wires=i)
+            qml.DepolarizingChannel(p_err, wires=i + 1)
 
 
 def frozen_ryy_cascade(num_qubits: int, cross_edge_index: int, p_err: float) -> None:
@@ -148,6 +168,9 @@ def create_qnn(
 
             if entangler == "frozen_ryy":
                 frozen_ryy_cascade(num_qubits, cross_edge_index, p_err)
+                continue
+            if entangler == "frozen_rxy":
+                frozen_rxy_cascade(num_qubits, p_err)
                 continue
 
             for i in range(num_qubits - 1):
