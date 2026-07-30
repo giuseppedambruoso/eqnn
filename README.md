@@ -1,5 +1,9 @@
 # EQNN — Equivariant Quantum Neural Network
 
+[![CI](https://github.com/giuseppedambruoso/eqnn/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/giuseppedambruoso/eqnn/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](pyproject.toml)
+
 Progetto di ricerca su reti neurali quantistiche (QNN) equivarianti, addestrate su MNIST tramite circuiti parametrici (PennyLane) e tracciate su [Weights & Biases](https://wandb.ai).
 
 Ogni sezione qui sotto è spiegata in due modi:

@@ -13,11 +13,17 @@ def verify_class_balance(dataloader, tolerance=0):
     diff = abs(class_counts.get(0, 0) - class_counts.get(1, 0))
     return diff
 
+
 @pytest.mark.parametrize("augment", [False, True])
 def test_dataset_balance(augment):
     train_loader, test_loader = load_mnist_data(
-        batch_size=10, N=100, num_workers=0, img_size=16,
-        data_dir="data", seed=42, augment_test=augment
+        batch_size=10,
+        N=100,
+        num_workers=0,
+        img_size=16,
+        data_dir="data",
+        seed=42,
+        augment_test=augment,
     )
 
     assert verify_class_balance(train_loader) <= 0, "Train dataset is unbalanced!"

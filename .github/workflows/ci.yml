@@ -48,13 +48,73 @@ jobs:
       - name: Check formatting with Black
         run: poetry run black --check .
 
+      - name: Type-check with mypy
+        run: poetry run mypy src
+
       - name: Run pytest
         env:
           WANDB_MODE: disabled
         run: poetry run pytest tests/ --disable-warnings --cov=src --cov-report=term-missing
 
+  pre-commit:
+    name: pre-commit hooks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
+
+  security:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-root
+
+      - name: pip-audit (installed environment)
+        run: |
+          poetry run pip install pip-audit
+          # torch's fix (2.10.0/2.13.0) is a version bump across the whole
+          # PennyLane-lightning stack, which is pinned to torch 2.9.1; that
+          # upgrade needs its own regression-testing pass, so it's tracked
+          # here explicitly rather than silently ignored or left blocking
+          # every future CI run for an unrelated dependency bump.
+          poetry run pip-audit --skip-editable \
+            --ignore-vuln PYSEC-2026-139 \
+            --ignore-vuln PYSEC-2025-194 \
+            --ignore-vuln PYSEC-2026-2286 \
+            --ignore-vuln CVE-2025-3001
+
   docker:
-    name: Docker build
+    name: Docker build & scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -68,6 +128,19 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: eqnn:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Pinned to the commit for v0.35.0 rather than a mutable tag: trivy-action
+      # tags 0.0.1-0.34.2 were compromised with a credential-stealing payload
+      # in March 2026 (GHSA-69fq-xp46-6x23). SHA-pinning is immune to any
+      # future tag re-pointing, which is how that attack was distributed.
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: eqnn:ci
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true

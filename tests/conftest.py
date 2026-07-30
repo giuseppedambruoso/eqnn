@@ -11,7 +11,11 @@ def device_and_tensors():
     reps = 2
     num_images = 10
 
-    params = torch.empty(num_qubits * reps, device=torch_device).uniform_(-0.1, 0.1).requires_grad_()
+    params = (
+        torch.empty(num_qubits * reps, device=torch_device)
+        .uniform_(-0.1, 0.1)
+        .requires_grad_()
+    )
     phi = torch.empty(1, device=torch_device).uniform_(-0.1, 0.1).requires_grad_()
 
     test_images = torch.rand(num_images, 16, 16, device=torch_device)
