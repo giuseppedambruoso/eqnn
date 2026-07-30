@@ -130,6 +130,8 @@ def train_loop(
     remove_cross_edge: bool = False,
     verbose: bool = False,
     img_size: int = 16,
+    rotation_gate: str = "RY",
+    entangler: str = "cnot",
 ) -> tuple[
     torch.Tensor,
     torch.Tensor,
@@ -142,13 +144,24 @@ def train_loop(
 ]:
     torch_dev = torch.device(dev)
     qnn = create_qnn(
-        device, num_qubits, p_err, reps, equivariance, twirling, remove_cross_edge
+        device,
+        num_qubits,
+        p_err,
+        reps,
+        equivariance,
+        twirling,
+        remove_cross_edge,
+        rotation_gate,
+        entangler,
     )
 
     run = wandb.init(
         project=os.environ.get("WANDB_PROJECT", "eqnn"),
         group=os.environ.get("WANDB_RUN_GROUP", None),
-        name=f"eq={equivariance}_twirl={twirling}_crossedge={not remove_cross_edge}_N={N}_seed={seed}",
+        name=(
+            f"eq={equivariance}_twirl={twirling}_crossedge={not remove_cross_edge}"
+            f"_rot={rotation_gate}_ent={entangler}_N={N}_seed={seed}"
+        ),
         config={
             "seed": seed,
             "N": N,
@@ -164,6 +177,8 @@ def train_loop(
             "equivariance": equivariance,
             "twirling": twirling,
             "remove_cross_edge": remove_cross_edge,
+            "rotation_gate": rotation_gate,
+            "entangler": entangler,
         },
         reinit=True,
     )
@@ -278,6 +293,8 @@ def train_loop(
                 "twirling": twirling,
                 "remove_cross_edge": remove_cross_edge,
                 "img_size": img_size,
+                "rotation_gate": rotation_gate,
+                "entangler": entangler,
             },
         },
         model_path,

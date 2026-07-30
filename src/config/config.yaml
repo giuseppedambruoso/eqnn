@@ -27,6 +27,8 @@ QNN:
   equivariance: True
   twirling: False
   remove_cross_edge: True
+  rotation_gate: "RY"  # "RY" | "RX" — only used when equivariance=False
+  entangler: "cnot"  # "cnot" | "frozen_ryy" — only used when equivariance=False
 
 TRAINING:
   epochs: 80

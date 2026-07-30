@@ -82,6 +82,44 @@ def compiled_cnot(c: int, t: int, p_err: float) -> None:
 
 # --- QNode Factory ---
 
+# Fixed (non-trainable) rotation angle for the "frozen_ryy" entangler, matching
+# the convention already used for IsingYY inside compiled_cnot.
+FROZEN_ENTANGLER_ANGLE = math.pi / 2
+
+_VALID_ROTATION_GATES = {"RY", "RX"}
+_VALID_ENTANGLERS = {"cnot", "frozen_ryy"}
+
+
+def frozen_ryy_cascade(
+    num_qubits: int, cross_edge_index: int, remove_cross_edge: bool, p_err: float
+) -> None:
+    """Cascade of fixed-angle RYY gates (IsingYY(pi/2)) over adjacent qubits.
+
+    At the single step that would act on the two central qubits
+    (i == cross_edge_index), it is replaced by one 4-qubit RYYYY
+    (PauliRot(pi/2, "YYYY")) over the 4 central qubits instead — unless
+    remove_cross_edge skips that step entirely, same as for the CNOT cascade.
+    """
+    for i in range(num_qubits - 1):
+        if i == cross_edge_index:
+            if remove_cross_edge:
+                continue
+            wires = [
+                cross_edge_index - 1,
+                cross_edge_index,
+                cross_edge_index + 1,
+                cross_edge_index + 2,
+            ]
+            qml.PauliRot(FROZEN_ENTANGLER_ANGLE, "YYYY", wires=wires)
+            if p_err != 0:
+                for w in wires:
+                    qml.DepolarizingChannel(p_err, wires=w)
+        else:
+            qml.IsingYY(FROZEN_ENTANGLER_ANGLE, wires=[i, i + 1])
+            if p_err != 0:
+                qml.DepolarizingChannel(p_err, wires=i)
+                qml.DepolarizingChannel(p_err, wires=i + 1)
+
 
 def create_qnn(
     device: str,
@@ -91,7 +129,14 @@ def create_qnn(
     equivariance: bool = False,
     twirling: bool = False,
     remove_cross_edge: bool = False,
+    rotation_gate: str = "RY",
+    entangler: str = "cnot",
 ) -> Any:
+    if rotation_gate not in _VALID_ROTATION_GATES:
+        raise ValueError(f"rotation_gate must be one of {_VALID_ROTATION_GATES}")
+    if entangler not in _VALID_ENTANGLERS:
+        raise ValueError(f"entangler must be one of {_VALID_ENTANGLERS}")
+
     dev = qml.device(device, wires=num_qubits, shots=None)
     cross_edge_index = (num_qubits // 2) - 1
 
@@ -112,9 +157,18 @@ def create_qnn(
 
         for rep in range(reps):
             for i in range(num_qubits):
-                qml.RY(params[i + num_qubits * rep], wires=i)
+                if rotation_gate == "RX":
+                    qml.RX(params[i + num_qubits * rep], wires=i)
+                else:
+                    qml.RY(params[i + num_qubits * rep], wires=i)
                 if p_err != 0:
                     qml.DepolarizingChannel(p_err, wires=i)
+
+            if entangler == "frozen_ryy":
+                frozen_ryy_cascade(
+                    num_qubits, cross_edge_index, remove_cross_edge, p_err
+                )
+                continue
 
             for i in range(num_qubits - 1):
                 if remove_cross_edge and i == cross_edge_index:

@@ -27,6 +27,8 @@ def main(cfg: DictConfig) -> None:
     equivariance = cfg.QNN.equivariance
     twirling = cfg.QNN.twirling
     remove_cross_edge = cfg.QNN.remove_cross_edge
+    rotation_gate = cfg.QNN.rotation_gate
+    entangler = cfg.QNN.entangler
 
     epochs = cfg.TRAINING.epochs
     learning_rate = cfg.TRAINING.learning_rate
@@ -91,6 +93,8 @@ def main(cfg: DictConfig) -> None:
             remove_cross_edge,
             verbose,
             img_size,
+            rotation_gate,
+            entangler,
         )
 
 

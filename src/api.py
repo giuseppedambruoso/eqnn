@@ -75,6 +75,8 @@ def load_model(model_path: str | None = None) -> None:
         cfg["equivariance"],
         cfg["twirling"],
         cfg["remove_cross_edge"],
+        cfg.get("rotation_gate", "RY"),
+        cfg.get("entangler", "cnot"),
     )
 
     _MODEL["qnn"] = qnn
