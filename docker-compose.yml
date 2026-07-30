@@ -15,3 +15,18 @@ services:
     # Pass Hydra overrides after `--`, e.g.:
     #   docker compose run --rm eqnn TRAINING.epochs=10 DATA.N=100
     command: []
+
+  api:
+    build: .
+    image: eqnn:latest
+    entrypoint: []
+    command: ["python3", "-m", "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      # Path to a final_model.pt inside the container; defaults to the most
+      # recently modified checkpoint under outputs/ or multirun/ if unset.
+      MODEL_PATH: ${MODEL_PATH:-}
+    volumes:
+      - ./outputs:/app/outputs
+      - ./multirun:/app/multirun

@@ -11,6 +11,7 @@ from src.train import study_gradients, train_loop
 
 logger = logging.getLogger(__name__)
 
+
 @hydra.main(config_path="./config/", config_name="config", version_base=None)
 def main(cfg: DictConfig) -> None:
     SEED = cfg.GENERAL.seed
@@ -36,7 +37,6 @@ def main(cfg: DictConfig) -> None:
     dataset = cfg.DATA.dataset
     img_size = cfg.DATA.img_size
     data_dir = cfg.DATA.data_dir
-    augment_test = cfg.DATA.augment_test
 
     batch_size = int(N // 10)
     num_workers = cfg.GENERAL.num_workers
@@ -44,22 +44,55 @@ def main(cfg: DictConfig) -> None:
     dev = cfg.GENERAL.dev
 
     if dataset == "mnist":
-        train_loader, test_loader = load_mnist_data(batch_size, N, num_workers, img_size, data_dir, SEED, verbose, False)
-        _, aug_test_loader = load_mnist_data(batch_size, N, num_workers, img_size, data_dir, SEED, verbose, True)
+        train_loader, test_loader = load_mnist_data(
+            batch_size, N, num_workers, img_size, data_dir, SEED, verbose, False
+        )
+        _, aug_test_loader = load_mnist_data(
+            batch_size, N, num_workers, img_size, data_dir, SEED, verbose, True
+        )
     else:
-        raise ValueError("Only 'mnist' is currently supported in this modularized example.")
+        raise ValueError(
+            "Only 'mnist' is currently supported in this modularized example."
+        )
 
     if cfg.GENERAL.initialization_analysis:
         study_gradients(
-            datasets=["mnist"], equivariances=[False, True], num_qubits=num_qubits, device=device,
-            dev=dev, p_err=p_err, reps=reps, twirling=twirling, remove_cross_edge=remove_cross_edge,
-            num_inits=300, verbose=verbose
+            datasets=["mnist"],
+            equivariances=[False, True],
+            num_qubits=num_qubits,
+            device=device,
+            dev=dev,
+            p_err=p_err,
+            reps=reps,
+            twirling=twirling,
+            remove_cross_edge=remove_cross_edge,
+            num_inits=300,
+            verbose=verbose,
         )
     else:
         train_loop(
-            train_loader, test_loader, aug_test_loader, epochs, learning_rate, patience, min_delta,
-            device, num_qubits, dev, SEED, N, equivariance, reps, p_err, dataset, twirling, remove_cross_edge, verbose
+            train_loader,
+            test_loader,
+            aug_test_loader,
+            epochs,
+            learning_rate,
+            patience,
+            min_delta,
+            device,
+            num_qubits,
+            dev,
+            SEED,
+            N,
+            equivariance,
+            reps,
+            p_err,
+            dataset,
+            twirling,
+            remove_cross_edge,
+            verbose,
+            img_size,
         )
+
 
 if __name__ == "__main__":
     main()
