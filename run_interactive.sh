@@ -9,11 +9,11 @@ echo " attivata automaticamente quando serve.)"
 echo
 
 echo "Architetture disponibili:"
-echo "  config1: RY + CNOT               (non equivariante)"
-echo "  config2: RY + CNOT + twirling     (equivariante)"
-echo "  config3: RX + CNOT               (non equivariante)"
-echo "  config4: RX + CNOT + twirling     (equivariante)"
-echo "  config5: RX + RYY/RYYYY + twirling (equivariante)"
+echo "  config1: RY + CNOT                 (non equivariante)"
+echo "  config2: RY + CNOT + twirling       (equivariante)"
+echo "  config3: RX + RXY                  (non equivariante)"
+echo "  config4: RX + RXY + twirling        (equivariante)"
+echo "  config5: RX + RYY/RYYYY + twirling  (equivariante)"
 echo
 read -rp "Architettura (config1-config5) [config1]: " ARCHITECTURE
 ARCHITECTURE=${ARCHITECTURE:-config1}
