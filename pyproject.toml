@@ -113,6 +113,7 @@ scikit-learn = "^1.7.2"
 hydra-joblib-launcher = "^1.2.0"
 seaborn = "^0.13.2"
 kagglehub = "^1.0.0"
+wandb = "^0.22.3"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.8.0"
@@ -120,6 +121,7 @@ flake8 = "^7.3.0"
 black = "^25.11.0"
 isort = "^7.0.0"
 mypy = "^1.18.2"
+ruff = "^0.9.0"
 
 # ---------------------------------------------------------------------------
 # Formatting tools
@@ -136,6 +138,37 @@ profile = "black"
 line_length = 88
 include_trailing_comma = true
 multi_line_output = 3
+
+# ---------------------------------------------------------------------------
+# Ruff (linting) — https://docs.astral.sh/ruff/
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+src = ["src", "tests"]
+exclude = [
+    ".venv",
+    ".git",
+    "dist",
+    "data",
+    "results",
+    "multirun",
+    "histos",
+]
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: isort, B: bugbear, UP: pyupgrade, C4: comprehensions
+select = ["E", "W", "F", "I", "B", "UP", "C4"]
+ignore = [
+    "E501",  # line length is enforced by black instead
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.mypy]
 python_version = "3.10"

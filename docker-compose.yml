@@ -1,0 +1,17 @@
+services:
+  eqnn:
+    build: .
+    image: eqnn:latest
+    env_file:
+      - .env
+    environment:
+      WANDB_MODE: ${WANDB_MODE:-online}
+      WANDB_PROJECT: ${WANDB_PROJECT:-eqnn}
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./multirun:/app/multirun
+      - ./wandb:/app/wandb
+    # Pass Hydra overrides after `--`, e.g.:
+    #   docker compose run --rm eqnn TRAINING.epochs=10 DATA.N=100
+    command: []

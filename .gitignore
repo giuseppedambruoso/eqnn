@@ -34,8 +34,11 @@ data/
 # outputs
 outputs/
 
-# poetry
-poetry.lock
-
 # multirun
 multirun/
+
+# wandb local run data
+wandb/
+
+# local env vars / secrets
+.env
