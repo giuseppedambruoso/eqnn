@@ -113,7 +113,7 @@ docker compose run --rm eqnn -m QNN.equivariance=True,False QNN.reps=1,2,3
 docker compose run --rm -e WANDB_RUN_GROUP=exp-equiv-vs-no eqnn -m QNN.equivariance=True,False
 ```
 
-Parametri configurabili: `GENERAL.{seed,dev}`, `DATA.{N,dataset,img_size,augment_test}`, `QNN.{num_qubits,p_err,reps,equivariance,twirling,remove_cross_edge,rotation_gate,entangler,device}`, `TRAINING.{epochs,learning_rate,patience,min_delta}` — vedi [src/config/config.yaml](src/config/config.yaml) per i default. Per uno sweep strutturato su più parametri contemporaneamente vedi anche [run_experiments.sh](run_experiments.sh) (usa il launcher `joblib` per parallelizzare).
+Parametri configurabili: `GENERAL.{seed,dev}`, `DATA.{N,dataset,img_size,augment_test}`, `QNN.{num_qubits,p_err,reps,equivariance,twirling,remove_cross_edge,rotation_gate,entangler,device}`, `TRAINING.{epochs,learning_rate,patience,min_delta}` — vedi [src/config/config.yaml](src/config/config.yaml) per i default. Per parallelizzare uno sweep su più core, aggiungi `hydra/launcher=joblib hydra.launcher.n_jobs=<N>` al comando.
 
 `QNN.rotation_gate` (`RY`|`RX`) e `QNN.entangler` (`cnot`|`frozen_ryy`) sono assi indipendenti da `equivariance`/`twirling`: `entangler=frozen_ryy` sostituisce la cascata di CNOT/`compiled_cnot` con una cascata di `IsingYY(π/2)` a parametro fisso (non allenabile), sostituendo lo step centrale con un singolo `PauliRot(π/2, "YYYY")` sui 4 qubit centrali invece che sui 2 (a meno di `remove_cross_edge=True`, che salta quello step come per il CNOT). Esempio:
 ```bash
