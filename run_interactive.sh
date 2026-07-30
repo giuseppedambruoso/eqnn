@@ -41,9 +41,29 @@ for VALUE in "$EQ" "$TWIRL" "$CROSS" "$ROTGATE" "$ENTANGLER" "$REPS" "$N" "$DATA
         break
     fi
 done
+JOBLIB_ARGS=()
 if [ -n "$MFLAG" ]; then
     echo
     echo "🔀 Sweep rilevato (valore con virgola) — aggiungo --multirun."
+    echo
+
+    CORES=$(nproc 2>/dev/null || echo 4)
+    RECOMMENDED=$((CORES > 1 ? CORES - 1 : 1))
+    echo "Il tuo computer ha $CORES core disponibili."
+    echo "Ogni job usa un intero core per tutta la sua durata: non ha senso mettere"
+    echo "K oltre $CORES (i job in più aspetterebbero comunque in coda), e usarli"
+    echo "tutti rallenta ogni altra cosa sul computer nel frattempo."
+    echo
+    read -rp "Quanti job in parallelo (K)? [$RECOMMENDED]: " KJOBS
+    KJOBS=${KJOBS:-$RECOMMENDED}
+    if ! [[ "$KJOBS" =~ ^[0-9]+$ ]] || [ "$KJOBS" -lt 1 ]; then
+        echo "Valore non valido, uso $RECOMMENDED."
+        KJOBS=$RECOMMENDED
+    elif [ "$KJOBS" -gt "$CORES" ]; then
+        echo "⚠️  K=$KJOBS supera i $CORES core disponibili: i job oltre $CORES si"
+        echo "    metteranno comunque in coda, senza guadagno di velocità."
+    fi
+    JOBLIB_ARGS=("hydra/launcher=joblib" "hydra.launcher.n_jobs=$KJOBS")
 fi
 
 CMD=(docker compose run --rm)
@@ -67,6 +87,9 @@ CMD+=(
     "QNN.reps=$REPS"
     "TRAINING.epochs=$EPOCHS"
 )
+if [ "${#JOBLIB_ARGS[@]}" -gt 0 ]; then
+    CMD+=("${JOBLIB_ARGS[@]}")
+fi
 
 echo
 echo "Comando che sto per eseguire:"

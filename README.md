@@ -98,6 +98,8 @@ Le domande principali:
 
 Alla fine ti verrà mostrato il comando che sta per essere eseguito e ti chiederà conferma (`Confermi? [Y/n]`): premi invio per procedere.
 
+**Confrontare più configurazioni insieme**: scrivi una lista di valori separati da virgola *senza spazi* in una qualunque domanda (es. `RY,RX` per il gate di rotazione, o `True,False` per l'equivarianza) — lo script se ne accorge da solo e ti chiede quanti job far girare in parallelo (K), dopo averti detto quanti core ha il tuo computer e quale valore di K è ragionevole non superare per non rallentare tutto il resto. Se le combinazioni sono più di K, le prime K partono subito e le altre si mettono in coda automaticamente, partendo una alla volta man mano che si libera un posto.
+
 ### 👩‍💻 Versione sviluppatori
 
 Il progetto usa [Hydra](https://hydra.cc/) per la configurazione ([src/config/config.yaml](src/config/config.yaml)). `run_interactive.sh` è solo un wrapper che costruisce ed esegue `docker compose run` con gli override; puoi bypassarlo e scrivere gli override direttamente:
