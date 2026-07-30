@@ -13,7 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV POETRY_HOME="/opt/poetry" \
     POETRY_VIRTUALENVS_IN_PROJECT=true \
     POETRY_NO_INTERACTION=1 \
+    POETRY_REQUESTS_TIMEOUT=120 \
     PIP_NO_CACHE_DIR=1 \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=10 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
@@ -21,13 +24,25 @@ ENV PATH="$POETRY_HOME/bin:$PATH"
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
+# Fewer concurrent downloads is more resilient on flaky/constrained networks
+# (e.g. Docker Desktop + WSL2 NAT) than poetry's default parallelism.
+RUN poetry config installer.max-workers 4
+
 WORKDIR /app
 
 # Copy only dependency manifests first so Docker can cache this layer
 COPY pyproject.toml poetry.lock README.md ./
 
-# Install dependencies only (no root package yet) — keeps the layer cacheable
-RUN poetry install --no-root --only main --no-ansi
+# Install dependencies only (no root package yet) — keeps the layer cacheable.
+# Retries in a loop: transient SSL/connection drops mid-download shouldn't
+# fail the whole build when the fix is just "try again".
+RUN bash -c '\
+    for i in $(seq 1 5); do \
+        poetry install --no-root --only main --no-ansi && exit 0; \
+        echo "poetry install failed (attempt $i/5), retrying in 5s..."; \
+        sleep 5; \
+    done; \
+    exit 1'
 
 # Now copy the rest of the source code and install the project itself
 COPY src ./src
