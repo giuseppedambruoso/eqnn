@@ -59,35 +59,24 @@ def approx_equiv_measure(phi: torch.Tensor, p_err: float, num_qubits: int) -> No
             qml.DepolarizingChannel(p_err, wires=i)
 
 
-def compiled_cnot(c: int, t: int, p_err: float) -> None:
-    """Compiles an exact CNOT gate using ONLY X, Y, and YY rotations."""
-    qml.RY(-math.pi / 2, wires=t)
-    qml.RX(math.pi / 2, wires=c)
-    qml.RX(math.pi / 2, wires=t)
-    qml.IsingYY(math.pi / 2, wires=[c, t])
-    qml.RX(-math.pi / 2, wires=c)
-    qml.RX(-math.pi / 2, wires=t)
-    qml.RX(-math.pi / 2, wires=c)
-    qml.RY(-math.pi / 2, wires=c)
-    qml.RX(math.pi / 2, wires=c)
-    qml.RX(-math.pi / 2, wires=t)
-    qml.RY(-math.pi / 2, wires=t)
-    qml.RX(math.pi / 2, wires=t)
-    qml.RY(math.pi / 2, wires=t)
-
-    if p_err != 0:
-        qml.DepolarizingChannel(p_err, wires=c)
-        qml.DepolarizingChannel(p_err, wires=t)
-
-
 # --- QNode Factory ---
 
-# Fixed (non-trainable) rotation angle for the "frozen_ryy" entangler, matching
-# the convention already used for IsingYY inside compiled_cnot.
+# Fixed (non-trainable) rotation angle for the frozen-RYY/RYYYY entangler
+# used by config5.
 FROZEN_ENTANGLER_ANGLE = math.pi / 2
 
-_VALID_ROTATION_GATES = {"RY", "RX"}
-_VALID_ENTANGLERS = {"cnot", "frozen_ryy"}
+# The 5 supported architectures. "twirled" wraps the ansatz in explicit p4m
+# group-twirling, averaged over the 8 group elements in qnn_forward — that's
+# what actually makes config2/4/5 p4m-equivariant (config1/3 are not).
+# remove_cross_edge (see create_qnn) is a separate, orthogonal toggle that
+# applies to any of these five.
+ARCHITECTURES: dict[str, dict[str, Any]] = {
+    "config1": {"rotation_gate": "RY", "entangler": "cnot", "twirled": False},
+    "config2": {"rotation_gate": "RY", "entangler": "cnot", "twirled": True},
+    "config3": {"rotation_gate": "RX", "entangler": "cnot", "twirled": False},
+    "config4": {"rotation_gate": "RX", "entangler": "cnot", "twirled": True},
+    "config5": {"rotation_gate": "RX", "entangler": "frozen_ryy", "twirled": True},
+}
 
 
 def frozen_ryy_cascade(
@@ -126,16 +115,17 @@ def create_qnn(
     num_qubits: int,
     p_err: float,
     reps: int,
-    equivariance: bool = False,
-    twirling: bool = False,
+    architecture: str = "config1",
     remove_cross_edge: bool = False,
-    rotation_gate: str = "RY",
-    entangler: str = "cnot",
 ) -> Any:
-    if rotation_gate not in _VALID_ROTATION_GATES:
-        raise ValueError(f"rotation_gate must be one of {_VALID_ROTATION_GATES}")
-    if entangler not in _VALID_ENTANGLERS:
-        raise ValueError(f"entangler must be one of {_VALID_ENTANGLERS}")
+    if architecture not in ARCHITECTURES:
+        raise ValueError(
+            f"architecture must be one of {sorted(ARCHITECTURES)}, got {architecture!r}"
+        )
+    spec = ARCHITECTURES[architecture]
+    rotation_gate = spec["rotation_gate"]
+    entangler = spec["entangler"]
+    twirled = spec["twirled"]
 
     dev = qml.device(device, wires=num_qubits, shots=None)
     cross_edge_index = (num_qubits // 2) - 1
@@ -149,7 +139,7 @@ def create_qnn(
     ) -> Any:
         qml.QubitUnitary(embedding_unitary, wires=range(num_qubits))
 
-        if equivariance and twirling:
+        if twirled:
             apply_group_element(g_idx, num_qubits)
             if p_err != 0:
                 for i in range(num_qubits):
@@ -173,24 +163,18 @@ def create_qnn(
             for i in range(num_qubits - 1):
                 if remove_cross_edge and i == cross_edge_index:
                     continue
-                if equivariance and not twirling:
-                    compiled_cnot(i, i + 1, p_err)
-                else:
-                    qml.CNOT(wires=[i, i + 1])
-                    if p_err != 0:
-                        qml.DepolarizingChannel(p_err, wires=i)
-                        qml.DepolarizingChannel(p_err, wires=i + 1)
+                qml.CNOT(wires=[i, i + 1])
+                if p_err != 0:
+                    qml.DepolarizingChannel(p_err, wires=i)
+                    qml.DepolarizingChannel(p_err, wires=i + 1)
 
-        if equivariance and twirling:
+        if twirled:
             apply_group_element(g_idx, num_qubits)
             if p_err != 0:
                 for i in range(num_qubits):
                     qml.DepolarizingChannel(p_err, wires=i)
-            phi = torch.tensor(0.0, requires_grad=False)
-            approx_equiv_measure(phi, p_err, num_qubits)
-        else:
-            phi = torch.tensor(0.0, requires_grad=False)
-            approx_equiv_measure(torch.tensor(0.0), p_err, num_qubits)
+
+        approx_equiv_measure(torch.tensor(0.0), p_err, num_qubits)
 
         coeffs = [1.0 / num_qubits] * num_qubits
         observables = [qml.Z(i) for i in range(num_qubits)]
@@ -200,7 +184,7 @@ def create_qnn(
     def qnn_forward(
         embedding_unitary: torch.Tensor, params: torch.Tensor, phi: torch.Tensor
     ) -> Any:
-        if equivariance and twirling:
+        if twirled:
             results = [qnn_base(embedding_unitary, params, phi, g) for g in range(8)]
             return torch.stack(results).mean(dim=0)
         return qnn_base(embedding_unitary, params, phi, 0)

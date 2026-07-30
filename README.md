@@ -86,19 +86,20 @@ Nel terminale, dentro la cartella `eqnn`, esegui:
 ```bash
 ./run_interactive.sh
 ```
-Lo script ti farà alcune domande in italiano, una alla volta (es. "Equivarianza [True]:"). Per ognuna:
+Lo script ti farà alcune domande in italiano, una alla volta. Per ognuna:
 - se premi solo **invio**, viene usato il valore tra parentesi quadre (il default, va bene nella maggior parte dei casi),
 - altrimenti scrivi il valore che vuoi e premi invio.
 
 Le domande principali:
-- **Equivarianza / Twirling / Rimuovi cross-edge**: sono opzioni tecniche del modello quantistico, scrivi `True` o `False`. Se non sai cosa scegliere, lascia il default.
+- **Architettura**: quale dei 5 modelli quantistici usare — lo script te li elenca prima di chiedere (`config1`..`config5`). Se non sai quale scegliere, lascia il default (`config1`).
+- **Rimuovi cross-edge**: opzione tecnica del circuito, scrivi `True` o `False`. Se non sai cosa scegliere, lascia il default.
 - **Numero immagini training (N)**: quante immagini usare per l'addestramento — un numero più basso (es. 20) fa un test veloce, un numero più alto (es. 300) allena meglio ma richiede più tempo.
 - **Epoche**: quante volte il modello "ripassa" tutti i dati — più epoche possono migliorare il risultato ma allungano il tempo di attesa.
 - **Seed**: un numero a caso per rendere l'esperimento ripetibile — lascialo pure com'è.
 
 Alla fine ti verrà mostrato il comando che sta per essere eseguito e ti chiederà conferma (`Confermi? [Y/n]`): premi invio per procedere.
 
-**Confrontare più configurazioni insieme**: scrivi una lista di valori separati da virgola *senza spazi* in una qualunque domanda (es. `RY,RX` per il gate di rotazione, o `True,False` per l'equivarianza) — lo script se ne accorge da solo e ti chiede quanti job far girare in parallelo (K), dopo averti detto quanti core ha il tuo computer e quale valore di K è ragionevole non superare per non rallentare tutto il resto. Se le combinazioni sono più di K, le prime K partono subito e le altre si mettono in coda automaticamente, partendo una alla volta man mano che si libera un posto.
+**Confrontare più configurazioni insieme**: scrivi una lista di valori separati da virgola *senza spazi* in una qualunque domanda (es. `config1,config2,config3,config4,config5` per l'architettura) — lo script se ne accorge da solo e ti chiede quanti job far girare in parallelo (K), dopo averti detto quanti core ha il tuo computer e quale valore di K è ragionevole non superare per non rallentare tutto il resto. Se le combinazioni sono più di K, le prime K partono subito e le altre si mettono in coda automaticamente, partendo una alla volta man mano che si libera un posto.
 
 ### 👩‍💻 Versione sviluppatori
 
@@ -106,21 +107,28 @@ Il progetto usa [Hydra](https://hydra.cc/) per la configurazione ([src/config/co
 
 ```bash
 # run singolo
-docker compose run --rm eqnn QNN.equivariance=False DATA.N=200 TRAINING.epochs=50
+docker compose run --rm eqnn QNN.architecture=config3 DATA.N=200 TRAINING.epochs=50
 
 # sweep/grid (multirun Hydra, un run per combinazione)
-docker compose run --rm eqnn -m QNN.equivariance=True,False QNN.reps=1,2,3
+docker compose run --rm eqnn -m QNN.architecture=config1,config2,config3,config4,config5
 
-# raggruppare i run di uno sweep su wandb
-docker compose run --rm -e WANDB_RUN_GROUP=exp-equiv-vs-no eqnn -m QNN.equivariance=True,False
+# raggruppare i run di uno sweep su wandb, in parallelo su 4 core
+docker compose run --rm -e WANDB_RUN_GROUP=arch-comparison eqnn -m QNN.architecture=config1,config2,config3,config4,config5 hydra/launcher=joblib hydra.launcher.n_jobs=4
 ```
 
-Parametri configurabili: `GENERAL.{seed,dev}`, `DATA.{N,dataset,img_size,augment_test}`, `QNN.{num_qubits,p_err,reps,equivariance,twirling,remove_cross_edge,rotation_gate,entangler,device}`, `TRAINING.{epochs,learning_rate,patience,min_delta}` — vedi [src/config/config.yaml](src/config/config.yaml) per i default. Per parallelizzare uno sweep su più core, aggiungi `hydra/launcher=joblib hydra.launcher.n_jobs=<N>` al comando.
+Parametri configurabili: `GENERAL.{seed,dev}`, `DATA.{N,dataset,img_size,augment_test}`, `QNN.{num_qubits,p_err,reps,architecture,remove_cross_edge,device}`, `TRAINING.{epochs,learning_rate,patience,min_delta}` — vedi [src/config/config.yaml](src/config/config.yaml) per i default.
 
-`QNN.rotation_gate` (`RY`|`RX`) e `QNN.entangler` (`cnot`|`frozen_ryy`) sono assi indipendenti da `equivariance`/`twirling`: `entangler=frozen_ryy` sostituisce la cascata di CNOT/`compiled_cnot` con una cascata di `IsingYY(π/2)` a parametro fisso (non allenabile), sostituendo lo step centrale con un singolo `PauliRot(π/2, "YYYY")` sui 4 qubit centrali invece che sui 2 (a meno di `remove_cross_edge=True`, che salta quello step come per il CNOT). Esempio:
-```bash
-docker compose run --rm eqnn QNN.equivariance=True QNN.twirling=True QNN.rotation_gate=RX QNN.entangler=frozen_ryy
-```
+`QNN.architecture` seleziona una delle 5 architetture supportate ([src/qnn.py:ARCHITECTURES](src/qnn.py)):
+
+| Architettura | Rotazione | Entangler | Twirling | Equivariante |
+|---|---|---|---|---|
+| `config1` | RY | CNOT | No | No |
+| `config2` | RY | CNOT | Sì | Sì |
+| `config3` | RX | CNOT | No | No |
+| `config4` | RX | CNOT | Sì | Sì |
+| `config5` | RX | RYY/RYYYY (parametro fisso π/2, non allenabile) | Sì | Sì |
+
+`remove_cross_edge` è un asse indipendente applicabile a qualunque delle 5: se `True`, salta lo step centrale della cascata (il CNOT/RYY tra i due qubit centrali, o l'unico RYYYY a 4 qubit per `config5`).
 
 Per disattivare wandb (es. in CI o debug locale): `WANDB_MODE=disabled` in `.env`, oppure `-e WANDB_MODE=disabled` sulla riga di comando.
 
@@ -142,7 +150,7 @@ Poco prima, il terminale avrà stampato un link che inizia con `https://wandb.ai
 
 - **Locale**: barra `tqdm` su stderr (posizionata per job quando si usa il launcher `joblib` in parallelo).
 - **Remoto**: ogni run stampa due link all'avvio ([train.py](src/train.py:88)):
-  - `View project` → https://wandb.ai/<entity>/eqnn — tabella di tutti i run, filtrabile/ordinabile per ogni campo di `config` (equivariance, N, seed, reps, ...), utile per confrontare esperimenti diversi.
+  - `View project` → https://wandb.ai/<entity>/eqnn — tabella di tutti i run, filtrabile/ordinabile per ogni campo di `config` (architecture, is_equivariant, N, seed, reps, ...), utile per confrontare esperimenti diversi.
   - `View run` → pagina del run corrente, con `train/loss`, `train/accuracy` aggiornati step-by-step, e a fine training anche le metriche di validazione e l'immagine della loss curve.
 - Se il container gira in background (`docker compose run -d`), puoi seguirne i log con `docker logs -f <container_id>` (`docker ps` per trovarlo).
 

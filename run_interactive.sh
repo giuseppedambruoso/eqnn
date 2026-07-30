@@ -8,16 +8,17 @@ echo " virgole senza spazi, es: True,False — la modalità sweep viene"
 echo " attivata automaticamente quando serve.)"
 echo
 
-read -rp "Equivarianza [True]: " EQ
-EQ=${EQ:-True}
-read -rp "Twirling [False]: " TWIRL
-TWIRL=${TWIRL:-False}
+echo "Architetture disponibili:"
+echo "  config1: RY + CNOT               (non equivariante)"
+echo "  config2: RY + CNOT + twirling     (equivariante)"
+echo "  config3: RX + CNOT               (non equivariante)"
+echo "  config4: RX + CNOT + twirling     (equivariante)"
+echo "  config5: RX + RYY/RYYYY + twirling (equivariante)"
+echo
+read -rp "Architettura (config1-config5) [config1]: " ARCHITECTURE
+ARCHITECTURE=${ARCHITECTURE:-config1}
 read -rp "Rimuovi cross-edge [True]: " CROSS
 CROSS=${CROSS:-True}
-read -rp "Gate di rotazione (RY/RX) [RY]: " ROTGATE
-ROTGATE=${ROTGATE:-RY}
-read -rp "Entangler (cnot/frozen_ryy) [cnot]: " ENTANGLER
-ENTANGLER=${ENTANGLER:-cnot}
 read -rp "Ripetizioni circuito (reps) [2]: " REPS
 REPS=${REPS:-2}
 read -rp "Numero immagini training (N) [20]: " N
@@ -35,7 +36,7 @@ read -rp "Nome gruppo wandb per raggruppare i run (opzionale): " GROUP
 # Sweep mode is detected automatically: if any value contains a comma, this
 # has to be a Hydra multirun (-m), otherwise Hydra rejects it as ambiguous.
 MFLAG=""
-for VALUE in "$EQ" "$TWIRL" "$CROSS" "$ROTGATE" "$ENTANGLER" "$REPS" "$N" "$DATASET" "$EPOCHS" "$SEED" "$DEV"; do
+for VALUE in "$ARCHITECTURE" "$CROSS" "$REPS" "$N" "$DATASET" "$EPOCHS" "$SEED" "$DEV"; do
     if [[ "$VALUE" == *,* ]]; then
         MFLAG="-m"
         break
@@ -79,11 +80,8 @@ CMD+=(
     "GENERAL.dev=$DEV"
     "DATA.N=$N"
     "DATA.dataset=$DATASET"
-    "QNN.equivariance=$EQ"
-    "QNN.twirling=$TWIRL"
+    "QNN.architecture=$ARCHITECTURE"
     "QNN.remove_cross_edge=$CROSS"
-    "QNN.rotation_gate=$ROTGATE"
-    "QNN.entangler=$ENTANGLER"
     "QNN.reps=$REPS"
     "TRAINING.epochs=$EPOCHS"
 )

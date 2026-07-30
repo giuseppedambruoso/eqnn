@@ -38,6 +38,7 @@ class ModelInfoResponse(BaseModel):
     path: str
     val_acc: float | None
     img_size: int
+    architecture: str
     classes: list[int]
 
 
@@ -72,17 +73,15 @@ def load_model(model_path: str | None = None) -> None:
         cfg["num_qubits"],
         cfg["p_err"],
         cfg["reps"],
-        cfg["equivariance"],
-        cfg["twirling"],
+        cfg.get("architecture", "config1"),
         cfg["remove_cross_edge"],
-        cfg.get("rotation_gate", "RY"),
-        cfg.get("entangler", "cnot"),
     )
 
     _MODEL["qnn"] = qnn
     _MODEL["params"] = checkpoint["params"]
     _MODEL["phi"] = torch.tensor(0.0)
     _MODEL["img_size"] = cfg["img_size"]
+    _MODEL["architecture"] = cfg.get("architecture", "config1")
     _MODEL["val_acc"] = checkpoint.get("val_acc")
     _MODEL["path"] = str(path)
     logger.info(f"Loaded model from {path} (val_acc={_MODEL['val_acc']})")
@@ -116,6 +115,7 @@ def model_info() -> ModelInfoResponse:
         path=_MODEL["path"],
         val_acc=_MODEL["val_acc"],
         img_size=_MODEL["img_size"],
+        architecture=_MODEL["architecture"],
         classes=[3, 4],
     )
 

@@ -7,7 +7,7 @@ import torch
 from omegaconf import DictConfig
 
 from src.data_loading import load_mnist_data
-from src.train import study_gradients, train_loop
+from src.train import train_loop
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +24,8 @@ def main(cfg: DictConfig) -> None:
     num_qubits = cfg.QNN.num_qubits
     p_err = cfg.QNN.p_err
     reps = cfg.QNN.reps
-    equivariance = cfg.QNN.equivariance
-    twirling = cfg.QNN.twirling
+    architecture = cfg.QNN.architecture
     remove_cross_edge = cfg.QNN.remove_cross_edge
-    rotation_gate = cfg.QNN.rotation_gate
-    entangler = cfg.QNN.entangler
 
     epochs = cfg.TRAINING.epochs
     learning_rate = cfg.TRAINING.learning_rate
@@ -57,45 +54,27 @@ def main(cfg: DictConfig) -> None:
             "Only 'mnist' is currently supported in this modularized example."
         )
 
-    if cfg.GENERAL.initialization_analysis:
-        study_gradients(
-            datasets=["mnist"],
-            equivariances=[False, True],
-            num_qubits=num_qubits,
-            device=device,
-            dev=dev,
-            p_err=p_err,
-            reps=reps,
-            twirling=twirling,
-            remove_cross_edge=remove_cross_edge,
-            num_inits=300,
-            verbose=verbose,
-        )
-    else:
-        train_loop(
-            train_loader,
-            test_loader,
-            aug_test_loader,
-            epochs,
-            learning_rate,
-            patience,
-            min_delta,
-            device,
-            num_qubits,
-            dev,
-            SEED,
-            N,
-            equivariance,
-            reps,
-            p_err,
-            dataset,
-            twirling,
-            remove_cross_edge,
-            verbose,
-            img_size,
-            rotation_gate,
-            entangler,
-        )
+    train_loop(
+        train_loader,
+        test_loader,
+        aug_test_loader,
+        epochs,
+        learning_rate,
+        patience,
+        min_delta,
+        device,
+        num_qubits,
+        dev,
+        SEED,
+        N,
+        architecture,
+        reps,
+        p_err,
+        dataset,
+        remove_cross_edge,
+        verbose,
+        img_size,
+    )
 
 
 if __name__ == "__main__":

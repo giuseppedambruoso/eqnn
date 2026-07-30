@@ -13,8 +13,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.data_loading import load_mnist_data
-from src.qnn import create_qnn
+from src.qnn import ARCHITECTURES, create_qnn
 
 logger = logging.getLogger(__name__)
 
@@ -122,16 +121,13 @@ def train_loop(
     dev: str,
     seed: int,
     N: int,
-    equivariance: bool,
+    architecture: str,
     reps: int,
     p_err: float,
     dataset: str,
-    twirling: bool = False,
     remove_cross_edge: bool = False,
     verbose: bool = False,
     img_size: int = 16,
-    rotation_gate: str = "RY",
-    entangler: str = "cnot",
 ) -> tuple[
     torch.Tensor,
     torch.Tensor,
@@ -143,25 +139,13 @@ def train_loop(
     list[float],
 ]:
     torch_dev = torch.device(dev)
-    qnn = create_qnn(
-        device,
-        num_qubits,
-        p_err,
-        reps,
-        equivariance,
-        twirling,
-        remove_cross_edge,
-        rotation_gate,
-        entangler,
-    )
+    qnn = create_qnn(device, num_qubits, p_err, reps, architecture, remove_cross_edge)
+    is_equivariant = ARCHITECTURES[architecture]["twirled"]
 
     run = wandb.init(
         project=os.environ.get("WANDB_PROJECT", "eqnn"),
         group=os.environ.get("WANDB_RUN_GROUP", None),
-        name=(
-            f"eq={equivariance}_twirl={twirling}_crossedge={not remove_cross_edge}"
-            f"_rot={rotation_gate}_ent={entangler}_N={N}_seed={seed}"
-        ),
+        name=f"{architecture}_crossedge={not remove_cross_edge}_N={N}_seed={seed}",
         config={
             "seed": seed,
             "N": N,
@@ -174,11 +158,9 @@ def train_loop(
             "num_qubits": num_qubits,
             "reps": reps,
             "p_err": p_err,
-            "equivariance": equivariance,
-            "twirling": twirling,
+            "architecture": architecture,
+            "is_equivariant": is_equivariant,
             "remove_cross_edge": remove_cross_edge,
-            "rotation_gate": rotation_gate,
-            "entangler": entangler,
         },
         reinit=True,
     )
@@ -198,7 +180,7 @@ def train_loop(
     pbar = (
         tqdm(
             total=total_steps,
-            desc=f"Job (Eq={equivariance}, Cross={remove_cross_edge})",
+            desc=f"Job ({architecture}, Cross={remove_cross_edge})",
             position=pos,
             leave=False,
         )
@@ -289,12 +271,9 @@ def train_loop(
                 "num_qubits": num_qubits,
                 "p_err": p_err,
                 "reps": reps,
-                "equivariance": equivariance,
-                "twirling": twirling,
+                "architecture": architecture,
                 "remove_cross_edge": remove_cross_edge,
                 "img_size": img_size,
-                "rotation_gate": rotation_gate,
-                "entangler": entangler,
             },
         },
         model_path,
@@ -316,58 +295,3 @@ def train_loop(
         [val_aug_loss],
         [val_aug_acc],
     )
-
-
-def study_gradients(
-    datasets: list[str],
-    equivariances: list[bool],
-    num_qubits: int,
-    device: str,
-    dev: str,
-    p_err: float,
-    reps: int,
-    twirling: bool,
-    remove_cross_edge: bool,
-    num_inits: int,
-    verbose: bool,
-) -> None:
-    try:
-        out_dir = HydraConfig.get().runtime.output_dir
-    except Exception:
-        out_dir = os.getcwd()
-
-    N_values = [20, 40]  # Truncated for example brevity
-    local_dev = torch.device(dev)
-
-    for ds in datasets:
-        for N in N_values:
-            train_loader, _ = load_mnist_data(
-                batch_size=N, N=N, num_workers=0, img_size=16
-            )  # Dummy implementation
-            batch_images, batch_labels = next(iter(train_loader))
-
-            for eq in equivariances:
-                qnn = create_qnn(
-                    device, num_qubits, p_err, reps, eq, twirling, remove_cross_edge
-                )
-                for _ in range(num_inits):
-                    params = (
-                        torch.empty(num_qubits * reps, device=local_dev)
-                        .uniform_(-0.1, 0.1)
-                        .requires_grad_()
-                    )
-                    phi = (
-                        torch.empty(1, device=local_dev)
-                        .uniform_(-0.1, 0.1)
-                        .requires_grad_()
-                    )
-                    preds = execute_batch(
-                        qnn, batch_images.to(local_dev), local_dev, params, phi
-                    )
-                    loss = loss_function(preds, batch_labels.to(local_dev))
-                    loss.backward()
-
-        # Ensure saving goes to out_dir
-        plt.figure()
-        plt.savefig(os.path.join(out_dir, f"histo_grid_{ds}.pdf"))
-        plt.close()

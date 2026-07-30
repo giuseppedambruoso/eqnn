@@ -9,7 +9,6 @@ GENERAL:
   seed: 1234
   dev: "cpu"
   verbose: True
-  initialization_analysis: False
   num_workers: 0
 
 DATA:
@@ -24,11 +23,11 @@ QNN:
   num_qubits: 8
   p_err: 0.0
   reps: 2
-  equivariance: True
-  twirling: False
+  # config1: RY+CNOT (not equivariant) | config2: RY+CNOT+twirling (equivariant)
+  # config3: RX+CNOT (not equivariant) | config4: RX+CNOT+twirling (equivariant)
+  # config5: RX+frozen-RYY/RYYYY+twirling (equivariant) — see src/qnn.py:ARCHITECTURES
+  architecture: "config1"
   remove_cross_edge: True
-  rotation_gate: "RY"  # "RY" | "RX" — only used when equivariance=False
-  entangler: "cnot"  # "cnot" | "frozen_ryy" — only used when equivariance=False
 
 TRAINING:
   epochs: 80

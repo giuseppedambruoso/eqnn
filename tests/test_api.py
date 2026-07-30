@@ -20,8 +20,7 @@ def checkpoint_path(tmp_path):
                 "num_qubits": num_qubits,
                 "p_err": 0.0,
                 "reps": reps,
-                "equivariance": False,
-                "twirling": False,
+                "architecture": "config1",
                 "remove_cross_edge": False,
                 "img_size": 4,
             },
@@ -59,6 +58,7 @@ def test_model_info(client):
     body = resp.json()
     assert body["classes"] == [3, 4]
     assert body["img_size"] == 4
+    assert body["architecture"] == "config1"
     assert body["val_acc"] == pytest.approx(0.9)
 
 
