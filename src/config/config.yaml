@@ -10,15 +10,19 @@ GENERAL:
   dev: "cpu"
   verbose: True
   initialization_analysis: False
+  num_workers: 0
 
 DATA:
   N: 20  # number of images in the training set
   dataset: "mnist"
   augment_test: True
+  img_size: 16
+  data_dir: "data"
 
 QNN:
-  device: "lightning.gpu"
-  p_err: 0
+  device: "default.qubit"
+  num_qubits: 8
+  p_err: 0.0
   reps: 2
   equivariance: True
   twirling: False
@@ -27,3 +31,5 @@ QNN:
 TRAINING:
   epochs: 80
   learning_rate: 0.05
+  patience: 5
+  min_delta: 0.0001
