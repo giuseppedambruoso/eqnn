@@ -17,8 +17,6 @@ echo "  config5: RX + RYY/RYYYY + twirling (equivariante)"
 echo
 read -rp "Architettura (config1-config5) [config1]: " ARCHITECTURE
 ARCHITECTURE=${ARCHITECTURE:-config1}
-read -rp "Rimuovi cross-edge [True]: " CROSS
-CROSS=${CROSS:-True}
 read -rp "Ripetizioni circuito (reps) [2]: " REPS
 REPS=${REPS:-2}
 read -rp "Numero immagini training (N) [20]: " N
@@ -36,7 +34,7 @@ read -rp "Nome gruppo wandb per raggruppare i run (opzionale): " GROUP
 # Sweep mode is detected automatically: if any value contains a comma, this
 # has to be a Hydra multirun (-m), otherwise Hydra rejects it as ambiguous.
 MFLAG=""
-for VALUE in "$ARCHITECTURE" "$CROSS" "$REPS" "$N" "$DATASET" "$EPOCHS" "$SEED" "$DEV"; do
+for VALUE in "$ARCHITECTURE" "$REPS" "$N" "$DATASET" "$EPOCHS" "$SEED" "$DEV"; do
     if [[ "$VALUE" == *,* ]]; then
         MFLAG="-m"
         break
@@ -81,7 +79,6 @@ CMD+=(
     "DATA.N=$N"
     "DATA.dataset=$DATASET"
     "QNN.architecture=$ARCHITECTURE"
-    "QNN.remove_cross_edge=$CROSS"
     "QNN.reps=$REPS"
     "TRAINING.epochs=$EPOCHS"
 )

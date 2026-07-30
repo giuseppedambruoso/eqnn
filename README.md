@@ -92,7 +92,6 @@ Lo script ti farà alcune domande in italiano, una alla volta. Per ognuna:
 
 Le domande principali:
 - **Architettura**: quale dei 5 modelli quantistici usare — lo script te li elenca prima di chiedere (`config1`..`config5`). Se non sai quale scegliere, lascia il default (`config1`).
-- **Rimuovi cross-edge**: opzione tecnica del circuito, scrivi `True` o `False`. Se non sai cosa scegliere, lascia il default.
 - **Numero immagini training (N)**: quante immagini usare per l'addestramento — un numero più basso (es. 20) fa un test veloce, un numero più alto (es. 300) allena meglio ma richiede più tempo.
 - **Epoche**: quante volte il modello "ripassa" tutti i dati — più epoche possono migliorare il risultato ma allungano il tempo di attesa.
 - **Seed**: un numero a caso per rendere l'esperimento ripetibile — lascialo pure com'è.
@@ -116,7 +115,7 @@ docker compose run --rm eqnn -m QNN.architecture=config1,config2,config3,config4
 docker compose run --rm -e WANDB_RUN_GROUP=arch-comparison eqnn -m QNN.architecture=config1,config2,config3,config4,config5 hydra/launcher=joblib hydra.launcher.n_jobs=4
 ```
 
-Parametri configurabili: `GENERAL.{seed,dev}`, `DATA.{N,dataset,img_size,augment_test}`, `QNN.{num_qubits,p_err,reps,architecture,remove_cross_edge,device}`, `TRAINING.{epochs,learning_rate,patience,min_delta}` — vedi [src/config/config.yaml](src/config/config.yaml) per i default.
+Parametri configurabili: `GENERAL.{seed,dev}`, `DATA.{N,dataset,img_size,augment_test}`, `QNN.{num_qubits,p_err,reps,architecture,device}`, `TRAINING.{epochs,learning_rate,patience,min_delta}` — vedi [src/config/config.yaml](src/config/config.yaml) per i default.
 
 `QNN.architecture` seleziona una delle 5 architetture supportate ([src/qnn.py:ARCHITECTURES](src/qnn.py)):
 
@@ -127,8 +126,6 @@ Parametri configurabili: `GENERAL.{seed,dev}`, `DATA.{N,dataset,img_size,augment
 | `config3` | RX | CNOT | No | No |
 | `config4` | RX | CNOT | Sì | Sì |
 | `config5` | RX | RYY/RYYYY (parametro fisso π/2, non allenabile) | Sì | Sì |
-
-`remove_cross_edge` è un asse indipendente applicabile a qualunque delle 5: se `True`, salta lo step centrale della cascata (il CNOT/RYY tra i due qubit centrali, o l'unico RYYYY a 4 qubit per `config5`).
 
 Per disattivare wandb (es. in CI o debug locale): `WANDB_MODE=disabled` in `.env`, oppure `-e WANDB_MODE=disabled` sulla riga di comando.
 

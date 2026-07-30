@@ -25,7 +25,6 @@ def main(cfg: DictConfig) -> None:
     p_err = cfg.QNN.p_err
     reps = cfg.QNN.reps
     architecture = cfg.QNN.architecture
-    remove_cross_edge = cfg.QNN.remove_cross_edge
 
     epochs = cfg.TRAINING.epochs
     learning_rate = cfg.TRAINING.learning_rate
@@ -71,7 +70,6 @@ def main(cfg: DictConfig) -> None:
         reps,
         p_err,
         dataset,
-        remove_cross_edge,
         verbose,
         img_size,
     )

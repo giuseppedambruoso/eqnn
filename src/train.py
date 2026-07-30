@@ -125,7 +125,6 @@ def train_loop(
     reps: int,
     p_err: float,
     dataset: str,
-    remove_cross_edge: bool = False,
     verbose: bool = False,
     img_size: int = 16,
 ) -> tuple[
@@ -139,13 +138,13 @@ def train_loop(
     list[float],
 ]:
     torch_dev = torch.device(dev)
-    qnn = create_qnn(device, num_qubits, p_err, reps, architecture, remove_cross_edge)
+    qnn = create_qnn(device, num_qubits, p_err, reps, architecture)
     is_equivariant = ARCHITECTURES[architecture]["twirled"]
 
     run = wandb.init(
         project=os.environ.get("WANDB_PROJECT", "eqnn"),
         group=os.environ.get("WANDB_RUN_GROUP", None),
-        name=f"{architecture}_crossedge={not remove_cross_edge}_N={N}_seed={seed}",
+        name=f"{architecture}_N={N}_seed={seed}",
         config={
             "seed": seed,
             "N": N,
@@ -160,7 +159,6 @@ def train_loop(
             "p_err": p_err,
             "architecture": architecture,
             "is_equivariant": is_equivariant,
-            "remove_cross_edge": remove_cross_edge,
         },
         reinit=True,
     )
@@ -180,7 +178,7 @@ def train_loop(
     pbar = (
         tqdm(
             total=total_steps,
-            desc=f"Job ({architecture}, Cross={remove_cross_edge})",
+            desc=f"Job ({architecture})",
             position=pos,
             leave=False,
         )
@@ -272,7 +270,6 @@ def train_loop(
                 "p_err": p_err,
                 "reps": reps,
                 "architecture": architecture,
-                "remove_cross_edge": remove_cross_edge,
                 "img_size": img_size,
             },
         },

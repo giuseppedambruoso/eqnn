@@ -68,8 +68,6 @@ FROZEN_ENTANGLER_ANGLE = math.pi / 2
 # The 5 supported architectures. "twirled" wraps the ansatz in explicit p4m
 # group-twirling, averaged over the 8 group elements in qnn_forward — that's
 # what actually makes config2/4/5 p4m-equivariant (config1/3 are not).
-# remove_cross_edge (see create_qnn) is a separate, orthogonal toggle that
-# applies to any of these five.
 ARCHITECTURES: dict[str, dict[str, Any]] = {
     "config1": {"rotation_gate": "RY", "entangler": "cnot", "twirled": False},
     "config2": {"rotation_gate": "RY", "entangler": "cnot", "twirled": True},
@@ -79,20 +77,15 @@ ARCHITECTURES: dict[str, dict[str, Any]] = {
 }
 
 
-def frozen_ryy_cascade(
-    num_qubits: int, cross_edge_index: int, remove_cross_edge: bool, p_err: float
-) -> None:
+def frozen_ryy_cascade(num_qubits: int, cross_edge_index: int, p_err: float) -> None:
     """Cascade of fixed-angle RYY gates (IsingYY(pi/2)) over adjacent qubits.
 
     At the single step that would act on the two central qubits
     (i == cross_edge_index), it is replaced by one 4-qubit RYYYY
-    (PauliRot(pi/2, "YYYY")) over the 4 central qubits instead — unless
-    remove_cross_edge skips that step entirely, same as for the CNOT cascade.
+    (PauliRot(pi/2, "YYYY")) over the 4 central qubits instead.
     """
     for i in range(num_qubits - 1):
         if i == cross_edge_index:
-            if remove_cross_edge:
-                continue
             wires = [
                 cross_edge_index - 1,
                 cross_edge_index,
@@ -116,7 +109,6 @@ def create_qnn(
     p_err: float,
     reps: int,
     architecture: str = "config1",
-    remove_cross_edge: bool = False,
 ) -> Any:
     if architecture not in ARCHITECTURES:
         raise ValueError(
@@ -155,14 +147,10 @@ def create_qnn(
                     qml.DepolarizingChannel(p_err, wires=i)
 
             if entangler == "frozen_ryy":
-                frozen_ryy_cascade(
-                    num_qubits, cross_edge_index, remove_cross_edge, p_err
-                )
+                frozen_ryy_cascade(num_qubits, cross_edge_index, p_err)
                 continue
 
             for i in range(num_qubits - 1):
-                if remove_cross_edge and i == cross_edge_index:
-                    continue
                 qml.CNOT(wires=[i, i + 1])
                 if p_err != 0:
                     qml.DepolarizingChannel(p_err, wires=i)

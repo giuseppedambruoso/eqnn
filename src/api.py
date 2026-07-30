@@ -74,7 +74,6 @@ def load_model(model_path: str | None = None) -> None:
         cfg["p_err"],
         cfg["reps"],
         cfg.get("architecture", "config1"),
-        cfg["remove_cross_edge"],
     )
 
     _MODEL["qnn"] = qnn

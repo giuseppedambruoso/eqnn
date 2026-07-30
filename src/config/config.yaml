@@ -27,7 +27,6 @@ QNN:
   # config3: RX+CNOT (not equivariant) | config4: RX+CNOT+twirling (equivariant)
   # config5: RX+frozen-RYY/RYYYY+twirling (equivariant) — see src/qnn.py:ARCHITECTURES
   architecture: "config1"
-  remove_cross_edge: True
 
 TRAINING:
   epochs: 80

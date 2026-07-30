@@ -21,7 +21,6 @@ def checkpoint_path(tmp_path):
                 "p_err": 0.0,
                 "reps": reps,
                 "architecture": "config1",
-                "remove_cross_edge": False,
                 "img_size": 4,
             },
         },

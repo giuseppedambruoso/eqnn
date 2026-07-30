@@ -57,35 +57,11 @@ def test_not_p4m_equivariant(device_and_tensors, architecture, img_idx):
     assert abs((out_orig - out_transposed).item()) > 1e-4
 
 
-@pytest.mark.parametrize("architecture", ["config2", "config4", "config5"])
-@pytest.mark.parametrize("img_idx", range(10))
-def test_cross_edge_removal_difference(device_and_tensors, architecture, img_idx):
-    torch_device, params, phi, test_images, num_qubits, reps = device_and_tensors
-
-    qnn_full = create_qnn(
-        DEVICE_NAME, num_qubits, P_ERR, reps, architecture, remove_cross_edge=False
-    )
-    qnn_no_center = create_qnn(
-        DEVICE_NAME, num_qubits, P_ERR, reps, architecture, remove_cross_edge=True
-    )
-
-    img = test_images[img_idx]
-    emb = embedding_unitary(img)
-
-    out_full = qnn_full(emb, params, phi)
-    out_no_center = qnn_no_center(emb, params, phi)
-
-    assert abs((out_full - out_no_center).item()) > 1e-5
-
-
 @pytest.mark.parametrize("architecture", sorted(ARCHITECTURES))
-@pytest.mark.parametrize("remove_cross_edge", [False, True])
-def test_all_architectures_run(device_and_tensors, architecture, remove_cross_edge):
+def test_all_architectures_run(device_and_tensors, architecture):
     torch_device, params, phi, test_images, num_qubits, reps = device_and_tensors
 
-    qnn_node = create_qnn(
-        DEVICE_NAME, num_qubits, P_ERR, reps, architecture, remove_cross_edge
-    )
+    qnn_node = create_qnn(DEVICE_NAME, num_qubits, P_ERR, reps, architecture)
 
     out = qnn_node(embedding_unitary(test_images[0]), params, phi)
 
