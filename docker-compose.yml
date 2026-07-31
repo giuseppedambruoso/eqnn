@@ -30,3 +30,24 @@ services:
     volumes:
       - ./outputs:/app/outputs
       - ./multirun:/app/multirun
+
+  designer:
+    build: .
+    image: eqnn:latest
+    entrypoint: []
+    command:
+      [
+        "python3", "-m", "streamlit", "run", "src/designer_app.py",
+        "--server.address=0.0.0.0", "--server.port=8501",
+      ]
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      WANDB_MODE: ${WANDB_MODE:-online}
+      WANDB_PROJECT: ${WANDB_PROJECT:-eqnn}
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./wandb:/app/wandb

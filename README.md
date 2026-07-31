@@ -171,7 +171,7 @@ In alternativa, tutti questi risultati (grafici, metriche, e il modello) sono vi
 ### 👩‍💻 Versione sviluppatori
 
 - Gli output Hydra vanno in `outputs/<date>/<time>/` per un run singolo, `multirun/<date>/<time>/<override_dirname>/` per uno sweep (`sweep.subdir` in `config.yaml`) — entrambe le cartelle sono montate come volumi Docker (vedi `docker-compose.yml`), quindi persistono sull'host anche se il container viene distrutto.
-- Ogni run directory contiene ([train.py](src/train.py:171)): `loss_history.csv` (loss per epoca, raw), `loss_history.jpg` (plot), `final_model.pt` (checkpoint self-contained: `{'params': tensor, 'val_acc': float, 'config': {...iperparametri QNN...}}`, caricabile con `torch.load` senza bisogno della run directory Hydra — usato anche da `src/api.py`, vedi sezione 6), `main.log`, `.hydra/{config,overrides,hydra}.yaml` (config esatta usata, per riprodurre il run).
+- Ogni run directory contiene ([train.py](src/train.py:171)): `loss_history.csv` (loss per epoca, raw), `loss_history.jpg` (plot), `final_model.pt` (checkpoint self-contained: `{'params': tensor, 'val_acc': float, 'config': {...iperparametri QNN...}}`, caricabile con `torch.load` senza bisogno della run directory Hydra — usato anche da `src/api.py`, vedi sezione 5), `main.log`, `.hydra/{config,overrides,hydra}.yaml` (config esatta usata, per riprodurre il run).
 - Su wandb: stessa `loss_history.jpg` loggata come `wandb.Image`, più il modello versionato come **Artifact** (`model-<run_id>`, tipo `model`, tab "Artifacts" della run) — scaricabile e ricaricabile con l'API wandb, utile per non dipendere dal filesystem locale.
 - La cache di MNIST è in `./data` (montata come volume) — scaricata una sola volta, riusata dai run successivi.
 
@@ -205,7 +205,35 @@ Nota: il modello è un classificatore binario (cifra 3 vs 4), non un riconoscito
 
 ---
 
-## 6. Release e pubblicazione dell'immagine Docker
+## 6. Disegnare un circuito personalizzato (Ansatz Designer)
+
+### 🔰 Guida per chi parte da zero
+
+Oltre alle 5 architetture pronte, puoi disegnare **il tuo circuito quantistico** con un'interfaccia grafica, senza scrivere codice:
+```bash
+docker compose up designer
+```
+Apri nel browser http://localhost:8501. Nella colonna di sinistra scegli i gate uno alla volta (che qubit coinvolgono, se hanno un parametro allenabile o fisso, se il valore iniziale è casuale o scelto da te) e componi il circuito; nella colonna di destra vedi subito il disegno del circuito e un modulo per impostare l'addestramento (numero di immagini, epoche, learning rate, ...). Premi "🚀 Avvia training" per far partire l'addestramento con le stesse metriche e gli stessi grafici (wandb, `loss_history.jpg`) delle architetture predefinite. Puoi anche partire da una delle architetture esistenti (bottone "Carica come punto di partenza", solo per `config1`/`config3`) e poi modificarla, oppure salvare/ricaricare un circuito come file JSON.
+
+### 👩‍💻 Versione sviluppatori
+
+`src/designer_app.py` è un'app [Streamlit](https://streamlit.io/) che espone `src/ansatz_builder.py`, il backend generico per circuiti "a spec" (una lista di dict JSON-serializzabili, uno per gate — formato documentato nel docstring del modulo) invece delle 5 architetture fisse di `qnn.py`:
+
+```bash
+docker compose up designer
+# oppure in locale, senza Docker:
+poetry run streamlit run src/designer_app.py
+```
+
+- `build_qnn_from_spec(device, num_qubits, p_err, spec)` costruisce il QNode, restituendo `(qnn_forward, initial_params, resolved_spec)` — `resolved_spec` ha ogni init casuale già "risolto" in un valore fisso, necessario per poter ricostruire lo stesso identico circuito in seguito (es. da un checkpoint).
+- `architecture_to_spec(architecture, num_qubits, reps)` espande `config1`/`config3` in uno spec equivalente (testato numericamente contro `create_qnn` in `tests/test_ansatz_builder.py`); `config2`/`config4`/`config5` non sono esprimibili come spec, perché la loro equivarianza viene dal p4m-twirling (media di 8 valutazioni del circuito), che non ha rappresentazione come circuito singolo — `architecture_to_spec` alza `ValueError` per queste tre.
+- Il training usa lo stesso `train_loop` generico di `src/train.py`, con `checkpoint_config={"circuit_spec": resolved_spec, ...}` invece di `architecture`; `src/api.py` riconosce questo campo e ricostruisce il circuito con `build_qnn_from_spec` per servire l'inferenza esattamente come per le architetture fisse (vedi sezione 5).
+- Output salvato in `outputs/designer/<data>/<ora>/`, montato come volume come per gli altri run.
+- Test: `tests/test_ansatz_builder.py` (validazione spec, gradiente, riproducibilità, equivalenza numerica con `create_qnn`), `tests/test_designer_app.py` (interazione UI via `streamlit.testing.v1.AppTest`), `tests/test_custom_training.py` (training end-to-end con uno spec custom).
+
+---
+
+## 7. Release e pubblicazione dell'immagine Docker
 
 ### 🔰 Guida per chi parte da zero
 
@@ -222,7 +250,7 @@ Immagine risultante: `ghcr.io/giuseppedambruoso/eqnn:v1.0.0`. Nessun secret da c
 
 ---
 
-## 7. Sviluppo
+## 8. Sviluppo
 
 Per contribuire codice (non necessario solo per lanciare esperimenti):
 
