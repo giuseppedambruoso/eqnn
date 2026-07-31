@@ -141,6 +141,8 @@ Ogni parametro allenabile viene loggato singolarmente su wandb ad ogni epoca com
 
 Per disattivare wandb (es. in CI o debug locale): `WANDB_MODE=disabled` in `.env`, oppure `-e WANDB_MODE=disabled` sulla riga di comando.
 
+**Velocità**: il training usa sempre `diff_method="backprop"` (differenziazione automatica, non "parameter-shift") ed esegue ogni batch in un'unica chiamata vettorizzata al circuito ([src/train.py:execute_batch](src/train.py)) invece che immagine per immagine — anche 10-100x più veloce a seconda dell'architettura. L'unico costo: `backprop` richiede lo stato interno del simulatore e **non è utilizzabile su hardware quantistico reale** (che invece richiederebbe `parameter-shift`, ancora disponibile passando `diff_method="parameter-shift"` a `create_qnn`/`build_qnn_from_spec` per chi programma direttamente in Python, ma non esposto come override da riga di comando).
+
 ---
 
 ## 3. Monitorare l'avanzamento

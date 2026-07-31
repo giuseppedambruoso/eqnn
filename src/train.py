@@ -41,20 +41,20 @@ def execute_batch(
     params: torch.Tensor,
     phi: torch.Tensor,
 ) -> torch.Tensor:
+    """Runs the whole batch through ONE QNode call, relying on
+    default.qubit's support for a batch dimension on the embedding gate —
+    dramatically faster than one Python-level call per image. Requires a
+    qnn built with diff_method="backprop" (create_qnn/build_qnn_from_spec's
+    default)."""
     batch_images = batch_images.to(dev)
-    batch_predictions = []
 
-    for i, image in enumerate(batch_images):
-        raw_output = qnn(image, params, phi)
-        output = (1.0 + raw_output) / 2.0
-        clamped_output = torch.clamp(output, min=1e-7, max=1.0 - 1e-7)
-
-        if torch.isnan(raw_output) or torch.isnan(clamped_output):
-            logger.critical(f"QNN Output is NaN at Image Index {i}!")
-            logger.error(f"Raw: {raw_output}, Clamped: {clamped_output}")
-        batch_predictions.append(clamped_output)
-
-    return torch.stack(batch_predictions)
+    raw_output = qnn(batch_images, params, phi)
+    output = (1.0 + raw_output) / 2.0
+    clamped_output = torch.clamp(output, min=1e-7, max=1.0 - 1e-7)
+    if torch.isnan(raw_output).any() or torch.isnan(clamped_output).any():
+        logger.critical("QNN Output is NaN in batch execution!")
+        logger.error(f"Raw: {raw_output}, Clamped: {clamped_output}")
+    return clamped_output
 
 
 def train_one_epoch(
@@ -214,6 +214,10 @@ def train_loop(
     checkpoint / wandb run config (e.g. architecture name, or a full custom
     circuit spec) — train_loop itself is agnostic to where the circuit came
     from.
+
+    Each batch runs through the QNN in a single vectorized call (see
+    execute_batch) — this requires `qnn` to have been built with
+    diff_method="backprop" (create_qnn/build_qnn_from_spec's default).
     """
     torch_dev = torch.device(dev)
 

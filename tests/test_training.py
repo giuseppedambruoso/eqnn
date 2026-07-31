@@ -10,26 +10,33 @@ DEVICE_NAME = "default.qubit"
 
 
 def _train_a_few_steps(architecture: str) -> tuple[torch.Tensor, torch.Tensor]:
-    """Trains a small circuit for a few steps and returns (initial_params,
-    final_params). Small on purpose: config2/4/5 are twirled (8x circuit
-    evaluations per forward pass), and parameter-shift gradients need ~2
-    evaluations per trainable parameter on top of that.
+    """Trains a circuit for a few steps and returns (initial_params,
+    final_params). Uses the same num_qubits=8/reps=2 as the project's
+    actual defaults (src/config/config.yaml) rather than a shrunk toy
+    circuit: with diff_method="backprop" + batched execution (see
+    src.train.execute_batch), even config8/config9 (18 trainable
+    parameters, the most expensive) run a full step in well under a
+    second, so there's no real speed reason to test a different, smaller
+    circuit than what's actually used — and doing so isn't free: config4
+    (twirled) at a shrunk num_qubits=4/reps=1 turned out to have an
+    accidental *total* zero-gradient degeneracy (not just its documented
+    frozen first qubit), an artifact of that specific tiny size, not a
+    real property of the architecture.
 
-    config6-config9 (paper-style ansatzes) require exactly 8 qubits instead
-    of 4, and shared18 (config8/config9) has 18 trainable parameters (36
-    parameter-shift evaluations per image) — both make each step
-    noticeably more expensive, so those 4 architectures get fewer
-    images/epochs. A single step is enough to detect whether gradients
-    flow at all, which is all this test checks.
+    float64 matters here too: an analytically *exact* zero gradient (e.g.
+    config3/config4's frozen first qubit per rep, see
+    test_config3_config4_first_qubit_stays_frozen) only reliably rounds to
+    ~1e-18 at float64 precision — at the default float32, backprop's
+    specific rounding path for a near-zero gradient can land around ~1e-10
+    instead, small but large enough for 3 Adam steps to move a "frozen"
+    parameter well past a reasonable tolerance.
     """
     torch.manual_seed(0)
-    is_paper = ARCHITECTURES[architecture]["kind"] == "paper"
-    num_qubits, reps = (8, 1) if is_paper else (4, 1)
-    num_images = 2 if is_paper else 4
-    num_steps = 1 if is_paper else 3
+    num_qubits, reps = 8, 2
+    num_images, num_steps = 4, 3
     img_side = 2 ** (num_qubits // 2)
 
-    images = torch.rand(num_images, img_side, img_side)
+    images = torch.rand(num_images, img_side, img_side, dtype=torch.float64)
     for i in range(num_images):
         images[i] = images[i] / torch.linalg.norm(images[i].reshape(-1))
     embeddings = torch.stack([embedding_unitary(img) for img in images])
@@ -38,7 +45,11 @@ def _train_a_few_steps(architecture: str) -> tuple[torch.Tensor, torch.Tensor]:
 
     qnn = create_qnn(DEVICE_NAME, num_qubits, 0.0, reps, architecture)
     names = architecture_param_names(architecture, num_qubits, reps)
-    params = torch.empty(len(names)).uniform_(-0.1, 0.1).requires_grad_()
+    params = (
+        torch.empty(len(names), dtype=torch.float64)
+        .uniform_(-0.1, 0.1)
+        .requires_grad_()
+    )
     phi = torch.tensor(0.0, requires_grad=False)
     initial_params = params.detach().clone()
 

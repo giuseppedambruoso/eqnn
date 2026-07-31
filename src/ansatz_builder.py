@@ -292,6 +292,7 @@ def build_qnn_from_spec(
     spec: list[dict[str, Any]],
     twirled: bool = False,
     readout: str = "sum_z",
+    diff_method: str = "backprop",
 ) -> tuple[Any, torch.Tensor, list[dict[str, Any]]]:
     """Builds a QNN from a user-drawn circuit spec.
 
@@ -310,6 +311,16 @@ def build_qnn_from_spec(
         itself under an X-flip, and summing over all qubits is unaffected
         by permuting them via the row/column swap), so it's a valid
         alternative readout for config6-config9 too.
+    diff_method: "backprop" (default) is dramatically faster in simulation
+        — one differentiation pass through default.qubit's statevector,
+        same order of cost as a single forward call — and is what
+        src.train.execute_batch relies on to run an entire batch through
+        the QNN in a single vectorized call (default.qubit's QubitUnitary,
+        the embedding gate, supports a batch dimension). "parameter-shift"
+        also works on real quantum hardware (needs only measurement
+        statistics) but requires ~2 extra full circuit evaluations per
+        trainable parameter for every gradient — much slower here, but the
+        only option if the circuit needs to stay hardware-realistic.
 
     Returns (qnn_forward, initial_params, resolved_spec):
       - initial_params holds ONLY the trainable parameters, in first-seen
@@ -352,7 +363,7 @@ def build_qnn_from_spec(
     dev = qml.device(device, wires=num_qubits, shots=None)
     half = num_qubits // 2
 
-    @qml.qnode(dev, interface="torch", diff_method="parameter-shift")
+    @qml.qnode(dev, interface="torch", diff_method=diff_method)
     def qnn_base(
         embedding_unitary_matrix: torch.Tensor,
         params: torch.Tensor,

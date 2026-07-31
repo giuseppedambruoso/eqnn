@@ -228,7 +228,14 @@ def create_qnn(
     p_err: float,
     reps: int,
     architecture: str = "config1",
+    diff_method: str = "backprop",
 ) -> Any:
+    """diff_method: "backprop" (default) is fast in simulation — src.train's
+    execute_batch relies on it to run a whole batch through the QNN in a
+    single vectorized call. "parameter-shift" is much slower here but is
+    the only option that would also work on real quantum hardware (see
+    src.ansatz_builder.build_qnn_from_spec's docstring for the tradeoff).
+    """
     if architecture not in ARCHITECTURES:
         raise ValueError(
             f"architecture must be one of {sorted(ARCHITECTURES)}, got {architecture!r}"
@@ -248,7 +255,13 @@ def create_qnn(
         # measuring Z, and H Z H = X — so every architecture now shares the
         # same measurement.
         paper_qnn_forward, _, _ = build_qnn_from_spec(
-            device, num_qubits, p_err, gate_spec, twirled=False, readout="avg_x"
+            device,
+            num_qubits,
+            p_err,
+            gate_spec,
+            twirled=False,
+            readout="avg_x",
+            diff_method=diff_method,
         )
         return paper_qnn_forward
 
@@ -259,7 +272,7 @@ def create_qnn(
     dev = qml.device(device, wires=num_qubits, shots=None)
     cross_edge_index = (num_qubits // 2) - 1
 
-    @qml.qnode(dev, interface="torch", diff_method="parameter-shift")
+    @qml.qnode(dev, interface="torch", diff_method=diff_method)
     def qnn_base(
         embedding_unitary: torch.Tensor,
         params: torch.Tensor,
