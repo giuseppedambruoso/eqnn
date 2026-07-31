@@ -68,7 +68,7 @@ _PARAM_GATES: dict[str, tuple[Any, int]] = {
 }
 
 RANDOM_INIT_RANGE = (-0.1, 0.1)
-READOUT_SCHEMES = ("sum_z", "x0_xhalf")
+READOUT_SCHEMES = ("sum_z", "x0_xhalf", "avg_x")
 
 
 def _gate_arity(gate_spec: dict[str, Any]) -> int:
@@ -303,8 +303,13 @@ def build_qnn_from_spec(
         qubit, preceded by the RZ+H noise-mixing layer used by
         config1-config5 (see src.qnn.approx_equiv_measure). "x0_xhalf"
         measures 0.5*(X_0 + X_{num_qubits//2}) with no mixing layer — the
-        readout config6-config9 (src.paper_ansatzes) need to preserve their
-        exact p4m-equivariance.
+        readout config6-config9 (src.paper_ansatzes) default to, to
+        preserve their exact p4m-equivariance. "avg_x" measures the average
+        of qml.X over every qubit (no mixing layer) — also p4m-invariant
+        under the same row/column-flip + swap generators (X commutes with
+        itself under an X-flip, and summing over all qubits is unaffected
+        by permuting them via the row/column swap), so it's a valid
+        alternative readout for config6-config9 too.
 
     Returns (qnn_forward, initial_params, resolved_spec):
       - initial_params holds ONLY the trainable parameters, in first-seen
@@ -396,8 +401,12 @@ def build_qnn_from_spec(
             coeffs = [1.0 / num_qubits] * num_qubits
             observables = [qml.Z(i) for i in range(num_qubits)]
             H = qml.Hamiltonian(coeffs, observables)
-        else:
+        elif readout == "x0_xhalf":
             H = qml.Hamiltonian([0.5, 0.5], [qml.X(0), qml.X(half)])
+        else:
+            coeffs = [1.0 / num_qubits] * num_qubits
+            observables = [qml.X(i) for i in range(num_qubits)]
+            H = qml.Hamiltonian(coeffs, observables)
         return qml.expval(H)
 
     def qnn_forward(

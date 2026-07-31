@@ -45,9 +45,10 @@ def test_load_config2_preset_enables_twirling():
     assert any("twirling: sì" in c.value for c in at.caption)
 
 
-def test_load_config6_preset_uses_x0_xhalf_readout():
-    """config6 (paper6, equivariant) needs the x0_xhalf readout to preserve
-    its exact p4m-equivariance — auto-set when the preset is loaded."""
+def test_load_config6_preset_uses_avg_x_readout():
+    """config6 (paper6, equivariant) defaults to the avg_x readout — the
+    same measurement config1-config5 already do in effect (H before
+    measuring Z) — auto-set when the preset is loaded."""
     at = AppTest.from_file(APP_PATH)
     at.run(timeout=TIMEOUT)
 
@@ -57,7 +58,7 @@ def test_load_config6_preset_uses_x0_xhalf_readout():
 
     assert not at.exception
     assert any("Parametri allenabili: 6" in c.value for c in at.caption)
-    assert any("X0 + X_" in c.value for c in at.caption)
+    assert any("Media delle X" in c.value for c in at.caption)
 
 
 def test_layer_repetition_multiplies_gate_count():

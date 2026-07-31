@@ -281,6 +281,44 @@ def test_readout_x0_xhalf_is_bounded():
     assert -1.0 - 1e-6 <= out.item() <= 1.0 + 1e-6
 
 
+def test_readout_avg_x_is_bounded():
+    spec = [{"gate": "RX", "wires": [0], "param": {"init": "random", "frozen": False}}]
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec, readout="avg_x")
+    emb = _sample_embedding(4)
+    out = qnn(emb, params, torch.tensor(0.0))
+    assert torch.isfinite(out)
+    assert -1.0 - 1e-6 <= out.item() <= 1.0 + 1e-6
+
+
+def test_readout_avg_x_matches_sum_z_noiseless():
+    """config1-config5's "sum_z" readout (H then measure Z) is
+    mathematically the same as measuring X directly (H Z H = X) when
+    there's no noise (p_err=0) — so "avg_x" must give an identical output
+    for the same spec/params in that regime."""
+    spec = [
+        {
+            "gate": "RX",
+            "wires": [0],
+            "param": {"init": "custom", "value": 0.3, "frozen": False},
+        },
+        {
+            "gate": "RY",
+            "wires": [1],
+            "param": {"init": "custom", "value": -0.2, "frozen": False},
+        },
+        {"gate": "CNOT", "wires": [0, 1]},
+    ]
+    qnn_sum_z, params, _ = build_qnn_from_spec(
+        DEVICE_NAME, 4, 0.0, spec, readout="sum_z"
+    )
+    qnn_avg_x, _, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec, readout="avg_x")
+    emb = _sample_embedding(4)
+
+    out_sum_z = qnn_sum_z(emb, params, torch.tensor(0.0))
+    out_avg_x = qnn_avg_x(emb, params, torch.tensor(0.0))
+    assert torch.allclose(out_sum_z, out_avg_x, atol=1e-8)
+
+
 def test_unknown_readout_raises():
     spec = [{"gate": "RX", "wires": [0], "param": {"init": "random", "frozen": False}}]
     with pytest.raises(ValueError, match="readout"):

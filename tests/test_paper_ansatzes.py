@@ -39,12 +39,15 @@ def test_unknown_symmetry_raises():
         paper_architecture_spec("6", "diagonal", 8)
 
 
+@pytest.mark.parametrize("readout", ["avg_x", "x0_xhalf"])
 @pytest.mark.parametrize("paper_ansatz", ["6", "18"])
-def test_equivariant_paper_ansatz_is_p4m_invariant(paper_ansatz):
+def test_equivariant_paper_ansatz_is_p4m_invariant(paper_ansatz, readout):
     """config6/config8: the generator-commuting design must be exactly
-    p4m-equivariant WITHOUT any explicit group-twirling."""
+    p4m-equivariant WITHOUT any explicit group-twirling — "avg_x" (the
+    default create_qnn now uses, matching config1-config5's effective
+    measurement) and "x0_xhalf" (the alternative) must both hold."""
     spec = paper_architecture_spec(paper_ansatz, "equivariant", 8)
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, 0.0, spec, readout="x0_xhalf")
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, 0.0, spec, readout=readout)
     is_invariant, deviation = check_p4m_invariance(
         qnn, params, img_size=16, n_samples=2
     )
@@ -52,12 +55,13 @@ def test_equivariant_paper_ansatz_is_p4m_invariant(paper_ansatz):
     assert deviation < 1e-6
 
 
+@pytest.mark.parametrize("readout", ["avg_x", "x0_xhalf"])
 @pytest.mark.parametrize("paper_ansatz", ["6", "18"])
-def test_nonequivariant_paper_ansatz_is_not_p4m_invariant(paper_ansatz):
+def test_nonequivariant_paper_ansatz_is_not_p4m_invariant(paper_ansatz, readout):
     """config7/config9: the axis-scrambled column register must generically
-    break p4m-equivariance."""
+    break p4m-equivariance, regardless of readout choice."""
     spec = paper_architecture_spec(paper_ansatz, "nonequivariant", 8)
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, 0.0, spec, readout="x0_xhalf")
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, 0.0, spec, readout=readout)
     is_invariant, _deviation = check_p4m_invariance(
         qnn, params, img_size=16, n_samples=2
     )

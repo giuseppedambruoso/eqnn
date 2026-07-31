@@ -52,8 +52,9 @@ GATE_CATALOG: dict[str, tuple[str, int | None]] = {
 }
 
 READOUT_LABELS = {
-    "Somma Z (generico, config1-5)": "sum_z",
-    "X0 + X_{n/2} (stile config6-9)": "x0_xhalf",
+    "Somma Z (config1-5, equivalente a media delle X — vedi H prima di Z)": "sum_z",
+    "Media delle X su tutti i qubit (config6-9)": "avg_x",
+    "X0 + X_{n/2} (alternativa per config6-9)": "x0_xhalf",
 }
 READOUT_LABELS_INV = {v: k for k, v in READOUT_LABELS.items()}
 
@@ -129,7 +130,7 @@ def main() -> None:
                         st.session_state.spec = paper_architecture_spec(
                             meta["paper_ansatz"], meta["symmetry"], NUM_QUBITS
                         )
-                        st.session_state.readout = "x0_xhalf"
+                        st.session_state.readout = "avg_x"
                     st.session_state.twirled = meta["twirled"]
                     st.session_state.layer_reps = 1
                     st.rerun()

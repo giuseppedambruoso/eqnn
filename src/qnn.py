@@ -243,8 +243,12 @@ def create_qnn(
         gate_spec = paper_architecture_spec(
             spec["paper_ansatz"], spec["symmetry"], num_qubits
         )
+        # "avg_x" (mean of X over every qubit) matches what config1-config5
+        # already measure in effect — approx_equiv_measure applies H before
+        # measuring Z, and H Z H = X — so every architecture now shares the
+        # same measurement.
         paper_qnn_forward, _, _ = build_qnn_from_spec(
-            device, num_qubits, p_err, gate_spec, twirled=False, readout="x0_xhalf"
+            device, num_qubits, p_err, gate_spec, twirled=False, readout="avg_x"
         )
         return paper_qnn_forward
 

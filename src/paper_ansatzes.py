@@ -16,12 +16,16 @@ by those three operations.
 
 Two ansatzes are available, named by their TOTAL trainable-parameter count:
 "6" (paper6, 3 angles/block) and "18" (shared18, 9 angles/block). Both use
-the same 5-block schedule, pooling 4 coordinate qubits down to 2 (measured
-at readout="x0_xhalf" in build_qnn_from_spec, i.e. 0.5*(X_0 + X_4)): 4
-"fine" blocks share ONE set of trainable angles (stage 0, "fine_shared"),
-and the final "coarse" block gets its own (stage 1) — hence only
-2 * parameters_per_block total trainable angles, tied via the spec's
-"group" mechanism, regardless of there being 5 blocks.
+the same 5-block schedule: 4 "fine" blocks share ONE set of trainable
+angles (stage 0, "fine_shared"), and the final "coarse" block gets its own
+(stage 1) — hence only 2 * parameters_per_block total trainable angles,
+tied via the spec's "group" mechanism, regardless of there being 5 blocks.
+
+Measured with readout="avg_x" in build_qnn_from_spec (the mean of X over
+every qubit — the same quantity config1-config5 measure in effect, via
+H-then-Z) by default; readout="x0_xhalf" (0.5*(X_0 + X_4)) is an available
+alternative that reads only the two "pooled-to" wires instead of all 8 —
+both preserve p4m-equivariance for config6/config8.
 
 The equivariant trainable blocks commute with the three D4 generators
 above. Their non-equivariant counterparts are obtained by cycling the
@@ -58,8 +62,8 @@ class OrbitBlockSpec:
 
 # Stage 0 mixes all four binary coordinate bits and then stops acting on
 # bits 1 and 3. Stage 1 transfers the remaining information from bit 2 to
-# bit 0. Measuring bits 0 and 4 (readout="x0_xhalf") therefore implements
-# an 8 -> 4 -> 2 pooling schedule.
+# bit 0 — an 8 -> 4 -> 2 pooling schedule (most load-bearing when paired
+# with readout="x0_xhalf", which only reads bits 0 and 4 back out).
 BLOCK_SCHEDULE: tuple[OrbitBlockSpec, ...] = (
     OrbitBlockSpec(0, "fine-01", 0, 1),
     OrbitBlockSpec(0, "fine-23", 2, 3),
@@ -293,8 +297,9 @@ def paper_architecture_spec(
     paper_ansatz: str, symmetry: str, num_qubits: int
 ) -> list[dict[str, Any]]:
     """Builds the config6-config9 gate-by-gate spec (see module docstring)
-    for src.ansatz_builder.build_qnn_from_spec — use with
-    readout="x0_xhalf" to preserve the intended (non-)equivariance.
+    for src.ansatz_builder.build_qnn_from_spec — use with readout="avg_x"
+    (the default create_qnn uses) or readout="x0_xhalf" to preserve the
+    intended (non-)equivariance.
     """
     if num_qubits != N_QUBITS:
         raise ValueError(

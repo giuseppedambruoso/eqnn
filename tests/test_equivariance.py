@@ -1,6 +1,7 @@
 import pytest
 import torch
 
+from src.ansatz_builder import check_p4m_invariance
 from src.data_encoding import embedding_unitary
 from src.qnn import ARCHITECTURES, architecture_param_names, create_qnn
 
@@ -18,55 +19,46 @@ def _params_for(architecture: str, num_qubits: int, reps: int) -> torch.Tensor:
 
 
 @pytest.mark.parametrize("architecture", EQUIVARIANT_CONFIGS)
-@pytest.mark.parametrize("img_idx", range(10))
-def test_p4m_equivariance(device_and_tensors, architecture, img_idx):
+def test_p4m_equivariance(device_and_tensors, architecture):
     """config2/4/5 (twirled) and config6/8 (D4-generator-commuting by
-    construction) must be p4m-equivariant: flipping the input image must
-    not change the circuit's output."""
-    torch_device, _params, phi, test_images, num_qubits, reps = device_and_tensors
+    construction) must be p4m-equivariant. Uses check_p4m_invariance (max
+    deviation over several random images and both flips + transpose)
+    rather than a single fixed image/transform: a pointwise comparison on
+    one specific (image, transform) pair can coincidentally land near zero
+    even for a genuinely non-equivariant circuit, which made an earlier,
+    less aggregated version of this test flaky as more architectures were
+    added — see src.ansatz_builder.check_p4m_invariance's docstring for the
+    ~1e-16 (invariant) vs ~1e-3+ (not) separation this relies on.
+    """
+    _torch_device, _params, _phi, _test_images, num_qubits, reps = device_and_tensors
 
     qnn_node = create_qnn(DEVICE_NAME, num_qubits, P_ERR, reps, architecture)
     params = _params_for(architecture, num_qubits, reps)
 
-    img = test_images[img_idx]
-    img_flip = torch.flip(img, dims=[-1])
-
-    out_orig = qnn_node(embedding_unitary(img), params, phi)
-    out_flip = qnn_node(embedding_unitary(img_flip), params, phi)
-
-    assert torch.allclose(out_orig, out_flip, atol=1e-2)
+    is_invariant, deviation = check_p4m_invariance(
+        qnn_node, params, img_size=16, n_samples=5
+    )
+    assert is_invariant, f"max deviation {deviation} for {architecture}"
 
 
 @pytest.mark.parametrize("architecture", NON_EQUIVARIANT_CONFIGS)
-@pytest.mark.parametrize("img_idx", range(10))
-def test_not_p4m_equivariant(device_and_tensors, architecture, img_idx):
+def test_not_p4m_equivariant(device_and_tensors, architecture):
     """config1/config3 have no twirling, and config7/config9 deliberately
     misalign their generators with the image symmetry (axis-scrambled
-    column register) — all four must generically NOT be p4m-equivariant:
-    transposing (swapping x/y) the input image should change the output.
-
-    Note: a plain horizontal/vertical flip is NOT a good probe here — RX
-    commutes exactly with the X gates that a flip induces on the embedding
-    (verified empirically: config3 gives an *exact* 0.0 difference under
-    horizontal flip, for every fixture image), so that transform alone
-    doesn't distinguish "equivariant" from "not". Transpose reliably does;
-    the smallest observed non-zero deviation across all 10 fixture images
-    and all 4 non-equivariant configs is ~3e-5, comfortably above the
-    ~1e-16 floating-point-noise floor a truly invariant circuit shows (see
-    src.ansatz_builder.check_p4m_invariance) — hence the 1e-5 threshold.
+    column register) — all four must generically NOT be p4m-equivariant.
+    See test_p4m_equivariance's docstring for why this uses
+    check_p4m_invariance rather than a single fixed (image, transform)
+    comparison.
     """
-    torch_device, _params, phi, test_images, num_qubits, reps = device_and_tensors
+    _torch_device, _params, _phi, _test_images, num_qubits, reps = device_and_tensors
 
     qnn_node = create_qnn(DEVICE_NAME, num_qubits, P_ERR, reps, architecture)
     params = _params_for(architecture, num_qubits, reps)
 
-    img = test_images[img_idx]
-    img_transposed = img.transpose(-1, -2)
-
-    out_orig = qnn_node(embedding_unitary(img), params, phi)
-    out_transposed = qnn_node(embedding_unitary(img_transposed), params, phi)
-
-    assert abs((out_orig - out_transposed).item()) > 1e-5
+    is_invariant, deviation = check_p4m_invariance(
+        qnn_node, params, img_size=16, n_samples=5
+    )
+    assert not is_invariant, f"max deviation {deviation} for {architecture}"
 
 
 @pytest.mark.parametrize("architecture", sorted(ARCHITECTURES))
