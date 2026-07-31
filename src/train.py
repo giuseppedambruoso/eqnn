@@ -13,8 +13,6 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.qnn import ARCHITECTURES, create_qnn
-
 logger = logging.getLogger(__name__)
 
 
@@ -116,17 +114,17 @@ def train_loop(
     learning_rate: float,
     patience: int,
     min_delta: float,
-    device: str,
-    num_qubits: int,
     dev: str,
     seed: int,
     N: int,
-    architecture: str,
-    reps: int,
-    p_err: float,
     dataset: str,
+    qnn: Any,
+    initial_params: torch.Tensor,
+    param_names: list[str],
+    run_name: str,
+    checkpoint_config: dict[str, Any],
+    wandb_extra_config: dict[str, Any],
     verbose: bool = False,
-    img_size: int = 16,
 ) -> tuple[
     torch.Tensor,
     torch.Tensor,
@@ -137,14 +135,23 @@ def train_loop(
     list[float],
     list[float],
 ]:
+    """Trains an already-built QNN (from src.qnn.create_qnn or
+    src.ansatz_builder.build_qnn_from_spec) and logs/checkpoints the run.
+
+    `param_names` must line up 1:1 with `initial_params` — each entry
+    becomes a wandb.log key "params/{name}" tracking that parameter's value
+    every epoch. `checkpoint_config`/`wandb_extra_config` carry whatever
+    circuit-specific metadata the caller wants embedded in the saved
+    checkpoint / wandb run config (e.g. architecture name, or a full custom
+    circuit spec) — train_loop itself is agnostic to where the circuit came
+    from.
+    """
     torch_dev = torch.device(dev)
-    qnn = create_qnn(device, num_qubits, p_err, reps, architecture)
-    is_equivariant = ARCHITECTURES[architecture]["twirled"]
 
     run = wandb.init(
         project=os.environ.get("WANDB_PROJECT", "eqnn"),
         group=os.environ.get("WANDB_RUN_GROUP", None),
-        name=f"{architecture}_N={N}_seed={seed}",
+        name=run_name,
         config={
             "seed": seed,
             "N": N,
@@ -153,23 +160,14 @@ def train_loop(
             "learning_rate": learning_rate,
             "patience": patience,
             "min_delta": min_delta,
-            "device": device,
-            "num_qubits": num_qubits,
-            "reps": reps,
-            "p_err": p_err,
-            "architecture": architecture,
-            "is_equivariant": is_equivariant,
+            **wandb_extra_config,
         },
         reinit=True,
     )
 
-    g = torch.Generator(device=torch_dev).manual_seed(seed)
-    params = torch.empty(num_qubits * reps, device=torch_dev).uniform_(
-        -0.1, 0.1, generator=g
-    )
-    params.requires_grad_()
+    params = initial_params.clone().to(torch_dev).requires_grad_()
     phi = torch.tensor(0.0, requires_grad=False)
-    opt = torch.optim.Adam([params, phi], lr=learning_rate, betas=(0.5, 0.99))
+    opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.99))
 
     train_loss_hist, train_acc_hist, params_hist = [], [], []
     total_steps = epochs * len(train_loader)
@@ -178,7 +176,7 @@ def train_loop(
     pbar = (
         tqdm(
             total=total_steps,
-            desc=f"Job ({architecture})",
+            desc=f"Job ({run_name})",
             position=pos,
             leave=False,
         )
@@ -199,11 +197,11 @@ def train_loop(
             + [phi.detach().cpu().item()]
         )
 
-        param_values = params.detach().cpu().tolist()
         params_log = {
-            f"params/rep{rep_idx}_q{i}": param_values[i + num_qubits * rep_idx]
-            for rep_idx in range(reps)
-            for i in range(num_qubits)
+            f"params/{name}": value
+            for name, value in zip(
+                param_names, params.detach().cpu().tolist(), strict=False
+            )
         }
 
         wandb.log(
@@ -271,14 +269,7 @@ def train_loop(
         {
             "params": params.detach().cpu(),
             "val_acc": val_acc,
-            "config": {
-                "device": device,
-                "num_qubits": num_qubits,
-                "p_err": p_err,
-                "reps": reps,
-                "architecture": architecture,
-                "img_size": img_size,
-            },
+            "config": checkpoint_config,
         },
         model_path,
     )

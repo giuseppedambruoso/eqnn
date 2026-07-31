@@ -7,6 +7,7 @@ import torch
 from omegaconf import DictConfig
 
 from src.data_loading import load_mnist_data
+from src.qnn import ARCHITECTURES, create_qnn
 from src.train import train_loop
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,15 @@ def main(cfg: DictConfig) -> None:
             "Only 'mnist' is currently supported in this modularized example."
         )
 
+    qnn = create_qnn(device, num_qubits, p_err, reps, architecture)
+    is_equivariant = ARCHITECTURES[architecture]["twirled"]
+
+    g = torch.Generator(device=torch.device(dev)).manual_seed(SEED)
+    initial_params = torch.empty(num_qubits * reps, device=torch.device(dev)).uniform_(
+        -0.1, 0.1, generator=g
+    )
+    param_names = [f"rep{r}_q{i}" for r in range(reps) for i in range(num_qubits)]
+
     train_loop(
         train_loader,
         test_loader,
@@ -61,17 +71,31 @@ def main(cfg: DictConfig) -> None:
         learning_rate,
         patience,
         min_delta,
-        device,
-        num_qubits,
         dev,
         SEED,
         N,
-        architecture,
-        reps,
-        p_err,
         dataset,
-        verbose,
-        img_size,
+        qnn,
+        initial_params,
+        param_names,
+        run_name=f"{architecture}_N={N}_seed={SEED}",
+        checkpoint_config={
+            "device": device,
+            "num_qubits": num_qubits,
+            "p_err": p_err,
+            "reps": reps,
+            "architecture": architecture,
+            "img_size": img_size,
+        },
+        wandb_extra_config={
+            "device": device,
+            "num_qubits": num_qubits,
+            "reps": reps,
+            "p_err": p_err,
+            "architecture": architecture,
+            "is_equivariant": is_equivariant,
+        },
+        verbose=verbose,
     )
 
 

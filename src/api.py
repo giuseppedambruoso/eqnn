@@ -19,6 +19,7 @@ from PIL import Image
 from pydantic import BaseModel
 from torchvision import transforms
 
+from src.ansatz_builder import build_qnn_from_spec
 from src.data_encoding import embedding_unitary
 from src.data_loading import L2Normalize
 from src.qnn import create_qnn
@@ -68,19 +69,23 @@ def load_model(model_path: str | None = None) -> None:
         )
 
     cfg = checkpoint["config"]
-    qnn = create_qnn(
-        cfg["device"],
-        cfg["num_qubits"],
-        cfg["p_err"],
-        cfg["reps"],
-        cfg.get("architecture", "config1"),
-    )
+    if "circuit_spec" in cfg:
+        qnn, _, _ = build_qnn_from_spec(
+            cfg["device"], cfg["num_qubits"], cfg["p_err"], cfg["circuit_spec"]
+        )
+        architecture_label = "custom"
+    else:
+        architecture = cfg.get("architecture", "config1")
+        qnn = create_qnn(
+            cfg["device"], cfg["num_qubits"], cfg["p_err"], cfg["reps"], architecture
+        )
+        architecture_label = architecture
 
     _MODEL["qnn"] = qnn
     _MODEL["params"] = checkpoint["params"]
     _MODEL["phi"] = torch.tensor(0.0)
     _MODEL["img_size"] = cfg["img_size"]
-    _MODEL["architecture"] = cfg.get("architecture", "config1")
+    _MODEL["architecture"] = architecture_label
     _MODEL["val_acc"] = checkpoint.get("val_acc")
     _MODEL["path"] = str(path)
     logger.info(f"Loaded model from {path} (val_acc={_MODEL['val_acc']})")
