@@ -1,3 +1,4 @@
+import pennylane as qml
 import pytest
 import torch
 
@@ -31,6 +32,23 @@ def test_build_and_run_simple_spec():
     out = qnn(emb, params, torch.tensor(0.0))
     assert torch.isfinite(out)
     assert -1.0 - 1e-6 <= out.item() <= 1.0 + 1e-6
+
+
+def test_qnode_attribute_draws_full_circuit():
+    """Regression test: qml.draw()/draw_mpl() on qnn_forward itself silently
+    truncates the diagram after the first couple of operations — everything
+    from the measurement's Hadamard layer onward goes missing, with no
+    error raised. Drawing must target the exposed `qnn.qnode` instead."""
+    spec = [
+        {"gate": "RX", "wires": [0], "param": {"init": "random", "frozen": False}},
+        {"gate": "CNOT", "wires": [0, 1]},
+    ]
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec)
+    emb = _sample_embedding(4)
+
+    drawing = qml.draw(qnn.qnode)(emb, params, torch.tensor(0.0))
+    assert "H" in drawing
+    assert "<𝓗" in drawing  # the Hamiltonian expval marker
 
 
 def test_frozen_gate_excluded_from_trainable_params():

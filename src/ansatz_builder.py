@@ -228,4 +228,11 @@ def build_qnn_from_spec(
     ) -> Any:
         return qnn_base(embedding_unitary, params, phi)
 
+    # qml.draw()/qml.draw_mpl() need the actual QNode, not a function that
+    # merely calls one — drawing qnn_forward directly silently truncates the
+    # diagram after the first few operations (verified: everything from the
+    # measurement's Hadamard layer onward goes missing). Expose it as
+    # `qnn_forward.qnode` for callers that want a circuit diagram.
+    qnn_forward.qnode = qnn_base  # type: ignore[attr-defined]
+
     return qnn_forward, initial_params, spec
