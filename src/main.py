@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from omegaconf import DictConfig
 
-from src.data_loading import load_mnist_data
+from src.data_loading import load_mnist_data_full
 from src.qnn import ARCHITECTURES, architecture_param_names, create_qnn
 from src.train import train_loop
 
@@ -53,11 +53,8 @@ def main(cfg: DictConfig) -> None:
     dev = cfg.GENERAL.dev
 
     if dataset == "mnist":
-        train_loader, test_loader = load_mnist_data(
-            batch_size, N, num_workers, img_size, data_dir, SEED, verbose, False
-        )
-        _, aug_test_loader = load_mnist_data(
-            batch_size, N, num_workers, img_size, data_dir, SEED, verbose, True
+        train_loader, test_loader, aug_test_loader = load_mnist_data_full(
+            batch_size, N, num_workers, img_size, data_dir, SEED, verbose
         )
     else:
         raise ValueError(

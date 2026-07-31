@@ -21,7 +21,7 @@ from src.ansatz_builder import (
     validate_spec,
 )
 from src.data_encoding import embedding_unitary
-from src.data_loading import load_mnist_data
+from src.data_loading import load_mnist_data_full
 from src.paper_ansatzes import paper_architecture_spec
 from src.qnn import ARCHITECTURES
 from src.train import train_loop
@@ -330,11 +330,8 @@ def main() -> None:
             ):
                 try:
                     batch_size = max(1, int(N) // 10)
-                    train_loader, test_loader = load_mnist_data(
-                        batch_size, int(N), 0, IMG_SIZE, "data", int(seed), False, False
-                    )
-                    _, aug_test_loader = load_mnist_data(
-                        batch_size, int(N), 0, IMG_SIZE, "data", int(seed), False, True
+                    train_loader, test_loader, aug_test_loader = load_mnist_data_full(
+                        batch_size, int(N), 0, IMG_SIZE, "data", int(seed), False
                     )
 
                     twirled = st.session_state.twirled
