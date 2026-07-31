@@ -15,6 +15,14 @@ logger = logging.getLogger(__name__)
 
 @hydra.main(config_path="./config/", config_name="config", version_base=None)
 def main(cfg: DictConfig) -> None:
+    # Each Hydra multirun job (hydra/launcher=joblib) is its own OS process;
+    # torch/BLAS default to spawning one thread per CPU core *within* each
+    # process, so running several jobs in parallel oversubscribes the
+    # machine's cores many times over (observed: ~100x slowdown running just
+    # 2 jobs on a 14-core machine). The intended parallelism is entirely at
+    # the process level (n_jobs), so each process keeps exactly one thread.
+    torch.set_num_threads(1)
+
     SEED = cfg.GENERAL.seed
     random.seed(SEED)
     np.random.seed(SEED)
