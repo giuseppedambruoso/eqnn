@@ -2,9 +2,13 @@
 
 Lets a circuit be described as a plain JSON-serializable list of gate
 placements instead of one of the 5 fixed architectures in src/qnn.py — the
-backend for the interactive circuit designer (src/designer_app.py). config1
-through config5 are each expressible as a spec here, but this module makes
-no assumption about circuit structure (no fixed reps/entangler pattern).
+backend for the interactive circuit designer (src/designer_app.py). This
+module makes no assumption about circuit structure (no fixed reps/entangler
+pattern). config1/config3 (untwirled) can be expanded into an equivalent
+spec via architecture_to_spec(); config2/config4/config5 cannot, since
+their p4m-equivariance comes from explicitly averaging 8 separate circuit
+evaluations *outside* the quantum circuit (see qnn.py's qnn_forward), which
+has no representation in this single-circuit spec format.
 
 Spec format — a list of gate dicts, applied in order:
     {
@@ -24,7 +28,12 @@ from typing import Any
 import pennylane as qml
 import torch
 
-from src.qnn import approx_equiv_measure
+from src.qnn import ARCHITECTURES, FROZEN_ENTANGLER_ANGLE, approx_equiv_measure
+
+# Only these can be expanded into an equivalent spec — see module docstring.
+_CONVERTIBLE_ARCHITECTURES = {
+    name for name, spec in ARCHITECTURES.items() if not spec["twirled"]
+}
 
 # name -> (pennylane operation, arity)
 _FIXED_GATES: dict[str, tuple[Any, int]] = {
@@ -65,8 +74,12 @@ def _gate_arity(gate_spec: dict[str, Any]) -> int:
     raise ValueError(f"Unknown gate {name!r}")
 
 
+def is_parametric_gate(gate_name: str) -> bool:
+    return gate_name == "PAULIROT" or gate_name in _PARAM_GATES
+
+
 def is_parametric(gate_spec: dict[str, Any]) -> bool:
-    return gate_spec["gate"] == "PAULIROT" or gate_spec["gate"] in _PARAM_GATES
+    return is_parametric_gate(gate_spec["gate"])
 
 
 def validate_spec(spec: list[dict[str, Any]], num_qubits: int) -> None:
@@ -127,6 +140,52 @@ def param_labels(spec: list[dict[str, Any]]) -> list[str]:
             wires = "-".join(str(w) for w in gate_spec["wires"])
             labels.append(f"g{idx}_{gate_spec['gate']}_w{wires}")
     return labels
+
+
+def architecture_to_spec(
+    architecture: str, num_qubits: int, reps: int
+) -> list[dict[str, Any]]:
+    """Expands config1/config3 (the untwirled fixed architectures) into an
+    equivalent gate-by-gate spec, e.g. as a starting point in the designer.
+
+    config2/config4/config5 cannot be expanded this way — see module
+    docstring — and raise ValueError.
+    """
+    if architecture not in _CONVERTIBLE_ARCHITECTURES:
+        raise ValueError(
+            f"{architecture!r} can't be expressed as a spec (it uses p4m "
+            f"twirling); only {sorted(_CONVERTIBLE_ARCHITECTURES)} can."
+        )
+    rotation_gate = ARCHITECTURES[architecture]["rotation_gate"]
+    entangler = ARCHITECTURES[architecture]["entangler"]
+
+    spec: list[dict[str, Any]] = []
+    for _ in range(reps):
+        for i in range(num_qubits):
+            spec.append(
+                {
+                    "gate": rotation_gate,
+                    "wires": [i],
+                    "param": {"init": "random", "value": None, "frozen": False},
+                }
+            )
+        for i in range(num_qubits - 1):
+            if entangler == "frozen_rxy":
+                spec.append(
+                    {
+                        "gate": "PAULIROT",
+                        "wires": [i, i + 1],
+                        "pauli_word": "XY",
+                        "param": {
+                            "init": "custom",
+                            "value": FROZEN_ENTANGLER_ANGLE,
+                            "frozen": True,
+                        },
+                    }
+                )
+            else:
+                spec.append({"gate": "CNOT", "wires": [i, i + 1]})
+    return spec
 
 
 def resolve_spec(spec: list[dict[str, Any]]) -> list[dict[str, Any]]:

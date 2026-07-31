@@ -3,11 +3,13 @@ import pytest
 import torch
 
 from src.ansatz_builder import (
+    architecture_to_spec,
     build_qnn_from_spec,
     param_labels,
     validate_spec,
 )
 from src.data_encoding import embedding_unitary
+from src.qnn import create_qnn
 
 DEVICE_NAME = "default.qubit"
 
@@ -198,3 +200,33 @@ def test_pauli_rot_gate_multi_qubit():
 def test_invalid_specs_raise(bad_spec, match):
     with pytest.raises(ValueError, match=match):
         validate_spec(bad_spec, num_qubits=8)
+
+
+@pytest.mark.parametrize("architecture", ["config1", "config3"])
+def test_architecture_to_spec_matches_create_qnn(architecture):
+    """config1/config3, expanded into a spec, must give numerically
+    identical output to the real fixed architecture for the same
+    parameters — not just "something plausible"."""
+    num_qubits, reps = 8, 2
+    spec = architecture_to_spec(architecture, num_qubits, reps)
+    qnn_spec, initial_params, _ = build_qnn_from_spec(
+        DEVICE_NAME, num_qubits, 0.0, spec
+    )
+    qnn_fixed = create_qnn(DEVICE_NAME, num_qubits, 0.0, reps, architecture)
+
+    assert initial_params.shape == (num_qubits * reps,)
+
+    params = torch.empty(num_qubits * reps).uniform_(-0.1, 0.1)
+    emb = _sample_embedding(num_qubits)
+    phi = torch.tensor(0.0)
+
+    out_spec = qnn_spec(emb, params, phi)
+    out_fixed = qnn_fixed(emb, params, phi)
+
+    assert torch.allclose(out_spec, out_fixed, atol=1e-6)
+
+
+@pytest.mark.parametrize("architecture", ["config2", "config4", "config5"])
+def test_architecture_to_spec_rejects_twirled(architecture):
+    with pytest.raises(ValueError, match="twirling"):
+        architecture_to_spec(architecture, 8, 2)
