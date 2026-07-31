@@ -6,7 +6,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, TensorDataset
 
 from src.data_encoding import embedding_unitary
 
@@ -38,6 +38,20 @@ class L2Normalize:
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
         l2_norm = torch.linalg.norm(tensor.reshape(-1), ord=2, keepdim=True)
         return tensor / (l2_norm + 1e-12)
+
+
+def _materialize(dataset: Subset) -> TensorDataset:
+    """Runs every item's transform pipeline (including the expensive
+    embedding_unitary encoding, ~0.2-0.3s/image) exactly once, instead of
+    on every DataLoader access. torchvision's Dataset/Subset apply their
+    `transform` lazily on every __getitem__ call — with no augmentation
+    randomizing the *training* transform, every epoch was silently
+    recomputing the identical embedding for every image from scratch
+    (measured: ~127s/epoch for N=640 train images, dwarfing the actual
+    circuit training cost once diff_method="backprop" made that fast).
+    """
+    images, labels = zip(*[dataset[i] for i in range(len(dataset))], strict=True)
+    return TensorDataset(torch.stack(images), torch.tensor(labels))
 
 
 class QuantumTestAugmentation:
@@ -123,8 +137,8 @@ def load_mnist_data(
         test_full.targets, 3, 4, N, g_select
     )
 
-    train_final = Subset(train_full, train_balanced_idx)
-    test_final = Subset(test_full, test_balanced_idx)
+    train_final = _materialize(Subset(train_full, train_balanced_idx))
+    test_final = _materialize(Subset(test_full, test_balanced_idx))
 
     g_loader = torch.Generator().manual_seed(seed)
     train_loader = DataLoader(

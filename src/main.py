@@ -1,4 +1,7 @@
+import hashlib
+import json
 import logging
+import os
 import random
 
 import hydra
@@ -61,6 +64,34 @@ def main(cfg: DictConfig) -> None:
         raise ValueError(
             "Only 'mnist' is currently supported in this modularized example."
         )
+
+    # Default wandb group: every config.yaml parameter that defines the
+    # experiment EXCEPT the seed (dev/verbose/num_workers are execution
+    # details, not part of the experiment definition, so they're excluded
+    # too). Two runs land in the same group, and so get averaged together
+    # with a std-dev band on every wandb chart, iff they're identical in
+    # every one of these — i.e. iff they're the same configuration run with
+    # a different random initialization. An explicit -e WANDB_RUN_GROUP=...
+    # still overrides this (e.g. to compare several architectures on one
+    # chart instead of averaging within each).
+    config_identity = {
+        "architecture": architecture,
+        "device": device,
+        "num_qubits": num_qubits,
+        "p_err": p_err,
+        "reps": reps,
+        "epochs": epochs,
+        "learning_rate": learning_rate,
+        "patience": patience,
+        "min_delta": min_delta,
+        "N": N,
+        "dataset": dataset,
+        "img_size": img_size,
+    }
+    config_hash = hashlib.sha1(
+        json.dumps(config_identity, sort_keys=True).encode()
+    ).hexdigest()[:8]
+    os.environ.setdefault("WANDB_RUN_GROUP", f"{architecture}_N{N}_{config_hash}")
 
     qnn = create_qnn(device, num_qubits, p_err, reps, architecture)
     is_equivariant = ARCHITECTURES[architecture]["is_equivariant"]
