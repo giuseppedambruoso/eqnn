@@ -47,7 +47,7 @@ def test_equivariant_paper_ansatz_is_p4m_invariant(paper_ansatz, readout):
     default create_qnn now uses, matching config1-config5's effective
     measurement) and "x0_xhalf" (the alternative) must both hold."""
     spec = paper_architecture_spec(paper_ansatz, "equivariant", 8)
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, 0.0, spec, readout=readout)
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, spec, readout=readout)
     is_invariant, deviation = check_p4m_invariance(
         qnn, params, img_size=16, n_samples=2
     )
@@ -61,7 +61,7 @@ def test_nonequivariant_paper_ansatz_is_not_p4m_invariant(paper_ansatz, readout)
     """config7/config9: the axis-scrambled column register must generically
     break p4m-equivariance, regardless of readout choice."""
     spec = paper_architecture_spec(paper_ansatz, "nonequivariant", 8)
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, 0.0, spec, readout=readout)
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, spec, readout=readout)
     is_invariant, _deviation = check_p4m_invariance(
         qnn, params, img_size=16, n_samples=2
     )

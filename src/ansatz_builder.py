@@ -39,7 +39,7 @@ from src.qnn import (
     ARCHITECTURES,
     FROZEN_ENTANGLER_ANGLE,
     apply_group_element,
-    approx_equiv_measure,
+    equiv_measure,
 )
 
 # name -> (pennylane operation, arity)
@@ -288,7 +288,6 @@ def resolve_spec(spec: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def build_qnn_from_spec(
     device: str,
     num_qubits: int,
-    p_err: float,
     spec: list[dict[str, Any]],
     twirled: bool = False,
     readout: str = "sum_z",
@@ -301,16 +300,16 @@ def build_qnn_from_spec(
         8) — the same mechanism that makes config2/config4/config5
         p4m-equivariant in src.qnn.create_qnn.
     readout: "sum_z" (default) measures the average of qml.Z over every
-        qubit, preceded by the RZ+H noise-mixing layer used by
-        config1-config5 (see src.qnn.approx_equiv_measure). "x0_xhalf"
-        measures 0.5*(X_0 + X_{num_qubits//2}) with no mixing layer — the
+        qubit, preceded by the H-basis-change layer used by config1-config5
+        (see src.qnn.equiv_measure). "x0_xhalf" measures
+        0.5*(X_0 + X_{num_qubits//2}) with no basis-change layer — the
         readout config6-config9 (src.paper_ansatzes) default to, to
         preserve their exact p4m-equivariance. "avg_x" measures the average
-        of qml.X over every qubit (no mixing layer) — also p4m-invariant
-        under the same row/column-flip + swap generators (X commutes with
-        itself under an X-flip, and summing over all qubits is unaffected
-        by permuting them via the row/column swap), so it's a valid
-        alternative readout for config6-config9 too.
+        of qml.X over every qubit (no basis-change layer) — also
+        p4m-invariant under the same row/column-flip + swap generators (X
+        commutes with itself under an X-flip, and summing over all qubits
+        is unaffected by permuting them via the row/column swap), so it's a
+        valid alternative readout for config6-config9 too.
     diff_method: "backprop" (default) is dramatically faster in simulation
         — one differentiation pass through default.qubit's statevector,
         same order of cost as a single forward call — and is what
@@ -367,16 +366,12 @@ def build_qnn_from_spec(
     def qnn_base(
         embedding_unitary_matrix: torch.Tensor,
         params: torch.Tensor,
-        phi: torch.Tensor,
         g_idx: int = 0,
     ) -> Any:
         qml.QubitUnitary(embedding_unitary_matrix, wires=range(num_qubits))
 
         if twirled:
             apply_group_element(g_idx, num_qubits)
-            if p_err != 0:
-                for w in range(num_qubits):
-                    qml.DepolarizingChannel(p_err, wires=w)
 
         for idx, gate_spec in enumerate(spec):
             name = gate_spec["gate"]
@@ -397,18 +392,11 @@ def build_qnn_from_spec(
                 op, _ = _FIXED_GATES[name]
                 op(wires=wires)
 
-            if p_err != 0:
-                for w in wires:
-                    qml.DepolarizingChannel(p_err, wires=w)
-
         if twirled:
             apply_group_element(g_idx, num_qubits)
-            if p_err != 0:
-                for w in range(num_qubits):
-                    qml.DepolarizingChannel(p_err, wires=w)
 
         if readout == "sum_z":
-            approx_equiv_measure(torch.tensor(0.0), p_err, num_qubits)
+            equiv_measure(num_qubits)
             coeffs = [1.0 / num_qubits] * num_qubits
             observables = [qml.Z(i) for i in range(num_qubits)]
             H = qml.Hamiltonian(coeffs, observables)
@@ -421,14 +409,12 @@ def build_qnn_from_spec(
         return qml.expval(H)
 
     def qnn_forward(
-        embedding_unitary_matrix: torch.Tensor, params: torch.Tensor, phi: torch.Tensor
+        embedding_unitary_matrix: torch.Tensor, params: torch.Tensor
     ) -> Any:
         if twirled:
-            results = [
-                qnn_base(embedding_unitary_matrix, params, phi, g) for g in range(8)
-            ]
+            results = [qnn_base(embedding_unitary_matrix, params, g) for g in range(8)]
             return torch.stack(results).mean(dim=0)
-        return qnn_base(embedding_unitary_matrix, params, phi, 0)
+        return qnn_base(embedding_unitary_matrix, params, 0)
 
     # qml.draw()/qml.draw_mpl() need the actual QNode, not a function that
     # merely calls one — drawing qnn_forward directly silently truncates the
@@ -465,7 +451,6 @@ def check_p4m_invariance(
     Returns (is_invariant, max_observed_deviation).
     """
     torch.manual_seed(0)
-    phi = torch.tensor(0.0)
     max_deviation = 0.0
     for _ in range(n_samples):
         img = torch.rand(img_size, img_size, dtype=torch.float64)
@@ -476,8 +461,8 @@ def check_p4m_invariance(
             torch.flip(img, dims=[-2]),
             img.transpose(-1, -2),
         ]
-        base = qnn_forward(embedding_unitary(variants[0]), params, phi)
+        base = qnn_forward(embedding_unitary(variants[0]), params)
         for variant in variants[1:]:
-            out = qnn_forward(embedding_unitary(variant), params, phi)
+            out = qnn_forward(embedding_unitary(variant), params)
             max_deviation = max(max_deviation, abs((out - base).item()))
     return max_deviation < atol, max_deviation

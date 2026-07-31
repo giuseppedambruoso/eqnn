@@ -43,19 +43,18 @@ def _train_a_few_steps(architecture: str) -> tuple[torch.Tensor, torch.Tensor]:
     labels = torch.tensor([0.0, 1.0] * ((num_images + 1) // 2))[:num_images]
     loader = DataLoader(TensorDataset(embeddings, labels), batch_size=num_images)
 
-    qnn = create_qnn(DEVICE_NAME, num_qubits, 0.0, reps, architecture)
+    qnn = create_qnn(DEVICE_NAME, num_qubits, reps, architecture)
     names = architecture_param_names(architecture, num_qubits, reps)
     params = (
         torch.empty(len(names), dtype=torch.float64)
         .uniform_(-0.1, 0.1)
         .requires_grad_()
     )
-    phi = torch.tensor(0.0, requires_grad=False)
     initial_params = params.detach().clone()
 
     opt = torch.optim.Adam([params], lr=0.1)
     for _ in range(num_steps):
-        train_one_epoch(loader, qnn, opt, torch.device("cpu"), params, phi)
+        train_one_epoch(loader, qnn, opt, torch.device("cpu"), params)
 
     return initial_params, params.detach().clone()
 

@@ -41,7 +41,7 @@ def test_custom_spec_trains_end_to_end(tmp_path, monkeypatch):
         {"gate": "CNOT", "wires": [2, 3]},
     ]
     qnn, initial_params, resolved_spec = build_qnn_from_spec(
-        DEVICE_NAME, num_qubits, 0.0, spec
+        DEVICE_NAME, num_qubits, spec
     )
     names = param_labels(resolved_spec)
 
@@ -66,7 +66,6 @@ def test_custom_spec_trains_end_to_end(tmp_path, monkeypatch):
         checkpoint_config={
             "device": DEVICE_NAME,
             "num_qubits": num_qubits,
-            "p_err": 0.0,
             "circuit_spec": resolved_spec,
             "img_size": 4,
         },
@@ -74,7 +73,7 @@ def test_custom_spec_trains_end_to_end(tmp_path, monkeypatch):
         verbose=False,
     )
 
-    trained_params, _, train_loss_hist, *_ = result
+    trained_params, train_loss_hist, *_ = result
     assert len(train_loss_hist) == 2
     assert torch.isfinite(trained_params).all()
 
@@ -87,10 +86,11 @@ def test_custom_spec_trains_end_to_end(tmp_path, monkeypatch):
     job_dir = checkpoints[0].parent
     assert (job_dir / "confusion_matrix.png").exists()
     assert (job_dir / "circuit.txt").exists()
+    assert (job_dir / "circuit.png").exists()
 
     summary = json.loads((job_dir / "summary.json").read_text())
     assert summary["param_names"] == names
     assert len(summary["final_params"]) == len(names)
-    assert summary["val_accuracy"] == result[5][0]
+    assert summary["val_accuracy"] == result[4][0]
     assert summary["p4m_equivariance"]["checked"] is True
     assert isinstance(summary["p4m_equivariance"]["is_invariant"], bool)

@@ -258,13 +258,12 @@ def main() -> None:
                 qnn, initial_params, _ = build_qnn_from_spec(
                     DEVICE_NAME,
                     NUM_QUBITS,
-                    0.0,
                     final_spec,
                     twirled=st.session_state.twirled,
                     readout=st.session_state.readout,
                 )
                 fig, _ = qml.draw_mpl(qnn.qnode, show_all_wires=True)(
-                    _dummy_embedding(), initial_params, torch.tensor(0.0)
+                    _dummy_embedding(), initial_params
                 )
                 st.pyplot(fig)
                 plt.close(fig)
@@ -307,7 +306,6 @@ def main() -> None:
             N = st.number_input("Numero immagini (N)", min_value=10, value=100, step=10)
             epochs = st.number_input("Epoche", min_value=1, value=40)
             seed = st.number_input("Seed", value=1234, step=1)
-            p_err = st.slider("Rumore depolarizzante (p_err)", 0.0, 0.5, 0.0, step=0.01)
         with col2:
             learning_rate = st.number_input("Learning rate", value=0.05, format="%.4f")
             patience = st.number_input("Patience", min_value=1, value=5)
@@ -344,7 +342,6 @@ def main() -> None:
                     qnn, initial_params, resolved_spec = build_qnn_from_spec(
                         DEVICE_NAME,
                         NUM_QUBITS,
-                        p_err,
                         _final_spec(),
                         twirled=twirled,
                         readout=readout,
@@ -373,7 +370,6 @@ def main() -> None:
                             checkpoint_config={
                                 "device": DEVICE_NAME,
                                 "num_qubits": NUM_QUBITS,
-                                "p_err": p_err,
                                 "circuit_spec": resolved_spec,
                                 "twirled": twirled,
                                 "readout": readout,
@@ -390,7 +386,7 @@ def main() -> None:
                     finally:
                         os.chdir(old_cwd)
 
-                    _, _, train_loss_hist, train_acc_hist, _, val_acc, *_ = result
+                    _, train_loss_hist, train_acc_hist, _, val_acc, *_ = result
                     st.success(
                         f"Training completato — accuratezza di validazione: {val_acc[0]:.3f}"
                     )

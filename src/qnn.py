@@ -49,14 +49,9 @@ def apply_group_element(g_idx: int, num_qubits: int) -> None:
         [qml.SWAP(wires=[i, i + half]) for i in range(half)]
 
 
-def approx_equiv_measure(phi: torch.Tensor, p_err: float, num_qubits: int) -> None:
+def equiv_measure(num_qubits: int) -> None:
     for i in range(num_qubits):
-        qml.RZ(phi, wires=i)
-        if p_err != 0:
-            qml.DepolarizingChannel(p_err, wires=i)
         qml.H(wires=i)
-        if p_err != 0:
-            qml.DepolarizingChannel(p_err, wires=i)
 
 
 # --- QNode Factory ---
@@ -158,17 +153,14 @@ ARCHITECTURES: dict[str, dict[str, Any]] = {
 }
 
 
-def frozen_rxy_cascade(num_qubits: int, p_err: float) -> None:
+def frozen_rxy_cascade(num_qubits: int) -> None:
     """Cascade of fixed-angle XY rotations (PauliRot(pi/2, "XY")) over
     adjacent qubits — the entangler for config3/config4."""
     for i in range(num_qubits - 1):
         qml.PauliRot(FROZEN_ENTANGLER_ANGLE, "XY", wires=[i, i + 1])
-        if p_err != 0:
-            qml.DepolarizingChannel(p_err, wires=i)
-            qml.DepolarizingChannel(p_err, wires=i + 1)
 
 
-def frozen_ryy_cascade(num_qubits: int, cross_edge_index: int, p_err: float) -> None:
+def frozen_ryy_cascade(num_qubits: int, cross_edge_index: int) -> None:
     """Cascade of fixed-angle RYY gates (IsingYY(pi/2)) over adjacent qubits.
 
     At the single step that would act on the two central qubits
@@ -184,14 +176,8 @@ def frozen_ryy_cascade(num_qubits: int, cross_edge_index: int, p_err: float) -> 
                 cross_edge_index + 2,
             ]
             qml.PauliRot(FROZEN_ENTANGLER_ANGLE, "YYYY", wires=wires)
-            if p_err != 0:
-                for w in wires:
-                    qml.DepolarizingChannel(p_err, wires=w)
         else:
             qml.IsingYY(FROZEN_ENTANGLER_ANGLE, wires=[i, i + 1])
-            if p_err != 0:
-                qml.DepolarizingChannel(p_err, wires=i)
-                qml.DepolarizingChannel(p_err, wires=i + 1)
 
 
 def architecture_param_names(
@@ -225,7 +211,6 @@ def architecture_param_names(
 def create_qnn(
     device: str,
     num_qubits: int,
-    p_err: float,
     reps: int,
     architecture: str = "config1",
     diff_method: str = "backprop",
@@ -251,13 +236,12 @@ def create_qnn(
             spec["paper_ansatz"], spec["symmetry"], num_qubits
         )
         # "avg_x" (mean of X over every qubit) matches what config1-config5
-        # already measure in effect — approx_equiv_measure applies H before
+        # already measure in effect — equiv_measure applies H before
         # measuring Z, and H Z H = X — so every architecture now shares the
         # same measurement.
         paper_qnn_forward, _, _ = build_qnn_from_spec(
             device,
             num_qubits,
-            p_err,
             gate_spec,
             twirled=False,
             readout="avg_x",
@@ -276,16 +260,12 @@ def create_qnn(
     def qnn_base(
         embedding_unitary: torch.Tensor,
         params: torch.Tensor,
-        phi: torch.Tensor,
         g_idx: int = 0,
     ) -> Any:
         qml.QubitUnitary(embedding_unitary, wires=range(num_qubits))
 
         if twirled:
             apply_group_element(g_idx, num_qubits)
-            if p_err != 0:
-                for i in range(num_qubits):
-                    qml.DepolarizingChannel(p_err, wires=i)
 
         for rep in range(reps):
             for i in range(num_qubits):
@@ -293,42 +273,32 @@ def create_qnn(
                     qml.RX(params[i + num_qubits * rep], wires=i)
                 else:
                     qml.RY(params[i + num_qubits * rep], wires=i)
-                if p_err != 0:
-                    qml.DepolarizingChannel(p_err, wires=i)
 
             if entangler == "frozen_ryy":
-                frozen_ryy_cascade(num_qubits, cross_edge_index, p_err)
+                frozen_ryy_cascade(num_qubits, cross_edge_index)
                 continue
             if entangler == "frozen_rxy":
-                frozen_rxy_cascade(num_qubits, p_err)
+                frozen_rxy_cascade(num_qubits)
                 continue
 
             for i in range(num_qubits - 1):
                 qml.CNOT(wires=[i, i + 1])
-                if p_err != 0:
-                    qml.DepolarizingChannel(p_err, wires=i)
-                    qml.DepolarizingChannel(p_err, wires=i + 1)
 
         if twirled:
             apply_group_element(g_idx, num_qubits)
-            if p_err != 0:
-                for i in range(num_qubits):
-                    qml.DepolarizingChannel(p_err, wires=i)
 
-        approx_equiv_measure(torch.tensor(0.0), p_err, num_qubits)
+        equiv_measure(num_qubits)
 
         coeffs = [1.0 / num_qubits] * num_qubits
         observables = [qml.Z(i) for i in range(num_qubits)]
         H = qml.Hamiltonian(coeffs, observables)
         return qml.expval(H)
 
-    def qnn_forward(
-        embedding_unitary: torch.Tensor, params: torch.Tensor, phi: torch.Tensor
-    ) -> Any:
+    def qnn_forward(embedding_unitary: torch.Tensor, params: torch.Tensor) -> Any:
         if twirled:
-            results = [qnn_base(embedding_unitary, params, phi, g) for g in range(8)]
+            results = [qnn_base(embedding_unitary, params, g) for g in range(8)]
             return torch.stack(results).mean(dim=0)
-        return qnn_base(embedding_unitary, params, phi, 0)
+        return qnn_base(embedding_unitary, params, 0)
 
     # See src.ansatz_builder.build_qnn_from_spec's identical comment:
     # qml.draw()/qml.draw_mpl() need the actual QNode, not a wrapper function,

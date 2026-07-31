@@ -16,10 +16,9 @@ def device_and_tensors():
         .uniform_(-0.1, 0.1)
         .requires_grad_()
     )
-    phi = torch.empty(1, device=torch_device).uniform_(-0.1, 0.1).requires_grad_()
 
     test_images = torch.rand(num_images, 16, 16, device=torch_device)
     for i in range(num_images):
         test_images[i] = test_images[i] / torch.linalg.norm(test_images[i].reshape(-1))
 
-    return torch_device, params, phi, test_images, num_qubits, reps
+    return torch_device, params, test_images, num_qubits, reps

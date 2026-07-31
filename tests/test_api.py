@@ -18,7 +18,6 @@ def checkpoint_path(tmp_path):
             "config": {
                 "device": "default.qubit",
                 "num_qubits": num_qubits,
-                "p_err": 0.0,
                 "reps": reps,
                 "architecture": "config1",
                 "img_size": 4,

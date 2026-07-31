@@ -21,7 +21,6 @@ DATA:
 QNN:
   device: "default.qubit"
   num_qubits: 8
-  p_err: 0.0
   reps: 2
   # config1: RY+CNOT (not equivariant)         | config2: RY+CNOT+twirling (equivariant)
   # config3: RX+RXY (not equivariant)           | config4: RX+RXY+twirling (equivariant)

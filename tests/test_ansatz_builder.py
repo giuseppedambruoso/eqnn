@@ -28,11 +28,11 @@ def test_build_and_run_simple_spec():
         {"gate": "RY", "wires": [1], "param": {"init": "random", "frozen": False}},
         {"gate": "CNOT", "wires": [0, 1]},
     ]
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec)
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, spec)
 
     assert params.shape == (2,)
     emb = _sample_embedding(4)
-    out = qnn(emb, params, torch.tensor(0.0))
+    out = qnn(emb, params)
     assert torch.isfinite(out)
     assert -1.0 - 1e-6 <= out.item() <= 1.0 + 1e-6
 
@@ -46,10 +46,10 @@ def test_qnode_attribute_draws_full_circuit():
         {"gate": "RX", "wires": [0], "param": {"init": "random", "frozen": False}},
         {"gate": "CNOT", "wires": [0, 1]},
     ]
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec)
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, spec)
     emb = _sample_embedding(4)
 
-    drawing = qml.draw(qnn.qnode)(emb, params, torch.tensor(0.0))
+    drawing = qml.draw(qnn.qnode)(emb, params)
     assert "H" in drawing
     assert "<𝓗" in drawing  # the Hamiltonian expval marker
 
@@ -63,7 +63,7 @@ def test_frozen_gate_excluded_from_trainable_params():
         },
         {"gate": "RY", "wires": [1], "param": {"init": "random", "frozen": False}},
     ]
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec)
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, spec)
 
     assert params.shape == (1,)  # only the non-frozen gate
     assert param_labels(spec) == ["g1_RY_w1"]
@@ -81,10 +81,10 @@ def test_resolved_spec_is_reproducible():
             "param": {"init": "random", "value": None, "frozen": True},
         },
     ]
-    _, _, resolved_spec = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec)
+    _, _, resolved_spec = build_qnn_from_spec(DEVICE_NAME, 4, spec)
     assert resolved_spec[0]["param"]["init"] == "custom"
 
-    _, _, resolved_again = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, resolved_spec)
+    _, _, resolved_again = build_qnn_from_spec(DEVICE_NAME, 4, resolved_spec)
     assert resolved_again[0]["param"]["value"] == resolved_spec[0]["param"]["value"]
 
 
@@ -96,7 +96,7 @@ def test_custom_init_value_is_used():
             "param": {"init": "custom", "value": 0.42, "frozen": False},
         },
     ]
-    _, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec)
+    _, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, spec)
     assert params[0].item() == pytest.approx(0.42)
 
 
@@ -110,11 +110,11 @@ def test_frozen_param_does_not_receive_gradient():
         {"gate": "RY", "wires": [1], "param": {"init": "random", "frozen": False}},
         {"gate": "CNOT", "wires": [0, 1]},
     ]
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec)
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, spec)
     params = params.clone().requires_grad_()
 
     emb = _sample_embedding(4)
-    out = qnn(emb, params, torch.tensor(0.0))
+    out = qnn(emb, params)
     out.backward()
 
     # Only one trainable param exists (the frozen RX never entered `params`).
@@ -133,11 +133,11 @@ def test_pauli_rot_gate_multi_qubit():
             "param": {"init": "custom", "value": 1.5707963267948966, "frozen": True},
         }
     ]
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec)
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, spec)
     assert params.shape == (4,)
 
     emb = _sample_embedding(4)
-    out = qnn(emb, params, torch.tensor(0.0))
+    out = qnn(emb, params)
     assert torch.isfinite(out)
 
 
@@ -216,18 +216,17 @@ def test_architecture_to_spec_matches_create_qnn(architecture):
     spec = architecture_to_spec(architecture, num_qubits, reps)
     twirled = ARCHITECTURES[architecture]["twirled"]
     qnn_spec, initial_params, _ = build_qnn_from_spec(
-        DEVICE_NAME, num_qubits, 0.0, spec, twirled=twirled
+        DEVICE_NAME, num_qubits, spec, twirled=twirled
     )
-    qnn_fixed = create_qnn(DEVICE_NAME, num_qubits, 0.0, reps, architecture)
+    qnn_fixed = create_qnn(DEVICE_NAME, num_qubits, reps, architecture)
 
     assert initial_params.shape == (num_qubits * reps,)
 
     params = torch.empty(num_qubits * reps).uniform_(-0.1, 0.1)
     emb = _sample_embedding(num_qubits)
-    phi = torch.tensor(0.0)
 
-    out_spec = qnn_spec(emb, params, phi)
-    out_fixed = qnn_fixed(emb, params, phi)
+    out_spec = qnn_spec(emb, params)
+    out_fixed = qnn_fixed(emb, params)
 
     assert torch.allclose(out_spec, out_fixed, atol=1e-6)
 
@@ -265,7 +264,7 @@ def test_tied_group_parameters_share_one_slot():
         },
         {"gate": "RY", "wires": [2], "param": {"init": "random", "frozen": False}},
     ]
-    _, params, resolved = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec)
+    _, params, resolved = build_qnn_from_spec(DEVICE_NAME, 4, spec)
 
     assert params.shape == (2,)  # the tied pair collapses to 1 slot + the RY
     assert param_labels(spec) == ["g0_RX_w0", "g2_RY_w2"]
@@ -274,27 +273,26 @@ def test_tied_group_parameters_share_one_slot():
 
 def test_readout_x0_xhalf_is_bounded():
     spec = [{"gate": "RX", "wires": [0], "param": {"init": "random", "frozen": False}}]
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec, readout="x0_xhalf")
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, spec, readout="x0_xhalf")
     emb = _sample_embedding(4)
-    out = qnn(emb, params, torch.tensor(0.0))
+    out = qnn(emb, params)
     assert torch.isfinite(out)
     assert -1.0 - 1e-6 <= out.item() <= 1.0 + 1e-6
 
 
 def test_readout_avg_x_is_bounded():
     spec = [{"gate": "RX", "wires": [0], "param": {"init": "random", "frozen": False}}]
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec, readout="avg_x")
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, spec, readout="avg_x")
     emb = _sample_embedding(4)
-    out = qnn(emb, params, torch.tensor(0.0))
+    out = qnn(emb, params)
     assert torch.isfinite(out)
     assert -1.0 - 1e-6 <= out.item() <= 1.0 + 1e-6
 
 
-def test_readout_avg_x_matches_sum_z_noiseless():
+def test_readout_avg_x_matches_sum_z():
     """config1-config5's "sum_z" readout (H then measure Z) is
-    mathematically the same as measuring X directly (H Z H = X) when
-    there's no noise (p_err=0) — so "avg_x" must give an identical output
-    for the same spec/params in that regime."""
+    mathematically the same as measuring X directly (H Z H = X) — so
+    "avg_x" must give an identical output for the same spec/params."""
     spec = [
         {
             "gate": "RX",
@@ -308,21 +306,19 @@ def test_readout_avg_x_matches_sum_z_noiseless():
         },
         {"gate": "CNOT", "wires": [0, 1]},
     ]
-    qnn_sum_z, params, _ = build_qnn_from_spec(
-        DEVICE_NAME, 4, 0.0, spec, readout="sum_z"
-    )
-    qnn_avg_x, _, _ = build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec, readout="avg_x")
+    qnn_sum_z, params, _ = build_qnn_from_spec(DEVICE_NAME, 4, spec, readout="sum_z")
+    qnn_avg_x, _, _ = build_qnn_from_spec(DEVICE_NAME, 4, spec, readout="avg_x")
     emb = _sample_embedding(4)
 
-    out_sum_z = qnn_sum_z(emb, params, torch.tensor(0.0))
-    out_avg_x = qnn_avg_x(emb, params, torch.tensor(0.0))
+    out_sum_z = qnn_sum_z(emb, params)
+    out_avg_x = qnn_avg_x(emb, params)
     assert torch.allclose(out_sum_z, out_avg_x, atol=1e-8)
 
 
 def test_unknown_readout_raises():
     spec = [{"gate": "RX", "wires": [0], "param": {"init": "random", "frozen": False}}]
     with pytest.raises(ValueError, match="readout"):
-        build_qnn_from_spec(DEVICE_NAME, 4, 0.0, spec, readout="bogus")
+        build_qnn_from_spec(DEVICE_NAME, 4, spec, readout="bogus")
 
 
 def test_twirled_spec_is_p4m_invariant():
@@ -330,7 +326,7 @@ def test_twirled_spec_is_p4m_invariant():
     p4m-equivariant, regardless of the spec's own content — here applied
     to config1's (normally non-equivariant) inner pattern."""
     spec = architecture_to_spec("config1", 8, 2)
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, 0.0, spec, twirled=True)
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, spec, twirled=True)
     is_invariant, deviation = check_p4m_invariance(
         qnn, params, img_size=16, n_samples=2
     )
@@ -340,7 +336,7 @@ def test_twirled_spec_is_p4m_invariant():
 
 def test_untwirled_spec_is_not_p4m_invariant():
     spec = architecture_to_spec("config1", 8, 2)
-    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, 0.0, spec, twirled=False)
+    qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, spec, twirled=False)
     is_invariant, _deviation = check_p4m_invariance(
         qnn, params, img_size=16, n_samples=2
     )

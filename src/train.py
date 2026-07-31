@@ -39,7 +39,6 @@ def execute_batch(
     batch_images: torch.Tensor,
     dev: torch.device,
     params: torch.Tensor,
-    phi: torch.Tensor,
 ) -> torch.Tensor:
     """Runs the whole batch through ONE QNode call, relying on
     default.qubit's support for a batch dimension on the embedding gate —
@@ -48,7 +47,7 @@ def execute_batch(
     default)."""
     batch_images = batch_images.to(dev)
 
-    raw_output = qnn(batch_images, params, phi)
+    raw_output = qnn(batch_images, params)
     output = (1.0 + raw_output) / 2.0
     clamped_output = torch.clamp(output, min=1e-7, max=1.0 - 1e-7)
     if torch.isnan(raw_output).any() or torch.isnan(clamped_output).any():
@@ -63,14 +62,13 @@ def train_one_epoch(
     opt: torch.optim.Optimizer,
     dev: torch.device,
     params: torch.Tensor,
-    phi: torch.Tensor,
     pbar: tqdm | None = None,
 ) -> tuple[float, float]:
     total_loss, total_correct, total_samples = 0.0, 0, 0
     for batch_images, batch_labels in loader:
         batch_labels = batch_labels.to(dev)
         opt.zero_grad()
-        batch_predictions = execute_batch(qnn, batch_images, dev, params, phi)
+        batch_predictions = execute_batch(qnn, batch_images, dev, params)
         loss = loss_function(batch_predictions, batch_labels)
         loss.backward()
         opt.step()
@@ -91,13 +89,12 @@ def validate(
     qnn: Any,
     dev: torch.device,
     params: torch.Tensor,
-    phi: torch.Tensor,
 ) -> tuple[float, float]:
     total_loss, total_correct, total_samples = 0.0, 0, 0
     with torch.no_grad():
         for batch_images, batch_labels in loader:
             batch_labels = batch_labels.to(dev)
-            batch_predictions = execute_batch(qnn, batch_images, dev, params, phi)
+            batch_predictions = execute_batch(qnn, batch_images, dev, params)
             loss = loss_function(batch_predictions, batch_labels)
             total_loss += loss.item() * batch_labels.size(0)
             total_correct += (
@@ -115,13 +112,12 @@ def _collect_predictions(
     qnn: Any,
     dev: torch.device,
     params: torch.Tensor,
-    phi: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     all_predictions, all_labels = [], []
     with torch.no_grad():
         for batch_images, batch_labels in loader:
             batch_labels = batch_labels.to(dev)
-            batch_predictions = execute_batch(qnn, batch_images, dev, params, phi)
+            batch_predictions = execute_batch(qnn, batch_images, dev, params)
             all_predictions.append(batch_predictions.reshape(-1))
             all_labels.append(batch_labels.reshape(-1))
     return torch.cat(all_predictions), torch.cat(all_labels)
@@ -157,7 +153,6 @@ def _plot_confusion_matrix(
 def _export_circuit_diagram(
     qnn: Any,
     params: torch.Tensor,
-    phi: torch.Tensor,
     sample_embedding: torch.Tensor,
     destination: str,
 ) -> bool:
@@ -169,9 +164,27 @@ def _export_circuit_diagram(
     qnode = getattr(qnn, "qnode", None)
     if qnode is None:
         return False
-    drawing = qml.draw(qnode, decimals=2)(sample_embedding, params, phi)
+    drawing = qml.draw(qnode, decimals=2)(sample_embedding, params)
     with open(destination, "w") as f:
         f.write(drawing)
+    return True
+
+
+def _export_circuit_diagram_image(
+    qnn: Any,
+    params: torch.Tensor,
+    sample_embedding: torch.Tensor,
+    destination: str,
+) -> bool:
+    """Visual (matplotlib) export of the trained circuit, viewable directly
+    in wandb's run page instead of a downloadable text file. Same
+    `.qnode` requirement as _export_circuit_diagram."""
+    qnode = getattr(qnn, "qnode", None)
+    if qnode is None:
+        return False
+    fig, _ = qml.draw_mpl(qnode, show_all_wires=True)(sample_embedding, params)
+    fig.savefig(destination, dpi=180, bbox_inches="tight")
+    plt.close(fig)
     return True
 
 
@@ -195,7 +208,6 @@ def train_loop(
     wandb_extra_config: dict[str, Any],
     verbose: bool = False,
 ) -> tuple[
-    torch.Tensor,
     torch.Tensor,
     list[float],
     list[float],
@@ -239,10 +251,9 @@ def train_loop(
     )
 
     params = initial_params.clone().to(torch_dev).requires_grad_()
-    phi = torch.tensor(0.0, requires_grad=False)
     opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.99))
 
-    train_loss_hist, train_acc_hist, params_hist = [], [], []
+    train_loss_hist, train_acc_hist = [], []
     total_steps = epochs * len(train_loader)
 
     pos = (current_process()._identity[0] - 1) if current_process()._identity else 0
@@ -260,15 +271,10 @@ def train_loop(
     t0 = time.time()
     for epoch in range(epochs):
         epoch_loss, epoch_acc = train_one_epoch(
-            train_loader, qnn, opt, torch_dev, params, phi, pbar
+            train_loader, qnn, opt, torch_dev, params, pbar
         )
         train_loss_hist.append(epoch_loss)
         train_acc_hist.append(epoch_acc)
-        params_hist.append(
-            [epoch]
-            + params.detach().cpu().numpy().tolist()
-            + [phi.detach().cpu().item()]
-        )
 
         params_log = {
             f"params/{name}": value
@@ -292,8 +298,8 @@ def train_loop(
     training_time = time.time() - t0
     epoch_time = training_time / max(epochs, 1)
 
-    val_loss, val_acc = validate(val_loader, qnn, torch_dev, params, phi)
-    val_aug_loss, val_aug_acc = validate(val_loader_aug, qnn, torch_dev, params, phi)
+    val_loss, val_acc = validate(val_loader, qnn, torch_dev, params)
+    val_aug_loss, val_aug_acc = validate(val_loader_aug, qnn, torch_dev, params)
 
     best_loss, epochs_no_improve, convergence_epoch = float("inf"), 0, epochs
     for idx, current_loss in enumerate(train_loss_hist):
@@ -349,16 +355,20 @@ def train_loop(
 
     # Confusion matrix on the (non-augmented) validation set.
     val_predictions, val_labels = _collect_predictions(
-        val_loader, qnn, torch_dev, params, phi
+        val_loader, qnn, torch_dev, params
     )
     confusion_path = os.path.join(job_dir, "confusion_matrix.png")
     _plot_confusion_matrix(val_predictions, val_labels, confusion_path)
 
-    # Best-effort text export of the trained circuit's diagram.
+    # Best-effort text + visual export of the trained circuit's diagram.
     sample_embedding = next(iter(val_loader))[0][0].to(torch_dev)
     circuit_path = os.path.join(job_dir, "circuit.txt")
     has_circuit_diagram = _export_circuit_diagram(
-        qnn, params.detach(), phi.detach(), sample_embedding, circuit_path
+        qnn, params.detach(), sample_embedding, circuit_path
+    )
+    circuit_image_path = os.path.join(job_dir, "circuit.png")
+    has_circuit_image = _export_circuit_diagram_image(
+        qnn, params.detach(), sample_embedding, circuit_image_path
     )
 
     # Numerical p4m-equivariance check (see src.ansatz_builder.check_p4m_invariance) —
@@ -415,6 +425,8 @@ def train_loop(
 
     wandb.log({"loss_history_plot": wandb.Image(loss_plot_path)})
     wandb.log({"confusion_matrix": wandb.Image(confusion_path)})
+    if has_circuit_image:
+        wandb.log({"circuit_diagram": wandb.Image(circuit_image_path)})
     if p4m_info["checked"]:
         wandb.summary["p4m_is_invariant"] = p4m_info["is_invariant"]
         wandb.summary["p4m_max_deviation"] = p4m_info["max_deviation"]
@@ -425,12 +437,13 @@ def train_loop(
     artifact.add_file(summary_path)
     if has_circuit_diagram:
         artifact.add_file(circuit_path)
+    if has_circuit_image:
+        artifact.add_file(circuit_image_path)
     wandb.log_artifact(artifact)
     wandb.finish()
 
     return (
         params,
-        phi,
         train_loss_hist,
         train_acc_hist,
         [val_loss],

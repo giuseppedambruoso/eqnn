@@ -6,7 +6,6 @@ from src.data_encoding import embedding_unitary
 from src.qnn import ARCHITECTURES, architecture_param_names, create_qnn
 
 DEVICE_NAME = "default.qubit"
-P_ERR = 0.0
 
 EQUIVARIANT_CONFIGS = ["config2", "config4", "config5", "config6", "config8"]
 NON_EQUIVARIANT_CONFIGS = ["config1", "config3", "config7", "config9"]
@@ -30,9 +29,9 @@ def test_p4m_equivariance(device_and_tensors, architecture):
     added — see src.ansatz_builder.check_p4m_invariance's docstring for the
     ~1e-16 (invariant) vs ~1e-3+ (not) separation this relies on.
     """
-    _torch_device, _params, _phi, _test_images, num_qubits, reps = device_and_tensors
+    _torch_device, _params, _test_images, num_qubits, reps = device_and_tensors
 
-    qnn_node = create_qnn(DEVICE_NAME, num_qubits, P_ERR, reps, architecture)
+    qnn_node = create_qnn(DEVICE_NAME, num_qubits, reps, architecture)
     params = _params_for(architecture, num_qubits, reps)
 
     is_invariant, deviation = check_p4m_invariance(
@@ -50,9 +49,9 @@ def test_not_p4m_equivariant(device_and_tensors, architecture):
     check_p4m_invariance rather than a single fixed (image, transform)
     comparison.
     """
-    _torch_device, _params, _phi, _test_images, num_qubits, reps = device_and_tensors
+    _torch_device, _params, _test_images, num_qubits, reps = device_and_tensors
 
-    qnn_node = create_qnn(DEVICE_NAME, num_qubits, P_ERR, reps, architecture)
+    qnn_node = create_qnn(DEVICE_NAME, num_qubits, reps, architecture)
     params = _params_for(architecture, num_qubits, reps)
 
     is_invariant, deviation = check_p4m_invariance(
@@ -63,12 +62,12 @@ def test_not_p4m_equivariant(device_and_tensors, architecture):
 
 @pytest.mark.parametrize("architecture", sorted(ARCHITECTURES))
 def test_all_architectures_run(device_and_tensors, architecture):
-    torch_device, _params, phi, test_images, num_qubits, reps = device_and_tensors
+    _torch_device, _params, test_images, num_qubits, reps = device_and_tensors
 
-    qnn_node = create_qnn(DEVICE_NAME, num_qubits, P_ERR, reps, architecture)
+    qnn_node = create_qnn(DEVICE_NAME, num_qubits, reps, architecture)
     params = _params_for(architecture, num_qubits, reps)
 
-    out = qnn_node(embedding_unitary(test_images[0]), params, phi)
+    out = qnn_node(embedding_unitary(test_images[0]), params)
 
     assert torch.isfinite(out)
     assert -1.0 - 1e-6 <= out.item() <= 1.0 + 1e-6
@@ -76,10 +75,10 @@ def test_all_architectures_run(device_and_tensors, architecture):
 
 def test_invalid_architecture_raises():
     with pytest.raises(ValueError):
-        create_qnn(DEVICE_NAME, 8, P_ERR, 2, architecture="config99")
+        create_qnn(DEVICE_NAME, 8, 2, architecture="config99")
 
 
 @pytest.mark.parametrize("architecture", ["config6", "config7", "config8", "config9"])
 def test_paper_architectures_require_8_qubits(architecture):
     with pytest.raises(ValueError, match="num_qubits"):
-        create_qnn(DEVICE_NAME, 4, P_ERR, 2, architecture=architecture)
+        create_qnn(DEVICE_NAME, 4, 2, architecture=architecture)

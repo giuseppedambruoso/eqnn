@@ -73,7 +73,6 @@ def load_model(model_path: str | None = None) -> None:
         qnn, _, _ = build_qnn_from_spec(
             cfg["device"],
             cfg["num_qubits"],
-            cfg["p_err"],
             cfg["circuit_spec"],
             twirled=cfg.get("twirled", False),
             readout=cfg.get("readout", "sum_z"),
@@ -81,14 +80,11 @@ def load_model(model_path: str | None = None) -> None:
         architecture_label = "custom"
     else:
         architecture = cfg.get("architecture", "config1")
-        qnn = create_qnn(
-            cfg["device"], cfg["num_qubits"], cfg["p_err"], cfg["reps"], architecture
-        )
+        qnn = create_qnn(cfg["device"], cfg["num_qubits"], cfg["reps"], architecture)
         architecture_label = architecture
 
     _MODEL["qnn"] = qnn
     _MODEL["params"] = checkpoint["params"]
-    _MODEL["phi"] = torch.tensor(0.0)
     _MODEL["img_size"] = cfg["img_size"]
     _MODEL["architecture"] = architecture_label
     _MODEL["val_acc"] = checkpoint.get("val_acc")
@@ -155,7 +151,7 @@ async def predict(file: UploadFile = File(...)) -> PredictResponse:  # noqa: B00
 
     unitary = embedding_unitary(image)
     with torch.no_grad():
-        raw = _MODEL["qnn"](unitary, _MODEL["params"], _MODEL["phi"])
+        raw = _MODEL["qnn"](unitary, _MODEL["params"])
 
     probability = float(torch.clamp((1.0 + raw) / 2.0, min=1e-7, max=1.0 - 1e-7))
     predicted_digit = 4 if probability > 0.5 else 3

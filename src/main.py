@@ -34,7 +34,6 @@ def main(cfg: DictConfig) -> None:
     # Parametrized configuration variables
     device = cfg.QNN.device
     num_qubits = cfg.QNN.num_qubits
-    p_err = cfg.QNN.p_err
     reps = cfg.QNN.reps
     architecture = cfg.QNN.architecture
 
@@ -78,7 +77,6 @@ def main(cfg: DictConfig) -> None:
         "architecture": architecture,
         "device": device,
         "num_qubits": num_qubits,
-        "p_err": p_err,
         "reps": reps,
         "epochs": epochs,
         "learning_rate": learning_rate,
@@ -93,7 +91,7 @@ def main(cfg: DictConfig) -> None:
     ).hexdigest()[:8]
     os.environ.setdefault("WANDB_RUN_GROUP", f"{architecture}_N{N}_{config_hash}")
 
-    qnn = create_qnn(device, num_qubits, p_err, reps, architecture)
+    qnn = create_qnn(device, num_qubits, reps, architecture)
     is_equivariant = ARCHITECTURES[architecture]["is_equivariant"]
 
     param_names = architecture_param_names(architecture, num_qubits, reps)
@@ -121,7 +119,6 @@ def main(cfg: DictConfig) -> None:
         checkpoint_config={
             "device": device,
             "num_qubits": num_qubits,
-            "p_err": p_err,
             "reps": reps,
             "architecture": architecture,
             "img_size": img_size,
@@ -130,7 +127,6 @@ def main(cfg: DictConfig) -> None:
             "device": device,
             "num_qubits": num_qubits,
             "reps": reps,
-            "p_err": p_err,
             "architecture": architecture,
             "is_equivariant": is_equivariant,
         },
