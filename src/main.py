@@ -7,7 +7,7 @@ import torch
 from omegaconf import DictConfig
 
 from src.data_loading import load_mnist_data
-from src.qnn import ARCHITECTURES, create_qnn
+from src.qnn import ARCHITECTURES, architecture_param_names, create_qnn
 from src.train import train_loop
 
 logger = logging.getLogger(__name__)
@@ -55,13 +55,13 @@ def main(cfg: DictConfig) -> None:
         )
 
     qnn = create_qnn(device, num_qubits, p_err, reps, architecture)
-    is_equivariant = ARCHITECTURES[architecture]["twirled"]
+    is_equivariant = ARCHITECTURES[architecture]["is_equivariant"]
 
+    param_names = architecture_param_names(architecture, num_qubits, reps)
     g = torch.Generator(device=torch.device(dev)).manual_seed(SEED)
-    initial_params = torch.empty(num_qubits * reps, device=torch.device(dev)).uniform_(
+    initial_params = torch.empty(len(param_names), device=torch.device(dev)).uniform_(
         -0.1, 0.1, generator=g
     )
-    param_names = [f"rep{r}_q{i}" for r in range(reps) for i in range(num_qubits)]
 
     train_loop(
         train_loader,

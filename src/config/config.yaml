@@ -23,9 +23,13 @@ QNN:
   num_qubits: 8
   p_err: 0.0
   reps: 2
-  # config1: RY+CNOT (not equivariant) | config2: RY+CNOT+twirling (equivariant)
-  # config3: RX+CNOT (not equivariant) | config4: RX+CNOT+twirling (equivariant)
-  # config5: RX+frozen-RYY/RYYYY+twirling (equivariant) — see src/qnn.py:ARCHITECTURES
+  # config1: RY+CNOT (not equivariant)         | config2: RY+CNOT+twirling (equivariant)
+  # config3: RX+RXY (not equivariant)           | config4: RX+RXY+twirling (equivariant)
+  # config5: RX+frozen-RYY/RYYYY+twirling (equivariant)
+  # config6: paper6, generator-equivariant      | config7: paper6, axis-scrambled (not equivariant)
+  # config8: shared18, generator-equivariant    | config9: shared18, axis-scrambled (not equivariant)
+  # config6-config9 need num_qubits=8 and ignore `reps` (fixed parameter budget)
+  # — see src/qnn.py:ARCHITECTURES and src/paper_ansatzes.py
   architecture: "config1"
 
 TRAINING:

@@ -65,9 +65,22 @@ def approx_equiv_measure(phi: torch.Tensor, p_err: float, num_qubits: int) -> No
 # config3/4, RYY/RYYYY for config5).
 FROZEN_ENTANGLER_ANGLE = math.pi / 2
 
-# The 5 supported architectures. "twirled" wraps the ansatz in explicit p4m
-# group-twirling, averaged over the 8 group elements in qnn_forward — that's
-# what actually makes config2/4/5 p4m-equivariant (config1/3 are not).
+# The 9 supported architectures.
+#
+# "kind" selects how create_qnn builds the circuit:
+#   - "uniform": the rotation+entangler+reps pattern below (config1-config5).
+#   - "paper": the D4-matched block-schedule ansatzes from
+#     src.paper_ansatzes (config6-config9) — a fixed 5-block schedule with a
+#     small, tied ("group"-shared) set of trainable angles, unrelated to
+#     "reps" (ignored for these architectures).
+#
+# "twirled" is the MECHANISM flag: it wraps the ansatz in explicit p4m
+# group-twirling, averaged over the 8 group elements in qnn_forward.
+# "is_equivariant" is the resulting PROPERTY: whether the built circuit is
+# actually p4m-equivariant. They're decoupled because config6/config8
+# achieve p4m-equivariance a different way — by construction, via
+# generators that commute with the D4 group — without needing explicit
+# twirling (see src.paper_ansatzes' module docstring).
 #
 # config3/4 use a frozen RXY entangler rather than CNOT: with a CNOT (or any
 # entangler built only from I/X, e.g. RXX) the RX rotations get an *exactly*
@@ -79,11 +92,69 @@ FROZEN_ENTANGLER_ANGLE = math.pi / 2
 # except the very first one in the chain (which only ever plays the "X" role
 # in the wires=[i, i+1] convention below, so it still gets zero gradient).
 ARCHITECTURES: dict[str, dict[str, Any]] = {
-    "config1": {"rotation_gate": "RY", "entangler": "cnot", "twirled": False},
-    "config2": {"rotation_gate": "RY", "entangler": "cnot", "twirled": True},
-    "config3": {"rotation_gate": "RX", "entangler": "frozen_rxy", "twirled": False},
-    "config4": {"rotation_gate": "RX", "entangler": "frozen_rxy", "twirled": True},
-    "config5": {"rotation_gate": "RX", "entangler": "frozen_ryy", "twirled": True},
+    "config1": {
+        "kind": "uniform",
+        "rotation_gate": "RY",
+        "entangler": "cnot",
+        "twirled": False,
+        "is_equivariant": False,
+    },
+    "config2": {
+        "kind": "uniform",
+        "rotation_gate": "RY",
+        "entangler": "cnot",
+        "twirled": True,
+        "is_equivariant": True,
+    },
+    "config3": {
+        "kind": "uniform",
+        "rotation_gate": "RX",
+        "entangler": "frozen_rxy",
+        "twirled": False,
+        "is_equivariant": False,
+    },
+    "config4": {
+        "kind": "uniform",
+        "rotation_gate": "RX",
+        "entangler": "frozen_rxy",
+        "twirled": True,
+        "is_equivariant": True,
+    },
+    "config5": {
+        "kind": "uniform",
+        "rotation_gate": "RX",
+        "entangler": "frozen_ryy",
+        "twirled": True,
+        "is_equivariant": True,
+    },
+    "config6": {
+        "kind": "paper",
+        "paper_ansatz": "6",
+        "symmetry": "equivariant",
+        "twirled": False,
+        "is_equivariant": True,
+    },
+    "config7": {
+        "kind": "paper",
+        "paper_ansatz": "6",
+        "symmetry": "nonequivariant",
+        "twirled": False,
+        "is_equivariant": False,
+    },
+    "config8": {
+        "kind": "paper",
+        "paper_ansatz": "18",
+        "symmetry": "equivariant",
+        "twirled": False,
+        "is_equivariant": True,
+    },
+    "config9": {
+        "kind": "paper",
+        "paper_ansatz": "18",
+        "symmetry": "nonequivariant",
+        "twirled": False,
+        "is_equivariant": False,
+    },
 }
 
 
@@ -123,6 +194,34 @@ def frozen_ryy_cascade(num_qubits: int, cross_edge_index: int, p_err: float) -> 
                 qml.DepolarizingChannel(p_err, wires=i + 1)
 
 
+def architecture_param_names(
+    architecture: str, num_qubits: int, reps: int
+) -> list[str]:
+    """Names for the trainable-parameter tensor create_qnn's architecture
+    needs — length matches what create_qnn(..., architecture) expects for
+    its `params` argument. config1-config5 need num_qubits*reps
+    independent rotation angles; config6-config9 have a fixed, tied
+    parameter budget (6 or 18 total) and ignore `reps` entirely.
+    """
+    if architecture not in ARCHITECTURES:
+        raise ValueError(
+            f"architecture must be one of {sorted(ARCHITECTURES)}, got {architecture!r}"
+        )
+    spec = ARCHITECTURES[architecture]
+    if spec["kind"] == "paper":
+        # Local import: src.ansatz_builder imports ARCHITECTURES from this
+        # module at top level, so importing it back here would be circular
+        # if done at module scope.
+        from src.ansatz_builder import param_labels
+        from src.paper_ansatzes import paper_architecture_spec
+
+        gate_spec = paper_architecture_spec(
+            spec["paper_ansatz"], spec["symmetry"], num_qubits
+        )
+        return param_labels(gate_spec)
+    return [f"rep{r}_q{i}" for r in range(reps) for i in range(num_qubits)]
+
+
 def create_qnn(
     device: str,
     num_qubits: int,
@@ -135,6 +234,20 @@ def create_qnn(
             f"architecture must be one of {sorted(ARCHITECTURES)}, got {architecture!r}"
         )
     spec = ARCHITECTURES[architecture]
+
+    if spec["kind"] == "paper":
+        # Local import — see architecture_param_names' comment above.
+        from src.ansatz_builder import build_qnn_from_spec
+        from src.paper_ansatzes import paper_architecture_spec
+
+        gate_spec = paper_architecture_spec(
+            spec["paper_ansatz"], spec["symmetry"], num_qubits
+        )
+        paper_qnn_forward, _, _ = build_qnn_from_spec(
+            device, num_qubits, p_err, gate_spec, twirled=False, readout="x0_xhalf"
+        )
+        return paper_qnn_forward
+
     rotation_gate = spec["rotation_gate"]
     entangler = spec["entangler"]
     twirled = spec["twirled"]
@@ -147,7 +260,7 @@ def create_qnn(
         embedding_unitary: torch.Tensor,
         params: torch.Tensor,
         phi: torch.Tensor,
-        g_idx: int,
+        g_idx: int = 0,
     ) -> Any:
         qml.QubitUnitary(embedding_unitary, wires=range(num_qubits))
 
@@ -199,5 +312,10 @@ def create_qnn(
             results = [qnn_base(embedding_unitary, params, phi, g) for g in range(8)]
             return torch.stack(results).mean(dim=0)
         return qnn_base(embedding_unitary, params, phi, 0)
+
+    # See src.ansatz_builder.build_qnn_from_spec's identical comment:
+    # qml.draw()/qml.draw_mpl() need the actual QNode, not a wrapper function,
+    # or the diagram silently truncates after the first few operations.
+    qnn_forward.qnode = qnn_base  # type: ignore[attr-defined]
 
     return qnn_forward

@@ -1,4 +1,5 @@
 import csv
+import json
 import logging
 import os
 import time
@@ -6,12 +7,15 @@ from multiprocessing import current_process
 from typing import Any
 
 import matplotlib.pyplot as plt
+import pennylane as qml
 import torch
 import wandb
 from hydra.core.hydra_config import HydraConfig
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+from src.ansatz_builder import check_p4m_invariance
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +108,71 @@ def validate(
             total_samples += batch_labels.size(0)
 
     return total_loss / (total_samples + 1e-8), total_correct / (total_samples + 1e-8)
+
+
+def _collect_predictions(
+    loader: DataLoader,
+    qnn: Any,
+    dev: torch.device,
+    params: torch.Tensor,
+    phi: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    all_predictions, all_labels = [], []
+    with torch.no_grad():
+        for batch_images, batch_labels in loader:
+            batch_labels = batch_labels.to(dev)
+            batch_predictions = execute_batch(qnn, batch_images, dev, params, phi)
+            all_predictions.append(batch_predictions.reshape(-1))
+            all_labels.append(batch_labels.reshape(-1))
+    return torch.cat(all_predictions), torch.cat(all_labels)
+
+
+def _plot_confusion_matrix(
+    predictions: torch.Tensor, labels: torch.Tensor, destination: str
+) -> None:
+    """0=digit 3, 1=digit 4 (see data_loading.py's tar_transform)."""
+    predicted_classes = (predictions > 0.5).long()
+    matrix = torch.zeros((2, 2), dtype=torch.long)
+    for true_cls, pred_cls in zip(
+        labels.long().tolist(), predicted_classes.tolist(), strict=False
+    ):
+        matrix[true_cls, pred_cls] += 1
+    matrix_np = matrix.numpy()
+
+    fig, axis = plt.subplots(figsize=(4.5, 4))
+    image = axis.imshow(matrix_np, cmap="Blues")
+    for i in range(2):
+        for j in range(2):
+            axis.text(j, i, str(matrix_np[i, j]), ha="center", va="center")
+    axis.set_xticks((0, 1), labels=("3", "4"))
+    axis.set_yticks((0, 1), labels=("3", "4"))
+    axis.set_xlabel("Cifra predetta")
+    axis.set_ylabel("Cifra reale")
+    fig.colorbar(image, ax=axis, fraction=0.046)
+    fig.tight_layout()
+    fig.savefig(destination, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _export_circuit_diagram(
+    qnn: Any,
+    params: torch.Tensor,
+    phi: torch.Tensor,
+    sample_embedding: torch.Tensor,
+    destination: str,
+) -> bool:
+    """Text export of the trained circuit. Needs `qnn.qnode` (the real
+    QNode, not a wrapper function) — see src.ansatz_builder.build_qnn_from_spec's
+    docstring for why drawing the wrapper silently truncates the diagram.
+    Returns whether a diagram was actually written (some qnn objects, e.g.
+    older callers, may not expose `.qnode`)."""
+    qnode = getattr(qnn, "qnode", None)
+    if qnode is None:
+        return False
+    drawing = qml.draw(qnode, decimals=2)(sample_embedding, params, phi)
+    with open(destination, "w") as f:
+        f.write(drawing)
+    return True
 
 
 def train_loop(
@@ -274,9 +343,84 @@ def train_loop(
         model_path,
     )
 
+    # Confusion matrix on the (non-augmented) validation set.
+    val_predictions, val_labels = _collect_predictions(
+        val_loader, qnn, torch_dev, params, phi
+    )
+    confusion_path = os.path.join(job_dir, "confusion_matrix.png")
+    _plot_confusion_matrix(val_predictions, val_labels, confusion_path)
+
+    # Best-effort text export of the trained circuit's diagram.
+    sample_embedding = next(iter(val_loader))[0][0].to(torch_dev)
+    circuit_path = os.path.join(job_dir, "circuit.txt")
+    has_circuit_diagram = _export_circuit_diagram(
+        qnn, params.detach(), phi.detach(), sample_embedding, circuit_path
+    )
+
+    # Numerical p4m-equivariance check (see src.ansatz_builder.check_p4m_invariance) —
+    # best-effort: an architecture this doesn't apply to shouldn't fail the run.
+    p4m_info: dict[str, Any] = {
+        "checked": False,
+        "is_invariant": None,
+        "max_deviation": None,
+        "error": None,
+    }
+    img_size = checkpoint_config.get("img_size")
+    if img_size is not None:
+        try:
+            is_invariant, deviation = check_p4m_invariance(
+                qnn, params.detach().cpu(), img_size, n_samples=2
+            )
+            p4m_info = {
+                "checked": True,
+                "is_invariant": is_invariant,
+                "max_deviation": deviation,
+                "error": None,
+            }
+        except Exception as exc:
+            logger.warning(f"p4m-invariance check failed: {exc}")
+            p4m_info["error"] = str(exc)
+
+    summary_path = os.path.join(job_dir, "summary.json")
+    with open(summary_path, "w") as f:
+        json.dump(
+            {
+                "run_name": run_name,
+                "seed": seed,
+                "N": N,
+                "dataset": dataset,
+                "epochs_configured": epochs,
+                "epochs_completed": len(train_loss_hist),
+                "convergence_epoch": convergence_epoch,
+                "training_time_sec": training_time,
+                "epoch_time_sec": epoch_time,
+                "train_loss": train_loss_hist[-1],
+                "train_accuracy": train_acc_hist[-1],
+                "val_loss": val_loss,
+                "val_accuracy": val_acc,
+                "val_aug_loss": val_aug_loss,
+                "val_aug_accuracy": val_aug_acc,
+                "param_names": param_names,
+                "final_params": params.detach().cpu().tolist(),
+                "p4m_equivariance": p4m_info,
+                "config": checkpoint_config,
+            },
+            f,
+            indent=2,
+        )
+
     wandb.log({"loss_history_plot": wandb.Image(loss_plot_path)})
+    wandb.log({"confusion_matrix": wandb.Image(confusion_path)})
+    if p4m_info["checked"]:
+        wandb.summary["p4m_is_invariant"] = p4m_info["is_invariant"]
+        wandb.summary["p4m_max_deviation"] = p4m_info["max_deviation"]
+
     artifact = wandb.Artifact(f"model-{run.id}", type="model")
     artifact.add_file(model_path)
+    artifact.add_file(confusion_path)
+    artifact.add_file(summary_path)
+    if has_circuit_diagram:
+        artifact.add_file(circuit_path)
     wandb.log_artifact(artifact)
     wandb.finish()
 

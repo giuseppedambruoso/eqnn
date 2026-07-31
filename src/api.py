@@ -71,7 +71,12 @@ def load_model(model_path: str | None = None) -> None:
     cfg = checkpoint["config"]
     if "circuit_spec" in cfg:
         qnn, _, _ = build_qnn_from_spec(
-            cfg["device"], cfg["num_qubits"], cfg["p_err"], cfg["circuit_spec"]
+            cfg["device"],
+            cfg["num_qubits"],
+            cfg["p_err"],
+            cfg["circuit_spec"],
+            twirled=cfg.get("twirled", False),
+            readout=cfg.get("readout", "sum_z"),
         )
         architecture_label = "custom"
     else:

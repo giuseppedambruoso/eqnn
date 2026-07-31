@@ -1,5 +1,5 @@
 """Interactive ansatz designer: draw an 8-qubit circuit gate-by-gate and
-train it on MNIST (digit 3 vs 4) with the same pipeline used by the 5 fixed
+train it on MNIST (digit 3 vs 4) with the same pipeline used by the fixed
 architectures (src/qnn.py). Run with `streamlit run src/designer_app.py`.
 """
 
@@ -15,12 +15,15 @@ import torch
 from src.ansatz_builder import (
     architecture_to_spec,
     build_qnn_from_spec,
+    check_p4m_invariance,
     is_parametric_gate,
     param_labels,
     validate_spec,
 )
 from src.data_encoding import embedding_unitary
 from src.data_loading import load_mnist_data
+from src.paper_ansatzes import paper_architecture_spec
+from src.qnn import ARCHITECTURES
 from src.train import train_loop
 
 NUM_QUBITS = 8
@@ -48,6 +51,12 @@ GATE_CATALOG: dict[str, tuple[str, int | None]] = {
     "PauliRot personalizzato (2-4 qubit)": ("PAULIROT", None),
 }
 
+READOUT_LABELS = {
+    "Somma Z (generico, config1-5)": "sum_z",
+    "X0 + X_{n/2} (stile config6-9)": "x0_xhalf",
+}
+READOUT_LABELS_INV = {v: k for k, v in READOUT_LABELS.items()}
+
 
 def _dummy_embedding() -> torch.Tensor:
     img = torch.rand(IMG_SIZE, IMG_SIZE)
@@ -64,7 +73,16 @@ def _gate_summary(gate_spec: dict) -> str:
         return f"{label} — qubit [{wires}]"
     lock = "🔒 congelato" if param["frozen"] else "🎯 allenabile"
     value = f"={param['value']:.3f}" if param["init"] == "custom" else " (casuale)"
-    return f"{label} — qubit [{wires}] — {lock}{value}"
+    group = f" — gruppo:{param['group']}" if param.get("group") else ""
+    return f"{label} — qubit [{wires}] — {lock}{value}{group}"
+
+
+def _final_spec() -> list[dict]:
+    """The circuit actually built/trained: the current gate list repeated
+    `layer_reps` times (each repetition gets its own independent
+    parameters, exactly like config1-5's own `reps` — see
+    src.ansatz_builder.build_qnn_from_spec)."""
+    return st.session_state.spec * int(st.session_state.layer_reps)
 
 
 def main() -> None:
@@ -72,11 +90,14 @@ def main() -> None:
     st.title("🔧 Ansatz Designer — circuito a 8 qubit")
     st.caption(
         "Disegna un circuito gate-per-gate e addestralo su MNIST (cifra 3 vs 4). "
-        "config1-5 sono casi particolari di quello che puoi costruire qui."
+        "config1-config9 sono casi particolari di quello che puoi costruire qui."
     )
 
     if "spec" not in st.session_state:
         st.session_state.spec = []
+    st.session_state.setdefault("twirled", False)
+    st.session_state.setdefault("readout", "sum_z")
+    st.session_state.setdefault("layer_reps", 1)
 
     left, right = st.columns([1, 1])
 
@@ -86,21 +107,60 @@ def main() -> None:
         with st.expander("Carica un punto di partenza"):
             preset_col1, preset_col2 = st.columns(2)
             with preset_col1:
-                preset = st.selectbox("Architettura", ["config1", "config3"])
+                preset = st.selectbox("Architettura", sorted(ARCHITECTURES))
                 st.caption(
-                    "Solo config1/config3 sono esprimibili qui: config2/4/5 usano "
-                    "il p4m-twirling (media di 8 circuiti), che non ha "
-                    "rappresentazione come singolo circuito."
+                    "config1-config5: pattern rotazione+entangler generico "
+                    "(twirling impostato automaticamente se previsto). "
+                    "config6-config9: ansatz D4-equivarianti/non-equivarianti "
+                    "a budget fisso di parametri (vedi src/paper_ansatzes.py)."
                 )
             with preset_col2:
                 preset_reps = st.number_input(
-                    "Ripetizioni", min_value=1, value=2, step=1
+                    "Ripetizioni (solo config1-5)", min_value=1, value=2, step=1
                 )
                 if st.button("Carica come punto di partenza"):
-                    st.session_state.spec = architecture_to_spec(
-                        preset, NUM_QUBITS, int(preset_reps)
-                    )
+                    meta = ARCHITECTURES[preset]
+                    if meta["kind"] == "uniform":
+                        st.session_state.spec = architecture_to_spec(
+                            preset, NUM_QUBITS, int(preset_reps)
+                        )
+                        st.session_state.readout = "sum_z"
+                    else:
+                        st.session_state.spec = paper_architecture_spec(
+                            meta["paper_ansatz"], meta["symmetry"], NUM_QUBITS
+                        )
+                        st.session_state.readout = "x0_xhalf"
+                    st.session_state.twirled = meta["twirled"]
+                    st.session_state.layer_reps = 1
                     st.rerun()
+
+        with st.expander("Opzioni circuito", expanded=False):
+            st.session_state.twirled = st.checkbox(
+                "🔄 Applica twirling p4m (media su 8 elementi del gruppo)",
+                value=st.session_state.twirled,
+                help=(
+                    "Rende il circuito ESATTAMENTE p4m-equivariante per "
+                    "costruzione, indipendentemente da cosa hai disegnato — "
+                    "lo stesso meccanismo di config2/config4/config5."
+                ),
+            )
+            readout_label = st.selectbox(
+                "Schema di misura",
+                list(READOUT_LABELS.keys()),
+                index=list(READOUT_LABELS.values()).index(st.session_state.readout),
+            )
+            st.session_state.readout = READOUT_LABELS[readout_label]
+            st.session_state.layer_reps = st.number_input(
+                "Ripeti questo layout N volte",
+                min_value=1,
+                value=int(st.session_state.layer_reps),
+                step=1,
+                help=(
+                    "Il circuito disegnato sotto viene ripetuto N volte, ognuna "
+                    "con parametri allenabili indipendenti (come 'reps' in "
+                    "config1-config5)."
+                ),
+            )
 
         with st.form("add_gate_form", clear_on_submit=True):
             label = st.selectbox("Tipo di gate", list(GATE_CATALOG.keys()))
@@ -155,7 +215,7 @@ def main() -> None:
             except ValueError as exc:
                 st.error(str(exc))
 
-        st.subheader("Circuito attuale")
+        st.subheader("Circuito attuale (un layout)")
         if not st.session_state.spec:
             st.info("Nessun gate ancora — aggiungine uno sopra, o carica un preset.")
         else:
@@ -193,15 +253,50 @@ def main() -> None:
         st.header("Anteprima circuito")
         if st.session_state.spec:
             try:
+                final_spec = _final_spec()
                 qnn, initial_params, _ = build_qnn_from_spec(
-                    DEVICE_NAME, NUM_QUBITS, 0.0, st.session_state.spec
+                    DEVICE_NAME,
+                    NUM_QUBITS,
+                    0.0,
+                    final_spec,
+                    twirled=st.session_state.twirled,
+                    readout=st.session_state.readout,
                 )
                 fig, _ = qml.draw_mpl(qnn.qnode, show_all_wires=True)(
                     _dummy_embedding(), initial_params, torch.tensor(0.0)
                 )
                 st.pyplot(fig)
                 plt.close(fig)
-                st.caption(f"Parametri allenabili: {len(initial_params)}")
+                st.caption(
+                    f"Parametri allenabili: {len(initial_params)} — "
+                    f"twirling: {'sì' if st.session_state.twirled else 'no'} — "
+                    f"misura: {READOUT_LABELS_INV[st.session_state.readout]}"
+                )
+
+                if st.button("🔍 Verifica invarianza p4m"):
+                    with st.spinner(
+                        "Valutazione del circuito su alcune immagini "
+                        "ribaltate/trasposte (qualche decina di secondi)..."
+                    ):
+                        is_invariant, deviation = check_p4m_invariance(
+                            qnn, initial_params, IMG_SIZE
+                        )
+                    if is_invariant:
+                        st.success(
+                            f"✅ p4m-invariante (deviazione massima osservata: "
+                            f"{deviation:.2e})"
+                        )
+                    else:
+                        st.warning(
+                            f"❌ NON p4m-invariante (deviazione massima osservata: "
+                            f"{deviation:.2e})"
+                        )
+                    st.caption(
+                        "Verifica numerica: l'uscita non deve cambiare se "
+                        "l'immagine in ingresso viene ribaltata o trasposta. Non "
+                        "è una prova formale, ma è affidabile su questo codice "
+                        "(vedi tests/test_equivariance.py)."
+                    )
             except Exception as exc:
                 st.error(f"Impossibile disegnare il circuito: {exc}")
 
@@ -243,8 +338,15 @@ def main() -> None:
                         batch_size, int(N), 0, IMG_SIZE, "data", int(seed), False, True
                     )
 
+                    twirled = st.session_state.twirled
+                    readout = st.session_state.readout
                     qnn, initial_params, resolved_spec = build_qnn_from_spec(
-                        DEVICE_NAME, NUM_QUBITS, p_err, st.session_state.spec
+                        DEVICE_NAME,
+                        NUM_QUBITS,
+                        p_err,
+                        _final_spec(),
+                        twirled=twirled,
+                        readout=readout,
                     )
                     names = param_labels(resolved_spec)
 
@@ -272,11 +374,15 @@ def main() -> None:
                                 "num_qubits": NUM_QUBITS,
                                 "p_err": p_err,
                                 "circuit_spec": resolved_spec,
+                                "twirled": twirled,
+                                "readout": readout,
                                 "img_size": IMG_SIZE,
                             },
                             wandb_extra_config={
                                 "architecture": "custom",
                                 "circuit_spec": resolved_spec,
+                                "twirled": twirled,
+                                "readout": readout,
                             },
                             verbose=False,
                         )

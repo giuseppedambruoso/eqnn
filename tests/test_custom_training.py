@@ -1,3 +1,5 @@
+import json
+
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -81,3 +83,14 @@ def test_custom_spec_trains_end_to_end(tmp_path, monkeypatch):
     checkpoint = torch.load(checkpoints[0], map_location="cpu", weights_only=False)
     assert checkpoint["config"]["circuit_spec"] == resolved_spec
     assert checkpoint["params"].shape == initial_params.shape
+
+    job_dir = checkpoints[0].parent
+    assert (job_dir / "confusion_matrix.png").exists()
+    assert (job_dir / "circuit.txt").exists()
+
+    summary = json.loads((job_dir / "summary.json").read_text())
+    assert summary["param_names"] == names
+    assert len(summary["final_params"]) == len(names)
+    assert summary["val_accuracy"] == result[5][0]
+    assert summary["p4m_equivariance"]["checked"] is True
+    assert isinstance(summary["p4m_equivariance"]["is_invariant"], bool)

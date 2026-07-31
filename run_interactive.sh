@@ -9,13 +9,20 @@ echo " attivata automaticamente quando serve.)"
 echo
 
 echo "Architetture disponibili:"
-echo "  config1: RY + CNOT                 (non equivariante)"
-echo "  config2: RY + CNOT + twirling       (equivariante)"
-echo "  config3: RX + RXY                  (non equivariante)"
-echo "  config4: RX + RXY + twirling        (equivariante)"
-echo "  config5: RX + RYY/RYYYY + twirling  (equivariante)"
+echo "  config1: RY + CNOT                       (non equivariante)"
+echo "  config2: RY + CNOT + twirling             (equivariante)"
+echo "  config3: RX + RXY                        (non equivariante)"
+echo "  config4: RX + RXY + twirling              (equivariante)"
+echo "  config5: RX + RYY/RYYYY + twirling        (equivariante)"
+echo "  config6: paper6 (6 parametri, generatori)  (equivariante)"
+echo "  config7: paper6, assi non allineati        (non equivariante)"
+echo "  config8: shared18 (18 parametri, generatori)(equivariante)"
+echo "  config9: shared18, assi non allineati      (non equivariante)"
+echo "  (config6-config9 richiedono QNN.num_qubits=8, il default; 'reps' viene"
+echo "   ignorato per queste 4 — hanno un budget di parametri fisso, vedi"
+echo "   src/paper_ansatzes.py)"
 echo
-read -rp "Architettura (config1-config5) [config1]: " ARCHITECTURE
+read -rp "Architettura (config1-config9) [config1]: " ARCHITECTURE
 ARCHITECTURE=${ARCHITECTURE:-config1}
 read -rp "Ripetizioni circuito (reps) [2]: " REPS
 REPS=${REPS:-2}

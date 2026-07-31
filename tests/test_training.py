@@ -3,35 +3,47 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from src.data_encoding import embedding_unitary
-from src.qnn import ARCHITECTURES, create_qnn
+from src.qnn import ARCHITECTURES, architecture_param_names, create_qnn
 from src.train import train_one_epoch
 
 DEVICE_NAME = "default.qubit"
 
 
 def _train_a_few_steps(architecture: str) -> tuple[torch.Tensor, torch.Tensor]:
-    """Trains a small 4-qubit circuit for a few steps and returns
-    (initial_params, final_params). Small on purpose: config2/4/5 are
-    twirled (8x circuit evaluations per forward pass), and parameter-shift
-    gradients need ~2 evaluations per trainable parameter on top of that.
+    """Trains a small circuit for a few steps and returns (initial_params,
+    final_params). Small on purpose: config2/4/5 are twirled (8x circuit
+    evaluations per forward pass), and parameter-shift gradients need ~2
+    evaluations per trainable parameter on top of that.
+
+    config6-config9 (paper-style ansatzes) require exactly 8 qubits instead
+    of 4, and shared18 (config8/config9) has 18 trainable parameters (36
+    parameter-shift evaluations per image) — both make each step
+    noticeably more expensive, so those 4 architectures get fewer
+    images/epochs. A single step is enough to detect whether gradients
+    flow at all, which is all this test checks.
     """
     torch.manual_seed(0)
-    num_qubits, reps = 4, 1
+    is_paper = ARCHITECTURES[architecture]["kind"] == "paper"
+    num_qubits, reps = (8, 1) if is_paper else (4, 1)
+    num_images = 2 if is_paper else 4
+    num_steps = 1 if is_paper else 3
+    img_side = 2 ** (num_qubits // 2)
 
-    images = torch.rand(4, 4, 4)
-    for i in range(4):
+    images = torch.rand(num_images, img_side, img_side)
+    for i in range(num_images):
         images[i] = images[i] / torch.linalg.norm(images[i].reshape(-1))
     embeddings = torch.stack([embedding_unitary(img) for img in images])
-    labels = torch.tensor([0.0, 1.0, 0.0, 1.0])
-    loader = DataLoader(TensorDataset(embeddings, labels), batch_size=4)
+    labels = torch.tensor([0.0, 1.0] * ((num_images + 1) // 2))[:num_images]
+    loader = DataLoader(TensorDataset(embeddings, labels), batch_size=num_images)
 
     qnn = create_qnn(DEVICE_NAME, num_qubits, 0.0, reps, architecture)
-    params = torch.empty(num_qubits * reps).uniform_(-0.1, 0.1).requires_grad_()
+    names = architecture_param_names(architecture, num_qubits, reps)
+    params = torch.empty(len(names)).uniform_(-0.1, 0.1).requires_grad_()
     phi = torch.tensor(0.0, requires_grad=False)
     initial_params = params.detach().clone()
 
     opt = torch.optim.Adam([params], lr=0.1)
-    for _ in range(3):
+    for _ in range(num_steps):
         train_one_epoch(loader, qnn, opt, torch.device("cpu"), params, phi)
 
     return initial_params, params.detach().clone()
