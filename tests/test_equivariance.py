@@ -82,3 +82,37 @@ def test_invalid_architecture_raises():
 def test_paper_architectures_require_8_qubits(architecture):
     with pytest.raises(ValueError, match="num_qubits"):
         create_qnn(DEVICE_NAME, 4, 2, architecture=architecture)
+
+
+def test_readout_override_changes_paper_architecture_output():
+    """readout is only meaningful for config6-config9 (see create_qnn's
+    docstring) — passing "x0_xhalf" instead of the default ("avg_x") must
+    actually change the measured output, proving the override takes
+    effect rather than being silently ignored."""
+    num_qubits, reps = 8, 2
+    params = _params_for("config6", num_qubits, reps)
+    emb = embedding_unitary(torch.rand(16, 16))
+
+    qnn_default = create_qnn(DEVICE_NAME, num_qubits, reps, "config6")
+    qnn_x0_xhalf = create_qnn(
+        DEVICE_NAME, num_qubits, reps, "config6", readout="x0_xhalf"
+    )
+
+    out_default = qnn_default(emb, params)
+    out_x0_xhalf = qnn_x0_xhalf(emb, params)
+    assert not torch.allclose(out_default, out_x0_xhalf)
+
+
+def test_readout_override_is_ignored_for_uniform_architectures():
+    """config1-config5's measurement is hardcoded and doesn't go through
+    the readout mechanism at all — passing readout= for one of them must
+    not raise or change anything."""
+    num_qubits, reps = 8, 2
+    params = _params_for("config1", num_qubits, reps)
+    emb = embedding_unitary(torch.rand(16, 16))
+
+    qnn_default = create_qnn(DEVICE_NAME, num_qubits, reps, "config1")
+    qnn_with_readout = create_qnn(
+        DEVICE_NAME, num_qubits, reps, "config1", readout="x0_xhalf"
+    )
+    assert torch.allclose(qnn_default(emb, params), qnn_with_readout(emb, params))

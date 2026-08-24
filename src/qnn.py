@@ -214,12 +214,20 @@ def create_qnn(
     reps: int,
     architecture: str = "config1",
     diff_method: str = "backprop",
+    readout: str | None = None,
 ) -> Any:
     """diff_method: "backprop" (default) is fast in simulation — src.train's
     execute_batch relies on it to run a whole batch through the QNN in a
     single vectorized call. "parameter-shift" is much slower here but is
     the only option that would also work on real quantum hardware (see
     src.ansatz_builder.build_qnn_from_spec's docstring for the tradeoff).
+
+    readout: only meaningful for config6-config9 (paper-kind
+    architectures); config1-config5's measurement is hardcoded elsewhere
+    in this function and ignores it. "avg_x" (default, i.e. readout=None)
+    measures the mean of X over every qubit; "x0_xhalf" measures only
+    0.5*(X_0 + X_{num_qubits//2}) — see
+    src.ansatz_builder.build_qnn_from_spec's docstring for both.
     """
     if architecture not in ARCHITECTURES:
         raise ValueError(
@@ -237,14 +245,14 @@ def create_qnn(
         )
         # "avg_x" (mean of X over every qubit) matches what config1-config5
         # already measure in effect — equiv_measure applies H before
-        # measuring Z, and H Z H = X — so every architecture now shares the
-        # same measurement.
+        # measuring Z, and H Z H = X — so every architecture uses the same
+        # measurement by default; readout=None falls back to it.
         paper_qnn_forward, _, _ = build_qnn_from_spec(
             device,
             num_qubits,
             gate_spec,
             twirled=False,
-            readout="avg_x",
+            readout=readout or "avg_x",
             diff_method=diff_method,
         )
         return paper_qnn_forward

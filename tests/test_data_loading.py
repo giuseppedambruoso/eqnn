@@ -51,3 +51,41 @@ def test_full_loader_test_and_aug_test_share_same_images():
     test_labels = torch.cat([labels for _, labels in test_loader])
     aug_test_labels = torch.cat([labels for _, labels in aug_test_loader])
     assert torch.equal(test_labels, aug_test_labels)
+
+
+def test_augment_train_re_randomizes_each_access():
+    """augment_train=True must apply a FRESH random p4m transform every
+    time an image is accessed (i.e. every epoch) — not a single one fixed
+    for the whole run — so the training set is deliberately left uncached
+    in that case (see load_mnist_data_full's docstring). Checked over
+    several images since any single one has a 1/8 chance of coincidentally
+    drawing the same (or an identity) transform twice."""
+    train_loader, _, _ = load_mnist_data_full(
+        batch_size=10,
+        N=20,
+        num_workers=0,
+        img_size=16,
+        data_dir="data",
+        seed=42,
+        augment_train=True,
+    )
+    dataset = train_loader.dataset
+    assert any(not torch.equal(dataset[i][0], dataset[i][0]) for i in range(5))
+
+
+def test_no_augment_train_is_cached():
+    """augment_train=False (the default) must keep the fast, cached
+    behavior: repeated access to the same image gives the identical
+    embedding, since no randomization is applied to it."""
+    train_loader, _, _ = load_mnist_data_full(
+        batch_size=10,
+        N=20,
+        num_workers=0,
+        img_size=16,
+        data_dir="data",
+        seed=42,
+        augment_train=False,
+    )
+    dataset = train_loader.dataset
+    for i in range(5):
+        assert torch.equal(dataset[i][0], dataset[i][0])

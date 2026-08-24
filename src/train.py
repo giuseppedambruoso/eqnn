@@ -251,7 +251,7 @@ def train_loop(
     )
 
     params = initial_params.clone().to(torch_dev).requires_grad_()
-    opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.99))
+    opt = torch.optim.Adam([params], lr=learning_rate, betas=(0.5, 0.999))
 
     train_loss_hist, train_acc_hist = [], []
     total_steps = epochs * len(train_loader)

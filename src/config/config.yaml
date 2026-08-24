@@ -15,6 +15,12 @@ DATA:
   N: 20  # number of images in the training set
   dataset: "mnist"
   augment_test: True
+  # Apply a random p4m transform to every training image, re-randomized
+  # every epoch (matches the reference d4_eqcnn training script's
+  # random_d4_batch). Off by default: it disables train-set caching, so
+  # every epoch re-runs the expensive embedding_unitary encoding instead
+  # of reusing a cached copy — noticeably slower per epoch when on.
+  augment_train: False
   img_size: 16
   data_dir: "data"
 
@@ -30,6 +36,11 @@ QNN:
   # config6-config9 need num_qubits=8 and ignore `reps` (fixed parameter budget)
   # — see src/qnn.py:ARCHITECTURES and src/paper_ansatzes.py
   architecture: "config1"
+  # Only meaningful for config6-config9 (ignored for config1-config5):
+  # null/"avg_x" measures the mean of X over every qubit (the default);
+  # "x0_xhalf" measures only 0.5*(X_0 + X_{num_qubits//2}) — the paper's
+  # own readout, i.e. only the first and (num_qubits//2+1)-th qubit.
+  readout: null
 
 TRAINING:
   epochs: 80

@@ -49,12 +49,22 @@ def _materialize(dataset: Subset) -> TensorDataset:
     recomputing the identical embedding for every image from scratch
     (measured: ~127s/epoch for N=640 train images, dwarfing the actual
     circuit training cost once diff_method="backprop" made that fast).
+
+    Only safe to call on a transform pipeline that gives the SAME output
+    every access — i.e. not one that includes D4Augmentation, which must
+    keep re-randomizing every epoch to actually work as augmentation.
     """
     images, labels = zip(*[dataset[i] for i in range(len(dataset))], strict=True)
     return TensorDataset(torch.stack(images), torch.tensor(labels))
 
 
-class QuantumTestAugmentation:
+class D4Augmentation:
+    """Applies a random p4m group transform (or leaves the image alone,
+    with probability 1-p) — used both for the augmented *test* set (a
+    fixed one-off, always p=1) and, optionally, for *training* (p=1, but
+    the dataset is deliberately left un-cached so a fresh random transform
+    is drawn every epoch — see load_mnist_data_full's augment_train)."""
+
     def __init__(self, p: float = 0.5):
         self.p = p
 
@@ -106,7 +116,7 @@ def load_mnist_data(
     train_transform = transforms.Compose(base_transforms + post_transforms)
     test_transform_list = list(base_transforms)
     if augment_test:
-        test_transform_list.append(QuantumTestAugmentation(p=1))
+        test_transform_list.append(D4Augmentation(p=1))
     test_transform = transforms.Compose(test_transform_list + post_transforms)
 
     switch = {3: 0, 4: 1, 0: 3, 1: 4}
@@ -168,6 +178,7 @@ def load_mnist_data_full(
     data_dir: str = "data",
     seed: int = 42,
     verbose: bool = False,
+    augment_train: bool = False,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Like load_mnist_data, but returns (train_loader, test_loader,
     aug_test_loader) from a single call. Calling load_mnist_data twice
@@ -175,6 +186,17 @@ def load_mnist_data_full(
     pattern needed to get all three loaders) materializes the *training*
     set's embeddings twice, since only the test transform differs between
     the two calls; this builds it exactly once instead.
+
+    augment_train=True applies a random p4m transform to every training
+    image (matching the reference d4_eqcnn training script's
+    random_d4_batch) — a NEW random transform drawn every epoch, not a
+    single one fixed for the whole run. This is why the training set is
+    deliberately left un-cached in that case: caching would freeze
+    whichever random transform got drawn first for the entire run instead
+    of re-randomizing it, defeating the point of augmentation. Expect
+    training to take noticeably longer per epoch when this is on (every
+    epoch re-runs the expensive embedding_unitary encoding for the whole
+    training set instead of reusing a cached copy).
     """
     torch.manual_seed(seed)
 
@@ -187,10 +209,13 @@ def load_mnist_data_full(
         transforms.Lambda(lambda x: x.squeeze(0)),
         transforms.Lambda(lambda x: embedding_unitary(x)),
     ]
-    train_transform = transforms.Compose(base_transforms + post_transforms)
+    train_transform_list = list(base_transforms)
+    if augment_train:
+        train_transform_list.append(D4Augmentation(p=1))
+    train_transform = transforms.Compose(train_transform_list + post_transforms)
     test_transform = transforms.Compose(base_transforms + post_transforms)
     aug_test_transform = transforms.Compose(
-        base_transforms + [QuantumTestAugmentation(p=1)] + post_transforms
+        base_transforms + [D4Augmentation(p=1)] + post_transforms
     )
 
     switch = {3: 0, 4: 1, 0: 3, 1: 4}
@@ -228,7 +253,12 @@ def load_mnist_data_full(
         test_full.targets, 3, 4, N, g_select
     )
 
-    train_final = _materialize(Subset(train_full, train_balanced_idx))
+    train_subset = Subset(train_full, train_balanced_idx)
+    # See the augment_train docstring note above: caching would freeze the
+    # augmentation instead of re-randomizing it every epoch.
+    train_final: Subset | TensorDataset = (
+        train_subset if augment_train else _materialize(train_subset)
+    )
     test_final = _materialize(Subset(test_full, test_balanced_idx))
     aug_test_final = _materialize(Subset(aug_test_full, test_balanced_idx))
 

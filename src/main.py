@@ -36,6 +36,9 @@ def main(cfg: DictConfig) -> None:
     num_qubits = cfg.QNN.num_qubits
     reps = cfg.QNN.reps
     architecture = cfg.QNN.architecture
+    # Only meaningful for config6-config9 — see src.qnn.create_qnn's
+    # docstring. config1-config5 ignore it.
+    readout = cfg.QNN.readout
 
     epochs = cfg.TRAINING.epochs
     learning_rate = cfg.TRAINING.learning_rate
@@ -46,6 +49,7 @@ def main(cfg: DictConfig) -> None:
     dataset = cfg.DATA.dataset
     img_size = cfg.DATA.img_size
     data_dir = cfg.DATA.data_dir
+    augment_train = cfg.DATA.augment_train
 
     batch_size = int(N // 10)
     num_workers = cfg.GENERAL.num_workers
@@ -54,7 +58,14 @@ def main(cfg: DictConfig) -> None:
 
     if dataset == "mnist":
         train_loader, test_loader, aug_test_loader = load_mnist_data_full(
-            batch_size, N, num_workers, img_size, data_dir, SEED, verbose
+            batch_size,
+            N,
+            num_workers,
+            img_size,
+            data_dir,
+            SEED,
+            verbose,
+            augment_train,
         )
     else:
         raise ValueError(
@@ -75,6 +86,7 @@ def main(cfg: DictConfig) -> None:
         "device": device,
         "num_qubits": num_qubits,
         "reps": reps,
+        "readout": readout,
         "epochs": epochs,
         "learning_rate": learning_rate,
         "patience": patience,
@@ -82,13 +94,14 @@ def main(cfg: DictConfig) -> None:
         "N": N,
         "dataset": dataset,
         "img_size": img_size,
+        "augment_train": augment_train,
     }
     config_hash = hashlib.sha1(
         json.dumps(config_identity, sort_keys=True).encode()
     ).hexdigest()[:8]
     os.environ.setdefault("WANDB_RUN_GROUP", f"{architecture}_N{N}_{config_hash}")
 
-    qnn = create_qnn(device, num_qubits, reps, architecture)
+    qnn = create_qnn(device, num_qubits, reps, architecture, readout=readout)
     is_equivariant = ARCHITECTURES[architecture]["is_equivariant"]
 
     param_names = architecture_param_names(architecture, num_qubits, reps)
@@ -118,6 +131,7 @@ def main(cfg: DictConfig) -> None:
             "num_qubits": num_qubits,
             "reps": reps,
             "architecture": architecture,
+            "readout": readout,
             "img_size": img_size,
         },
         wandb_extra_config={
@@ -125,7 +139,9 @@ def main(cfg: DictConfig) -> None:
             "num_qubits": num_qubits,
             "reps": reps,
             "architecture": architecture,
+            "readout": readout,
             "is_equivariant": is_equivariant,
+            "augment_train": augment_train,
         },
         verbose=verbose,
     )

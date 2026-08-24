@@ -311,6 +311,14 @@ def main() -> None:
             patience = st.number_input("Patience", min_value=1, value=5)
             min_delta = st.number_input("Min delta", value=0.0001, format="%.5f")
             wandb_group = st.text_input("Gruppo wandb (opzionale)")
+            augment_train = st.checkbox(
+                "🔄 Aumenta i dati di training (trasformazione p4m casuale ad ogni epoca)",
+                value=False,
+                help=(
+                    "Disabilita la cache del training set — ogni epoca "
+                    "ricalcola l'embedding, quindi è più lento."
+                ),
+            )
 
         can_train = bool(st.session_state.spec)
         if st.button("🚀 Avvia training", type="primary", disabled=not can_train):
@@ -331,7 +339,14 @@ def main() -> None:
                 try:
                     batch_size = max(1, int(N) // 10)
                     train_loader, test_loader, aug_test_loader = load_mnist_data_full(
-                        batch_size, int(N), 0, IMG_SIZE, "data", int(seed), False
+                        batch_size,
+                        int(N),
+                        0,
+                        IMG_SIZE,
+                        "data",
+                        int(seed),
+                        False,
+                        augment_train,
                     )
 
                     twirled = st.session_state.twirled
@@ -377,6 +392,7 @@ def main() -> None:
                                 "circuit_spec": resolved_spec,
                                 "twirled": twirled,
                                 "readout": readout,
+                                "augment_train": augment_train,
                             },
                             verbose=False,
                         )

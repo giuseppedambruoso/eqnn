@@ -80,7 +80,13 @@ def load_model(model_path: str | None = None) -> None:
         architecture_label = "custom"
     else:
         architecture = cfg.get("architecture", "config1")
-        qnn = create_qnn(cfg["device"], cfg["num_qubits"], cfg["reps"], architecture)
+        qnn = create_qnn(
+            cfg["device"],
+            cfg["num_qubits"],
+            cfg["reps"],
+            architecture,
+            readout=cfg.get("readout"),
+        )
         architecture_label = architecture
 
     _MODEL["qnn"] = qnn
