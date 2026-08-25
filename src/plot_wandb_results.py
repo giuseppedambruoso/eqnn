@@ -6,10 +6,10 @@ auto-picked when only one is present) — mixing readouts on one axis would
 conflate two different measured quantities. Doesn't touch the training
 pipeline — a standalone analysis utility over already-logged wandb runs.
 
-Only picks up runs logged with the current string-valued augment_train
-("none"/"online"/"once" — see src/data_loading.py); older runs logged
-with a boolean augment_train won't match any panel and are silently
-skipped (they still show up in the diagnostic table).
+Older runs logged augment_train as a bool, before "once" existed —
+True/"true" is normalized to "online" and False/"false" to "none" (they
+were the same behavior, just re-randomized every epoch vs not), so those
+runs still land in the right panel alongside newer string-valued ones.
 
 Usage (reuses the eqnn image, which already has wandb + the .env API key
 wired via docker-compose.yml's env_file):
@@ -76,6 +76,20 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _normalize_augment_train(value: Any) -> Any:
+    """Older runs logged augment_train as a bool (True/False) or, via
+    wandb's API, sometimes as the strings "true"/"false" — from before the
+    "once" mode existed, when it was just "re-randomize every epoch or
+    not". Map those onto today's "online"/"none" so old and new runs group
+    together; anything else (already "none"/"online"/"once") passes
+    through unchanged."""
+    if isinstance(value, bool):
+        return "online" if value else "none"
+    if isinstance(value, str) and value.lower() in ("true", "false"):
+        return "online" if value.lower() == "true" else "none"
+    return value
+
+
 Bucket = dict[str, list[Any]]
 GroupKey = tuple[str, Any, Any]  # (architecture, augment_train, readout)
 Grouped = dict[GroupKey, dict[int, Bucket]]
@@ -103,7 +117,7 @@ def _fetch_grouped_results(
             cfg = run.config
             summary = run.summary
             N = cfg.get("N")
-            augment_train = cfg.get("augment_train")
+            augment_train = _normalize_augment_train(cfg.get("augment_train"))
             readout = cfg.get("readout")
             seed = cfg.get("seed")
             val_acc = summary.get("val/accuracy")
