@@ -15,11 +15,11 @@ DATA:
   N: 20  # number of images in the training set
   dataset: "mnist"
   augment_test: True
-  # Apply a random p4m transform to every training image, re-randomized
+  # none: no augmentation. online: a random p4m transform re-randomized
   # every epoch (matches the reference d4_eqcnn training script's
-  # random_d4_batch). Off by default: it disables train-set caching, so
-  # every epoch re-runs the expensive embedding_unitary encoding instead
-  # of reusing a cached copy — noticeably slower per epoch when on.
+  # random_d4_batch) — disables train-set caching, noticeably slower per
+  # epoch. once: a random p4m transform drawn once per image, then cached
+  # like the test set — fast, but weaker regularizer than online.
   augment_train: "none"  # one of: none, online, once — see src/data_loading.py
   img_size: 16
   data_dir: "data"
