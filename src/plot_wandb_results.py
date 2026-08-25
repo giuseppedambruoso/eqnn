@@ -1,11 +1,15 @@
 """Plots val/accuracy and val_aug/accuracy vs N from wandb runs, averaged
-over seeds, all as ONE single plot. Distinguishes (up to) three
-dimensions visually: color = architecture, solid/dashed line = whether
-augment_train was on, marker shape = val vs val_aug. Requires a single
-readout (pass --readout, or it's auto-picked when only one is present) —
-mixing readouts on one axis would conflate two different measured
-quantities. Doesn't touch the training pipeline — a standalone analysis
-utility over already-logged wandb runs.
+over seeds, as three side-by-side panels (one per augment_train mode:
+none / online / once). Distinguishes: color = architecture, marker shape
+= val vs val_aug. Requires a single readout (pass --readout, or it's
+auto-picked when only one is present) — mixing readouts on one axis would
+conflate two different measured quantities. Doesn't touch the training
+pipeline — a standalone analysis utility over already-logged wandb runs.
+
+Only picks up runs logged with the current string-valued augment_train
+("none"/"online"/"once" — see src/data_loading.py); older runs logged
+with a boolean augment_train won't match any panel and are silently
+skipped (they still show up in the diagnostic table).
 
 Usage (reuses the eqnn image, which already has wandb + the .env API key
 wired via docker-compose.yml's env_file):
@@ -72,18 +76,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _normalize_bool(value: Any) -> Any:
-    """wandb's API sometimes hands back config booleans as the strings
-    "true"/"false" instead of Python bool, depending on how they were
-    logged — normalize so (True, False) grouping keys actually match."""
-    if isinstance(value, str):
-        if value.lower() == "true":
-            return True
-        if value.lower() == "false":
-            return False
-    return value
-
-
 Bucket = dict[str, list[Any]]
 GroupKey = tuple[str, Any, Any]  # (architecture, augment_train, readout)
 Grouped = dict[GroupKey, dict[int, Bucket]]
@@ -111,7 +103,7 @@ def _fetch_grouped_results(
             cfg = run.config
             summary = run.summary
             N = cfg.get("N")
-            augment_train = _normalize_bool(cfg.get("augment_train"))
+            augment_train = cfg.get("augment_train")
             readout = cfg.get("readout")
             seed = cfg.get("seed")
             val_acc = summary.get("val/accuracy")
@@ -177,8 +169,9 @@ def main() -> None:
         )
     readout = readouts[0]
 
-    fig, (ax_true, ax_false) = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
-    panels = {True: ax_true, False: ax_false}
+    augment_train_modes = ["none", "online", "once"]
+    fig, axes = plt.subplots(1, 3, figsize=(21, 7), sharey=True)
+    panels = dict(zip(augment_train_modes, axes, strict=True))
 
     for augment_train, ax in panels.items():
         for architecture in architectures:
@@ -207,7 +200,7 @@ def main() -> None:
         ax.legend(fontsize="small", loc="best")
         ax.grid(True, alpha=0.3)
 
-    ax_true.set_ylabel("accuracy")
+    axes[0].set_ylabel("accuracy")
 
     fig.suptitle(
         f"{', '.join(architectures)}: accuracy vs N, averaged over seeds "

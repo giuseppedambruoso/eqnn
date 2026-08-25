@@ -58,12 +58,16 @@ def _materialize(dataset: Subset) -> TensorDataset:
     return TensorDataset(torch.stack(images), torch.tensor(labels))
 
 
+AUGMENT_TRAIN_MODES = ("none", "online", "once")
+
+
 class D4Augmentation:
     """Applies a random p4m group transform (or leaves the image alone,
-    with probability 1-p) — used both for the augmented *test* set (a
-    fixed one-off, always p=1) and, optionally, for *training* (p=1, but
-    the dataset is deliberately left un-cached so a fresh random transform
-    is drawn every epoch — see load_mnist_data_full's augment_train)."""
+    with probability 1-p) — used for the augmented *test* set (a fixed
+    one-off, always p=1) and, optionally, for *training* (p=1) in either
+    of two ways — see load_mnist_data_full's augment_train modes: "online"
+    (re-randomized every epoch, dataset left un-cached) or "once" (drawn a
+    single time and then cached, like the test set)."""
 
     def __init__(self, p: float = 0.5):
         self.p = p
@@ -178,7 +182,7 @@ def load_mnist_data_full(
     data_dir: str = "data",
     seed: int = 42,
     verbose: bool = False,
-    augment_train: bool = False,
+    augment_train: str = "none",
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Like load_mnist_data, but returns (train_loader, test_loader,
     aug_test_loader) from a single call. Calling load_mnist_data twice
@@ -187,17 +191,30 @@ def load_mnist_data_full(
     set's embeddings twice, since only the test transform differs between
     the two calls; this builds it exactly once instead.
 
-    augment_train=True applies a random p4m transform to every training
-    image (matching the reference d4_eqcnn training script's
-    random_d4_batch) — a NEW random transform drawn every epoch, not a
-    single one fixed for the whole run. This is why the training set is
-    deliberately left un-cached in that case: caching would freeze
-    whichever random transform got drawn first for the entire run instead
-    of re-randomizing it, defeating the point of augmentation. Expect
-    training to take noticeably longer per epoch when this is on (every
-    epoch re-runs the expensive embedding_unitary encoding for the whole
-    training set instead of reusing a cached copy).
+    augment_train selects how (if at all) a random p4m transform is
+    applied to training images (matching the reference d4_eqcnn training
+    script's random_d4_batch), one of:
+      - "none" (default): no augmentation, training set cached as usual.
+      - "online": a NEW random transform drawn every epoch, not a single
+        one fixed for the whole run. This is why the training set is
+        deliberately left un-cached in this mode: caching would freeze
+        whichever random transform got drawn first for the entire run
+        instead of re-randomizing it, defeating the point of augmentation.
+        Expect training to take noticeably longer per epoch (every epoch
+        re-runs the expensive embedding_unitary encoding for the whole
+        training set instead of reusing a cached copy).
+      - "once": a single random transform is drawn per image, up front,
+        then cached and reused for every epoch — like the augmented test
+        set. This is NOT the same regularizer as "online": the model
+        never sees more than one orientation per training image, so it
+        doesn't get exposed to the diversity that makes augmentation act
+        as a regularizer against overfitting to a specific orientation —
+        it's closer to training on a different, but still fixed, dataset.
     """
+    if augment_train not in AUGMENT_TRAIN_MODES:
+        raise ValueError(
+            f"augment_train must be one of {AUGMENT_TRAIN_MODES}, got {augment_train!r}"
+        )
     torch.manual_seed(seed)
 
     base_transforms = [
@@ -210,7 +227,7 @@ def load_mnist_data_full(
         transforms.Lambda(lambda x: embedding_unitary(x)),
     ]
     train_transform_list = list(base_transforms)
-    if augment_train:
+    if augment_train in ("online", "once"):
         train_transform_list.append(D4Augmentation(p=1))
     train_transform = transforms.Compose(train_transform_list + post_transforms)
     test_transform = transforms.Compose(base_transforms + post_transforms)
@@ -254,10 +271,13 @@ def load_mnist_data_full(
     )
 
     train_subset = Subset(train_full, train_balanced_idx)
-    # See the augment_train docstring note above: caching would freeze the
-    # augmentation instead of re-randomizing it every epoch.
+    # "online" is deliberately left un-cached (see the augment_train
+    # docstring note above: caching would freeze the augmentation instead
+    # of re-randomizing it every epoch). "none" and "once" are both a
+    # single fixed transform (identity or one random draw) per image, so
+    # both are safe to materialize/cache like the test sets.
     train_final: Subset | TensorDataset = (
-        train_subset if augment_train else _materialize(train_subset)
+        train_subset if augment_train == "online" else _materialize(train_subset)
     )
     test_final = _materialize(Subset(test_full, test_balanced_idx))
     aug_test_final = _materialize(Subset(aug_test_full, test_balanced_idx))

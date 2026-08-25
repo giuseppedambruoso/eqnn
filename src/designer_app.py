@@ -311,12 +311,22 @@ def main() -> None:
             patience = st.number_input("Patience", min_value=1, value=5)
             min_delta = st.number_input("Min delta", value=0.0001, format="%.5f")
             wandb_group = st.text_input("Gruppo wandb (opzionale)")
-            augment_train = st.checkbox(
-                "🔄 Aumenta i dati di training (trasformazione p4m casuale ad ogni epoca)",
-                value=False,
+            augment_train = st.selectbox(
+                "🔄 Aumento dati di training",
+                options=["none", "online", "once"],
+                index=0,
+                format_func=lambda v: {
+                    "none": "Nessuno",
+                    "online": "Ad ogni epoca (ri-randomizzato)",
+                    "once": "Una sola volta all'inizio (fisso)",
+                }[v],
                 help=(
-                    "Disabilita la cache del training set — ogni epoca "
-                    "ricalcola l'embedding, quindi è più lento."
+                    "'online': una trasformazione p4m casuale nuova ad ogni "
+                    "epoca — vera augmentation, ma disabilita la cache del "
+                    "training set (più lento). 'once': una trasformazione "
+                    "casuale scelta una volta sola e poi fissata per tutto "
+                    "il training (resta veloce, ma non dà lo stesso "
+                    "beneficio di regolarizzazione di 'online')."
                 ),
             )
 

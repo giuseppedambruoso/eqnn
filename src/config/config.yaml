@@ -20,7 +20,7 @@ DATA:
   # random_d4_batch). Off by default: it disables train-set caching, so
   # every epoch re-runs the expensive embedding_unitary encoding instead
   # of reusing a cached copy — noticeably slower per epoch when on.
-  augment_train: False
+  augment_train: "none"  # one of: none, online, once — see src/data_loading.py
   img_size: 16
   data_dir: "data"
 
