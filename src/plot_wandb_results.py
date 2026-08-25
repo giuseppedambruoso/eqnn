@@ -7,6 +7,12 @@ Usage (reuses the eqnn image, which already has wandb + the .env API key
 wired via docker-compose.yml's env_file):
 
     docker compose run --rm --entrypoint python3 eqnn src/plot_wandb_results.py --architecture config6
+    docker compose run --rm --entrypoint python3 eqnn src/plot_wandb_results.py --architecture config6 --readout x0_xhalf
+
+Always prints a diagnostic table first (N, augment_train, readout, the
+exact seeds found) — check it before trusting the plot: a combination
+with fewer seeds than expected, or a missing row entirely, means those
+runs either weren't launched or aren't finished/logged in wandb yet.
 
 Output: a PNG (default val_accuracy_vs_N.png) saved in the working
 directory (mount ./outputs or similar if you want it to land on the host).
@@ -33,6 +39,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--architecture", default="config6")
     parser.add_argument(
+        "--readout",
+        default=None,
+        help="Only plot this readout (e.g. x0_xhalf or avg_x). "
+        "Default: plot every readout found, one row per value.",
+    )
+    parser.add_argument(
         "--project", default=None, help="Defaults to $WANDB_PROJECT or 'eqnn'."
     )
     parser.add_argument(
@@ -44,13 +56,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _normalize_bool(value: Any) -> Any:
+    """wandb's API sometimes hands back config booleans as the strings
+    "true"/"false" instead of Python bool, depending on how they were
+    logged — normalize so (True, False) grouping keys actually match."""
+    if isinstance(value, str):
+        if value.lower() == "true":
+            return True
+        if value.lower() == "false":
+            return False
+    return value
+
+
 def _fetch_grouped_results(
     architecture: str, project: str, entity: str | None
 ) -> dict[tuple[Any, Any], dict[int, dict[str, list[float]]]]:
-    """Returns {(augment_train, readout): {N: {"val": [...], "val_aug": [...]}}},
-    one accuracy value per finished run with a usable summary — runs that
-    crashed or never reached the final validation step (no val/accuracy in
-    their summary) are silently skipped.
+    """Returns {(augment_train, readout): {N: {"val": [...], "val_aug": [...],
+    "seed": [...]}}}, one accuracy value per finished run with a usable
+    summary — runs that crashed or never reached the final validation step
+    (no val/accuracy in their summary) are silently skipped.
     """
     api = wandb.Api()
     resolved_entity = entity or api.default_entity
@@ -58,23 +82,43 @@ def _fetch_grouped_results(
 
     runs = api.runs(path, filters={"config.architecture": architecture})
 
-    grouped: dict[tuple[Any, Any], dict[int, dict[str, list[float]]]] = defaultdict(
-        lambda: defaultdict(lambda: {"val": [], "val_aug": []})
+    grouped: dict[tuple[Any, Any], dict[int, dict[str, list[Any]]]] = defaultdict(
+        lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": []})
     )
     for run in runs:
         cfg = run.config
         summary = run.summary
         N = cfg.get("N")
-        augment_train = cfg.get("augment_train")
+        augment_train = _normalize_bool(cfg.get("augment_train"))
         readout = cfg.get("readout")
+        seed = cfg.get("seed")
         val_acc = summary.get("val/accuracy")
         val_aug_acc = summary.get("val_aug/accuracy")
         if None in (N, augment_train, val_acc, val_aug_acc):
             continue
-        grouped[(augment_train, readout)][N]["val"].append(val_acc)
-        grouped[(augment_train, readout)][N]["val_aug"].append(val_aug_acc)
+        bucket = grouped[(augment_train, readout)][N]
+        bucket["val"].append(val_acc)
+        bucket["val_aug"].append(val_aug_acc)
+        bucket["seed"].append(seed)
 
     return grouped
+
+
+def _print_diagnostics(
+    grouped: dict[tuple[Any, Any], dict[int, dict[str, list[float]]]],
+) -> None:
+    print(f"{'augment_train':<15}{'readout':<12}{'N':<8}{'n_seeds':<9}seeds")
+    print("-" * 70)
+    for (augment_train, readout), by_n in sorted(
+        grouped.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]))
+    ):
+        for N, bucket in sorted(by_n.items()):
+            seeds = sorted(bucket["seed"])
+            print(
+                f"{str(augment_train):<15}{str(readout):<12}{N:<8}"
+                f"{len(seeds):<9}{seeds}"
+            )
+    print("-" * 70)
 
 
 def main() -> None:
@@ -87,6 +131,13 @@ def main() -> None:
             f"No finished runs with a logged val/accuracy found for "
             f"architecture={args.architecture!r} in project {project!r}."
         )
+
+    _print_diagnostics(grouped)
+
+    if args.readout is not None:
+        grouped = {k: v for k, v in grouped.items() if k[1] == args.readout}
+        if not grouped:
+            raise SystemExit(f"No runs found with readout={args.readout!r}.")
 
     readouts = sorted({key[1] for key in grouped}, key=str)
     fig, axes = plt.subplots(
