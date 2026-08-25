@@ -1,9 +1,10 @@
 """Plots val/accuracy and val_aug/accuracy vs N from wandb runs, averaged
-over seeds. One row of plots per readout value found (or a single row if
---readout restricts to one); one line per (architecture, augment_train)
-combination — color = architecture, solid/dashed = augment_train
-True/False — so multiple architectures overlay directly comparable on the
-same panel. Doesn't touch the training pipeline — a standalone analysis
+over seeds, all as ONE single plot. Distinguishes (up to) three
+dimensions visually: color = architecture, solid/dashed line = whether
+augment_train was on, marker shape = val vs val_aug. Requires a single
+readout (pass --readout, or it's auto-picked when only one is present) —
+mixing readouts on one axis would conflate two different measured
+quantities. Doesn't touch the training pipeline — a standalone analysis
 utility over already-logged wandb runs.
 
 Usage (reuses the eqnn image, which already has wandb + the .env API key
@@ -34,6 +35,8 @@ import matplotlib.pyplot as plt
 import wandb
 
 AUGMENT_TRAIN_LINESTYLES = {True: "-", False: "--"}
+METRIC_MARKERS = {"val": "o", "val_aug": "s"}
+METRIC_LABELS = {"val": "val/accuracy", "val_aug": "val_aug/accuracy"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -166,52 +169,53 @@ def main() -> None:
     architectures = sorted({key[0] for key in grouped})
     colors = {arch: f"C{i}" for i, arch in enumerate(architectures)}
     readouts = sorted({key[2] for key in grouped}, key=str)
+    if len(readouts) > 1:
+        raise SystemExit(
+            f"Found multiple readouts {readouts} — a single combined plot "
+            "would conflate two different measured quantities. Pass "
+            "--readout to pick one."
+        )
+    readout = readouts[0]
 
-    fig, axes = plt.subplots(
-        len(readouts), 2, figsize=(12, 5 * len(readouts)), squeeze=False
-    )
+    fig, ax = plt.subplots(figsize=(10, 7))
 
-    for row, readout in enumerate(readouts):
-        ax_val, ax_val_aug = axes[row]
-        for architecture in architectures:
-            for augment_train in (True, False):
-                key = (architecture, augment_train, readout)
-                if key not in grouped:
-                    continue
-                points = sorted(grouped[key].items())
-                Ns = [p[0] for p in points]
-                val_means = [sum(p[1]["val"]) / len(p[1]["val"]) for p in points]
-                val_aug_means = [
-                    sum(p[1]["val_aug"]) / len(p[1]["val_aug"]) for p in points
-                ]
-                n_seeds = [len(p[1]["val"]) for p in points]
-                style = {
-                    "color": colors[architecture],
-                    "linestyle": AUGMENT_TRAIN_LINESTYLES[augment_train],
-                    "marker": "o",
-                }
+    for architecture in architectures:
+        for augment_train in (True, False):
+            key = (architecture, augment_train, readout)
+            if key not in grouped:
+                continue
+            points = sorted(grouped[key].items())
+            Ns = [p[0] for p in points]
+            means = {
+                metric: [sum(p[1][metric]) / len(p[1][metric]) for p in points]
+                for metric in ("val", "val_aug")
+            }
+            n_seeds = [len(p[1]["val"]) for p in points]
+            for metric in ("val", "val_aug"):
                 label = (
-                    f"{architecture}, augment_train={augment_train} (n_seeds={n_seeds})"
+                    f"{architecture}, augment_train={augment_train}, "
+                    f"{METRIC_LABELS[metric]} (n_seeds={n_seeds})"
                 )
-                ax_val.plot(Ns, val_means, label=label, **style)
-                ax_val_aug.plot(Ns, val_aug_means, label=label, **style)
+                ax.plot(
+                    Ns,
+                    means[metric],
+                    label=label,
+                    color=colors[architecture],
+                    linestyle=AUGMENT_TRAIN_LINESTYLES[augment_train],
+                    marker=METRIC_MARKERS[metric],
+                )
 
-        ax_val.set_title(f"val/accuracy vs N — readout={readout}")
-        ax_val.set_xlabel("N")
-        ax_val.set_ylabel("val/accuracy")
-        ax_val.legend(fontsize="small")
-        ax_val.grid(True, alpha=0.3)
-
-        ax_val_aug.set_title(f"val_aug/accuracy vs N — readout={readout}")
-        ax_val_aug.set_xlabel("N")
-        ax_val_aug.set_ylabel("val_aug/accuracy")
-        ax_val_aug.legend(fontsize="small")
-        ax_val_aug.grid(True, alpha=0.3)
-
-    fig.suptitle(
+    ax.set_title(
         f"{', '.join(architectures)}: accuracy vs N, averaged over seeds "
-        "(solid=augment_train, dashed=no augment_train)"
+        f"— readout={readout}\n"
+        "(colore=architettura, tratteggio=augment_train, "
+        "●=val ■=val_aug)"
     )
+    ax.set_xlabel("N")
+    ax.set_ylabel("accuracy")
+    ax.legend(fontsize="small", loc="best")
+    ax.grid(True, alpha=0.3)
+
     fig.tight_layout()
     fig.savefig(args.output, dpi=150)
     print(f"Saved to {args.output}")
