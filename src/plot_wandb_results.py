@@ -34,7 +34,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import wandb
 
-AUGMENT_TRAIN_LINESTYLES = {True: "-", False: "--"}
+METRIC_LINESTYLES = {"val": "-", "val_aug": "--"}
 METRIC_MARKERS = {"val": "o", "val_aug": "s"}
 METRIC_LABELS = {"val": "val/accuracy", "val_aug": "val_aug/accuracy"}
 
@@ -177,10 +177,11 @@ def main() -> None:
         )
     readout = readouts[0]
 
-    fig, ax = plt.subplots(figsize=(10, 7))
+    fig, (ax_true, ax_false) = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
+    panels = {True: ax_true, False: ax_false}
 
-    for architecture in architectures:
-        for augment_train in (True, False):
+    for augment_train, ax in panels.items():
+        for architecture in architectures:
             key = (architecture, augment_train, readout)
             if key not in grouped:
                 continue
@@ -192,30 +193,27 @@ def main() -> None:
             }
             n_seeds = [len(p[1]["val"]) for p in points]
             for metric in ("val", "val_aug"):
-                label = (
-                    f"{architecture}, augment_train={augment_train}, "
-                    f"{METRIC_LABELS[metric]} (n_seeds={n_seeds})"
-                )
+                label = f"{architecture}, {METRIC_LABELS[metric]} (n_seeds={n_seeds})"
                 ax.plot(
                     Ns,
                     means[metric],
                     label=label,
                     color=colors[architecture],
-                    linestyle=AUGMENT_TRAIN_LINESTYLES[augment_train],
+                    linestyle=METRIC_LINESTYLES[metric],
                     marker=METRIC_MARKERS[metric],
                 )
+        ax.set_title(f"augment_train={augment_train}")
+        ax.set_xlabel("N")
+        ax.legend(fontsize="small", loc="best")
+        ax.grid(True, alpha=0.3)
 
-    ax.set_title(
+    ax_true.set_ylabel("accuracy")
+
+    fig.suptitle(
         f"{', '.join(architectures)}: accuracy vs N, averaged over seeds "
         f"— readout={readout}\n"
-        "(colore=architettura, tratteggio=augment_train, "
-        "●=val ■=val_aug)"
+        "(colore=architettura, continua ●=val, tratteggiata ■=val_aug)"
     )
-    ax.set_xlabel("N")
-    ax.set_ylabel("accuracy")
-    ax.legend(fontsize="small", loc="best")
-    ax.grid(True, alpha=0.3)
-
     fig.tight_layout()
     fig.savefig(args.output, dpi=150)
     print(f"Saved to {args.output}")
