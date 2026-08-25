@@ -107,18 +107,24 @@ def _fetch_grouped_results(
 def _print_diagnostics(
     grouped: dict[tuple[Any, Any], dict[int, dict[str, list[float]]]],
 ) -> None:
-    print(f"{'augment_train':<15}{'readout':<12}{'N':<8}{'n_seeds':<9}seeds")
-    print("-" * 70)
+    header = (
+        f"{'augment_train':<15}{'readout':<12}{'N':<8}{'n_seeds':<9}"
+        f"{'mean_val':<10}{'mean_val_aug':<14}seeds"
+    )
+    print(header)
+    print("-" * len(header))
     for (augment_train, readout), by_n in sorted(
         grouped.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]))
     ):
         for N, bucket in sorted(by_n.items()):
             seeds = sorted(bucket["seed"])
+            mean_val = sum(bucket["val"]) / len(bucket["val"])
+            mean_val_aug = sum(bucket["val_aug"]) / len(bucket["val_aug"])
             print(
                 f"{str(augment_train):<15}{str(readout):<12}{N:<8}"
-                f"{len(seeds):<9}{seeds}"
+                f"{len(seeds):<9}{mean_val:<10.4f}{mean_val_aug:<14.4f}{seeds}"
             )
-    print("-" * 70)
+    print("-" * len(header))
 
 
 def main() -> None:
