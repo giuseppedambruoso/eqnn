@@ -1,10 +1,11 @@
 """Plots val/accuracy and val_aug/accuracy vs N from wandb runs, averaged
-over seeds, as three side-by-side panels (one per augment_train mode:
-none / online / once). Distinguishes: color = architecture, marker shape
-= val vs val_aug. Requires a single readout (pass --readout, or it's
-auto-picked when only one is present) — mixing readouts on one axis would
-conflate two different measured quantities. Doesn't touch the training
-pipeline — a standalone analysis utility over already-logged wandb runs.
+over seeds with ±SEM (standard error of the mean) error bars, as three
+side-by-side panels (one per augment_train mode: none / online / once).
+Distinguishes: color = architecture, marker shape = val vs val_aug.
+Requires a single readout (pass --readout, or it's auto-picked when only
+one is present) — mixing readouts on one axis would conflate two
+different measured quantities. Doesn't touch the training pipeline — a
+standalone analysis utility over already-logged wandb runs.
 
 Older runs logged augment_train as a bool, before "once" existed —
 True/"true" is normalized to "online" and False/"false" to "none" (they
@@ -29,6 +30,7 @@ directory (mount ./outputs or similar if you want it to land on the host).
 
 import argparse
 import os
+import statistics
 from collections import defaultdict
 from typing import Any
 
@@ -41,6 +43,14 @@ import wandb
 METRIC_LINESTYLES = {"val": "-", "val_aug": "--"}
 METRIC_MARKERS = {"val": "o", "val_aug": "s"}
 METRIC_LABELS = {"val": "val/accuracy", "val_aug": "val_aug/accuracy"}
+
+
+def _sem(values: list[float]) -> float:
+    """Standard error of the mean — 0 for a single seed (no spread to
+    estimate), not NaN (which would break the error bars)."""
+    if len(values) < 2:
+        return 0.0
+    return statistics.stdev(values) / len(values) ** 0.5
 
 
 def parse_args() -> argparse.Namespace:
@@ -198,16 +208,23 @@ def main() -> None:
                 metric: [sum(p[1][metric]) / len(p[1][metric]) for p in points]
                 for metric in ("val", "val_aug")
             }
+            sems = {
+                metric: [_sem(p[1][metric]) for p in points]
+                for metric in ("val", "val_aug")
+            }
             n_seeds = [len(p[1]["val"]) for p in points]
             for metric in ("val", "val_aug"):
                 label = f"{architecture}, {METRIC_LABELS[metric]} (n_seeds={n_seeds})"
-                ax.plot(
+                ax.errorbar(
                     Ns,
                     means[metric],
+                    yerr=sems[metric],
                     label=label,
                     color=colors[architecture],
                     linestyle=METRIC_LINESTYLES[metric],
                     marker=METRIC_MARKERS[metric],
+                    capsize=3,
+                    elinewidth=1,
                 )
         ax.set_title(f"augment_train={augment_train}")
         ax.set_xlabel("N")
@@ -219,7 +236,8 @@ def main() -> None:
     fig.suptitle(
         f"{', '.join(architectures)}: accuracy vs N, averaged over seeds "
         f"— readout={readout}\n"
-        "(colore=architettura, continua ●=val, tratteggiata ■=val_aug)"
+        "(colore=architettura, continua ●=val, tratteggiata ■=val_aug, "
+        "barre=±SEM sui seed)"
     )
     fig.tight_layout()
     fig.savefig(args.output, dpi=150)
