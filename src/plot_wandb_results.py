@@ -7,6 +7,14 @@ one is present) — mixing readouts on one axis would conflate two
 different measured quantities. Doesn't touch the training pipeline — a
 standalone analysis utility over already-logged wandb runs.
 
+For each (architecture, N), only the seeds present in EVERY augment_train
+mode with data at that point are averaged — same architecture + same
+seed means the same initial parameters, so this keeps the none/online/once
+comparison paired instead of letting a mode with extra seeds (or missing
+some) skew the mean relative to the others. See _restrict_to_common_seeds.
+The diagnostic table printed below still shows the raw, unrestricted
+seed counts, so you can see what got dropped.
+
 Older runs logged augment_train as a bool, before "once" existed —
 True/"true" is normalized to "online" and False/"false" to "none" (they
 were the same behavior, just re-randomized every epoch vs not), so those
@@ -164,6 +172,42 @@ def _print_diagnostics(grouped: Grouped) -> None:
     print("-" * len(header))
 
 
+def _restrict_to_common_seeds(grouped: Grouped) -> Grouped:
+    """Restricts every (architecture, N) point to only the seeds present
+    in EVERY augment_train mode that has data for that point — same
+    architecture + same seed means the same initial parameters, so this
+    makes the none/online/once comparison at a given N a fair, paired
+    one instead of mixing in extra seeds that only some panels happen to
+    have. Assumes readout is already fixed to a single value (see main:
+    this runs after the --readout filter)."""
+    architectures = {key[0] for key in grouped}
+    restricted: Grouped = defaultdict(
+        lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": []})
+    )
+    for architecture in architectures:
+        keys_for_arch = [key for key in grouped if key[0] == architecture]
+        n_values = {N for key in keys_for_arch for N in grouped[key]}
+        for N in n_values:
+            buckets = [grouped[key][N] for key in keys_for_arch if N in grouped[key]]
+            common_seeds = set.intersection(*(set(b["seed"]) for b in buckets))
+            for key in keys_for_arch:
+                if N not in grouped[key]:
+                    continue
+                bucket = grouped[key][N]
+                keep = [i for i, s in enumerate(bucket["seed"]) if s in common_seeds]
+                if not keep:
+                    # No seed survives the intersection for this point —
+                    # drop it entirely rather than leaving an empty bucket
+                    # (which would divide by zero when averaged later).
+                    continue
+                restricted[key][N] = {
+                    "val": [bucket["val"][i] for i in keep],
+                    "val_aug": [bucket["val_aug"][i] for i in keep],
+                    "seed": [bucket["seed"][i] for i in keep],
+                }
+    return restricted
+
+
 def main() -> None:
     args = parse_args()
     project = args.project or os.environ.get("WANDB_PROJECT", "eqnn")
@@ -192,6 +236,8 @@ def main() -> None:
             "--readout to pick one."
         )
     readout = readouts[0]
+
+    grouped = _restrict_to_common_seeds(grouped)
 
     augment_train_modes = ["none", "online", "once"]
     fig, axes = plt.subplots(1, 3, figsize=(21, 7), sharey=True)
@@ -237,7 +283,7 @@ def main() -> None:
         f"{', '.join(architectures)}: accuracy vs N, averaged over seeds "
         f"— readout={readout}\n"
         "(colore=architettura, continua ●=val, tratteggiata ■=val_aug, "
-        "barre=±SEM sui seed)"
+        "barre=±SEM sui seed comuni a none/online/once)"
     )
     fig.tight_layout()
     fig.savefig(args.output, dpi=150)
