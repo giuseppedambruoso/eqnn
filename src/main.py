@@ -50,6 +50,8 @@ def main(cfg: DictConfig) -> None:
     img_size = cfg.DATA.img_size
     data_dir = cfg.DATA.data_dir
     augment_train = cfg.DATA.augment_train
+    class1 = cfg.DATA.class1
+    class2 = cfg.DATA.class2
 
     batch_size = int(N // 10)
     num_workers = cfg.GENERAL.num_workers
@@ -66,6 +68,8 @@ def main(cfg: DictConfig) -> None:
             SEED,
             verbose,
             augment_train,
+            class1,
+            class2,
         )
     else:
         raise ValueError(
@@ -95,6 +99,8 @@ def main(cfg: DictConfig) -> None:
         "dataset": dataset,
         "img_size": img_size,
         "augment_train": augment_train,
+        "class1": class1,
+        "class2": class2,
     }
     config_hash = hashlib.sha1(
         json.dumps(config_identity, sort_keys=True).encode()
@@ -134,6 +140,8 @@ def main(cfg: DictConfig) -> None:
             "readout": readout,
             "img_size": img_size,
             "augment_train": augment_train,
+            "class1": class1,
+            "class2": class2,
         },
         wandb_extra_config={
             "device": device,
@@ -144,6 +152,8 @@ def main(cfg: DictConfig) -> None:
             "is_equivariant": is_equivariant,
             "augment_train": augment_train,
             "img_size": img_size,
+            "class1": class1,
+            "class2": class2,
         },
         verbose=verbose,
     )

@@ -14,6 +14,8 @@ GENERAL:
 DATA:
   N: 20  # number of images in the training set
   dataset: "mnist"
+  class1: 3  # first MNIST digit class (remapped to label 0)
+  class2: 4  # second MNIST digit class (remapped to label 1)
   augment_test: True
   # none: no augmentation. online: a random p4m transform re-randomized
   # every epoch (matches the reference d4_eqcnn training script's

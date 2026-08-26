@@ -1,7 +1,11 @@
 import pytest
 import torch
 
-from src.data_loading import load_mnist_data, load_mnist_data_full
+from src.data_loading import (
+    get_balanced_subset_indices,
+    load_mnist_data,
+    load_mnist_data_full,
+)
 
 
 def verify_class_balance(dataloader, tolerance=0):
@@ -123,6 +127,38 @@ def test_no_augment_train_is_cached():
     dataset = train_loader.dataset
     for i in range(5):
         assert torch.equal(dataset[i][0], dataset[i][0])
+
+
+def test_get_balanced_subset_indices_selects_requested_classes():
+    """Not hardcoded to digits 3/4 — any class1/class2 pair must select
+    only indices belonging to those two classes, e.g. 4 vs 5."""
+    targets = torch.tensor([3, 4, 5, 4, 5, 3, 4, 5, 4, 5])
+    generator = torch.Generator().manual_seed(0)
+
+    indices = get_balanced_subset_indices(targets, 4, 5, N=4, generator=generator)
+
+    selected = targets[indices]
+    assert len(indices) == 4
+    assert set(selected.tolist()) <= {4, 5}
+    assert (selected == 4).sum() == (selected == 5).sum() == 2
+
+
+def test_load_mnist_data_full_supports_non_default_classes():
+    """class1/class2 must work for any digit pair, not just the 3-vs-4
+    default (e.g. 4 vs 5)."""
+    train_loader, test_loader, aug_test_loader = load_mnist_data_full(
+        batch_size=10,
+        N=20,
+        num_workers=0,
+        img_size=16,
+        data_dir="data",
+        seed=42,
+        class1=4,
+        class2=5,
+    )
+    assert verify_class_balance(train_loader) <= 0
+    assert verify_class_balance(test_loader) <= 0
+    assert verify_class_balance(aug_test_loader) <= 0
 
 
 def test_invalid_augment_train_raises():

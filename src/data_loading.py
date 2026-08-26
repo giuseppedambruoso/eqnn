@@ -103,6 +103,8 @@ def load_mnist_data(
     seed: int = 42,
     verbose: bool = False,
     augment_test: bool = False,
+    class1: int = 3,
+    class2: int = 4,
 ) -> tuple[DataLoader, DataLoader]:
 
     torch.manual_seed(seed)
@@ -123,7 +125,7 @@ def load_mnist_data(
         test_transform_list.append(D4Augmentation(p=1))
     test_transform = transforms.Compose(test_transform_list + post_transforms)
 
-    switch = {3: 0, 4: 1, 0: 3, 1: 4}
+    switch = {class1: 0, class2: 1}
 
     def tar_transform(y: int) -> int:
         return switch.get(y, y)
@@ -145,10 +147,10 @@ def load_mnist_data(
 
     g_select = torch.Generator().manual_seed(seed)
     train_balanced_idx = get_balanced_subset_indices(
-        train_full.targets, 3, 4, N, g_select
+        train_full.targets, class1, class2, N, g_select
     )
     test_balanced_idx = get_balanced_subset_indices(
-        test_full.targets, 3, 4, N, g_select
+        test_full.targets, class1, class2, N, g_select
     )
 
     train_final = _materialize(Subset(train_full, train_balanced_idx))
@@ -183,6 +185,8 @@ def load_mnist_data_full(
     seed: int = 42,
     verbose: bool = False,
     augment_train: str = "none",
+    class1: int = 3,
+    class2: int = 4,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Like load_mnist_data, but returns (train_loader, test_loader,
     aug_test_loader) from a single call. Calling load_mnist_data twice
@@ -210,6 +214,9 @@ def load_mnist_data_full(
         doesn't get exposed to the diversity that makes augmentation act
         as a regularizer against overfitting to a specific orientation —
         it's closer to training on a different, but still fixed, dataset.
+
+    class1/class2 select which two original MNIST digit classes to use
+    (remapped to labels 0/1 respectively) — default 3 vs 4.
     """
     if augment_train not in AUGMENT_TRAIN_MODES:
         raise ValueError(
@@ -235,7 +242,7 @@ def load_mnist_data_full(
         base_transforms + [D4Augmentation(p=1)] + post_transforms
     )
 
-    switch = {3: 0, 4: 1, 0: 3, 1: 4}
+    switch = {class1: 0, class2: 1}
 
     def tar_transform(y: int) -> int:
         return switch.get(y, y)
@@ -264,10 +271,10 @@ def load_mnist_data_full(
 
     g_select = torch.Generator().manual_seed(seed)
     train_balanced_idx = get_balanced_subset_indices(
-        train_full.targets, 3, 4, N, g_select
+        train_full.targets, class1, class2, N, g_select
     )
     test_balanced_idx = get_balanced_subset_indices(
-        test_full.targets, 3, 4, N, g_select
+        test_full.targets, class1, class2, N, g_select
     )
 
     train_subset = Subset(train_full, train_balanced_idx)
