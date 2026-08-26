@@ -24,6 +24,25 @@ def test_restricts_to_seeds_common_across_augment_train_modes():
         assert restricted[key][40]["seed"] == [1, 2]
 
 
+def test_restricts_across_architectures_too():
+    """A series with extra seeds no other architecture reaches yet must
+    not keep them — every line in the final plot, including different
+    colors (architectures), must reflect the same set of trained models."""
+    grouped = {
+        ("config6", "none", "x0_xhalf"): {40: _bucket([1, 2, 3, 4, 5, 6, 7])},
+        ("config6", "online", "x0_xhalf"): {40: _bucket([1, 2, 3, 4, 5, 6, 7])},
+        ("config6", "once", "x0_xhalf"): {40: _bucket([1, 2, 3, 4, 5, 6, 7])},
+        ("config7", "none", "x0_xhalf"): {40: _bucket([1, 2, 3, 4, 5, 6])},
+        ("config7", "online", "x0_xhalf"): {40: _bucket([1, 2, 3, 4, 5, 6])},
+        ("config7", "once", "x0_xhalf"): {40: _bucket([1, 2, 3, 4, 5, 6])},
+    }
+
+    restricted = _restrict_to_common_seeds(grouped)
+
+    for key in grouped:
+        assert restricted[key][40]["seed"] == [1, 2, 3, 4, 5, 6]
+
+
 def test_keeps_full_seed_set_when_only_one_mode_present():
     grouped = {("config6", "none", "x0_xhalf"): {40: _bucket([1, 2, 3])}}
 
