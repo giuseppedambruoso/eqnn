@@ -46,6 +46,20 @@ def test_identity_key_matches_only_when_every_field_matches():
     assert a != c
 
 
+def test_identity_key_normalizes_legacy_bool_augment_train():
+    """Runs logged before "once" existed used a bool for augment_train —
+    False must match "none" and True must match "online" so an old and a
+    new run of the otherwise-same config are recognized as duplicates
+    instead of silently splitting into two separate identity groups."""
+    legacy_false = _identity_key(_full_config(augment_train=False))
+    modern_none = _identity_key(_full_config(augment_train="none"))
+    legacy_true = _identity_key(_full_config(augment_train=True))
+    modern_online = _identity_key(_full_config(augment_train="online"))
+    assert legacy_false == modern_none
+    assert legacy_true == modern_online
+    assert legacy_false != legacy_true
+
+
 def test_pick_keep_and_drop_prefers_finished_run():
     finished = FakeRun(
         id="finished", created_at="2024-01-01", summary={"val/accuracy": 0.9}

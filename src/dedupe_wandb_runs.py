@@ -86,11 +86,31 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _normalize_augment_train(value: Any) -> Any:
+    """Runs logged before the "once" mode existed used a plain bool
+    (True/False) for augment_train instead of today's "online"/"none" —
+    without this, an old and a new run of the exact same config would get
+    different identity keys and dedup would miss the duplicate entirely
+    (see plot_wandb_results.py, which needs the same normalization)."""
+    if isinstance(value, bool):
+        return "online" if value else "none"
+    if isinstance(value, str) and value.lower() in ("true", "false"):
+        return "online" if value.lower() == "true" else "none"
+    return value
+
+
 def _identity_key(cfg: dict[str, Any]) -> tuple[Any, ...] | None:
     """None if any identity field is missing — such a run can't be safely
     compared, so it's excluded from dedup entirely rather than risking a
     false-positive match on missing (None, None, ...) fields."""
-    values = tuple(cfg.get(field) for field in IDENTITY_FIELDS)
+    values = tuple(
+        (
+            _normalize_augment_train(cfg.get(field))
+            if field == "augment_train"
+            else cfg.get(field)
+        )
+        for field in IDENTITY_FIELDS
+    )
     return None if None in values else values
 
 
@@ -115,19 +135,31 @@ def main() -> None:
     resolved_entity = args.entity or api.default_entity
     path = f"{resolved_entity}/{project}" if resolved_entity else project
 
-    filters = (
-        {"config.architecture": {"$in": args.architecture}} if args.architecture else {}
-    )
-    runs = api.runs(path, filters=filters)
-
+    # One query per architecture (matching plot_wandb_results.py's proven
+    # pattern) rather than a single "$in" filter — kept simple/plain-equality
+    # since that's what's known to actually work against wandb's API.
+    architectures = args.architecture
+    seen_ids: set[str] = set()
     groups: dict[tuple[Any, ...], list[RunLike]] = defaultdict(list)
     skipped = 0
-    for run in runs:
-        key = _identity_key(run.config)
-        if key is None:
-            skipped += 1
-            continue
-        groups[key].append(run)
+    run_iterables = (
+        [
+            api.runs(path, filters={"config.architecture": arch})
+            for arch in architectures
+        ]
+        if architectures
+        else [api.runs(path)]
+    )
+    for runs in run_iterables:
+        for run in runs:
+            if run.id in seen_ids:
+                continue
+            seen_ids.add(run.id)
+            key = _identity_key(run.config)
+            if key is None:
+                skipped += 1
+                continue
+            groups[key].append(run)
 
     if skipped:
         print(f"Skipped {skipped} run(s) missing one or more identity fields.")
