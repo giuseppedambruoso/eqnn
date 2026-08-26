@@ -29,6 +29,15 @@ def test_identity_key_missing_field_is_none():
     assert _identity_key(cfg) is None
 
 
+def test_identity_key_does_not_require_img_size():
+    """img_size is never logged into run.config by train.py's wandb.init
+    (see main.py) — it must NOT be an identity field, or every historical
+    run (missing it) would be silently excluded from dedup, as happened
+    before this field list was pruned to only fields train.py actually
+    logs."""
+    assert "img_size" not in IDENTITY_FIELDS
+
+
 def test_identity_key_matches_only_when_every_field_matches():
     a = _identity_key(_full_config())
     b = _identity_key(_full_config())

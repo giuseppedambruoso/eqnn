@@ -142,6 +142,7 @@ def main(cfg: DictConfig) -> None:
             "readout": readout,
             "is_equivariant": is_equivariant,
             "augment_train": augment_train,
+            "img_size": img_size,
         },
         verbose=verbose,
     )

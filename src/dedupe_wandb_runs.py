@@ -28,7 +28,6 @@ IDENTITY_FIELDS = [
     "architecture",
     "N",
     "dataset",
-    "img_size",
     "num_qubits",
     "reps",
     "device",
