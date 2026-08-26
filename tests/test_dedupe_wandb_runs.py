@@ -60,6 +60,28 @@ def test_identity_key_normalizes_legacy_bool_augment_train():
     assert legacy_false != legacy_true
 
 
+def test_identity_key_defaults_missing_class1_class2_to_3_and_4():
+    """Runs logged before DATA.class1/class2 existed never had these
+    fields at all — they must default to (3, 4), the only pair ever used
+    back then, matching a run that explicitly logged class1=3/class2=4,
+    instead of being excluded from dedup entirely."""
+    cfg = _full_config()
+    del cfg["class1"]
+    del cfg["class2"]
+    legacy = _identity_key(cfg)
+    modern = _identity_key(_full_config(class1=3, class2=4))
+    assert legacy == modern
+
+
+def test_identity_key_distinguishes_different_class_pairs():
+    """A 3-vs-4 run and an otherwise-identical 4-vs-5 run must NOT be
+    treated as duplicates of each other — they're different
+    classification tasks, not a re-run of the same job."""
+    pair_3v4 = _identity_key(_full_config(class1=3, class2=4))
+    pair_4v5 = _identity_key(_full_config(class1=4, class2=5))
+    assert pair_3v4 != pair_4v5
+
+
 def test_pick_keep_and_drop_prefers_finished_run():
     finished = FakeRun(
         id="finished", created_at="2024-01-01", summary={"val/accuracy": 0.9}

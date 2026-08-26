@@ -37,6 +37,8 @@ IDENTITY_FIELDS = [
     "patience",
     "min_delta",
     "augment_train",
+    "class1",
+    "class2",
     "seed",
 ]
 
@@ -99,6 +101,16 @@ def _normalize_augment_train(value: Any) -> Any:
     return value
 
 
+_FIELD_DEFAULTS: dict[str, Any] = {
+    # class1/class2 didn't exist before DATA.class1/class2 was added — 3
+    # vs 4 was the only pair ever used back then, so old runs default to
+    # that instead of being excluded from dedup entirely (see
+    # plot_wandb_results.py, which needs the same default).
+    "class1": 3,
+    "class2": 4,
+}
+
+
 def _identity_key(cfg: dict[str, Any]) -> tuple[Any, ...] | None:
     """None if any identity field is missing — such a run can't be safely
     compared, so it's excluded from dedup entirely rather than risking a
@@ -107,7 +119,7 @@ def _identity_key(cfg: dict[str, Any]) -> tuple[Any, ...] | None:
         (
             _normalize_augment_train(cfg.get(field))
             if field == "augment_train"
-            else cfg.get(field)
+            else cfg.get(field, _FIELD_DEFAULTS.get(field))
         )
         for field in IDENTITY_FIELDS
     )
