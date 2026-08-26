@@ -1,0 +1,47 @@
+{
+  "run_name": "config6_N=80_seed=3",
+  "seed": 3,
+  "N": 80,
+  "dataset": "mnist",
+  "epochs_configured": 40,
+  "epochs_completed": 40,
+  "convergence_epoch": 16,
+  "training_time_sec": 922.5093386173248,
+  "epoch_time_sec": 23.06273346543312,
+  "train_loss": 0.6565706931035199,
+  "train_accuracy": 0.6874999999140625,
+  "val_loss": 0.6612309735670184,
+  "val_accuracy": 0.6624999999171876,
+  "val_aug_loss": 0.6612309734860832,
+  "val_aug_accuracy": 0.6624999999171876,
+  "param_names": [
+    "g0_RX_w0",
+    "g2_RX_w1",
+    "g4_PAULIROT_w0-1-4-5",
+    "g20_RX_w0",
+    "g22_RX_w2",
+    "g24_PAULIROT_w0-2-4-6"
+  ],
+  "final_params": [
+    0.04196282476186752,
+    -0.06297552585601807,
+    -1.6722545623779297,
+    -1.8380964994430542,
+    0.9068174362182617,
+    1.4723715782165527
+  ],
+  "p4m_equivariance": {
+    "checked": true,
+    "is_invariant": true,
+    "max_deviation": 6.245004513516506e-17,
+    "error": null
+  },
+  "config": {
+    "device": "default.qubit",
+    "num_qubits": 8,
+    "reps": 2,
+    "architecture": "config6",
+    "readout": null,
+    "img_size": 16
+  }
+}

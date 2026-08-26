@@ -30,16 +30,16 @@ dist/
 .idea/
 
 # data
-data/
+/data/
 
 # outputs
-outputs/
+/outputs/
 
 # multirun
-multirun/
+/multirun/
 
 # wandb local run data
-wandb/
+/wandb/
 
 # local env vars / secrets
 .env

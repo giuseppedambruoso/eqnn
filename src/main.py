@@ -133,6 +133,7 @@ def main(cfg: DictConfig) -> None:
             "architecture": architecture,
             "readout": readout,
             "img_size": img_size,
+            "augment_train": augment_train,
         },
         wandb_extra_config={
             "device": device,
