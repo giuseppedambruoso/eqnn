@@ -10,6 +10,7 @@ from src.plot_wandb_results import (
     _find_local_candidates,
     _prune_stale_local_runs,
     _restrict_to_common_seeds,
+    _seed_and_n_allowed,
 )
 
 
@@ -163,7 +164,7 @@ def test_fetch_grouped_results_local_reads_underscore_keys(tmp_path: Path):
     _write_summary(tmp_path / "multirun" / "job0")
 
     grouped = _fetch_grouped_results_local(
-        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun")
+        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun"), 1, 10, [40]
     )
 
     key = ("config6", "none", "x0_xhalf", 3, 4)
@@ -176,7 +177,7 @@ def test_fetch_grouped_results_local_filters_by_architecture(tmp_path: Path):
     _write_summary(tmp_path / "multirun" / "job0", config={"architecture": "config7"})
 
     grouped = _fetch_grouped_results_local(
-        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun")
+        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun"), 1, 10, [40]
     )
 
     assert grouped == {}
@@ -187,6 +188,9 @@ def test_fetch_grouped_results_local_skips_missing_dirs(tmp_path: Path):
         ["config6"],
         str(tmp_path / "nonexistent_outputs"),
         str(tmp_path / "nonexistent_multirun"),
+        1,
+        10,
+        [40],
     )
     assert grouped == {}
 
@@ -206,7 +210,7 @@ def test_prune_stale_local_runs_deletes_older_duplicate_directory(tmp_path: Path
     os.utime(new_dir / "summary.json", (new_time, new_time))
 
     candidates = _find_local_candidates(
-        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun")
+        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun"), 1, 10, [40]
     )
     survivors = _prune_stale_local_runs(candidates)
 
@@ -225,7 +229,7 @@ def test_prune_stale_local_runs_keeps_distinct_identities(tmp_path: Path):
     _write_summary(run2, seed=2)
 
     candidates = _find_local_candidates(
-        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun")
+        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun"), 1, 10, [40]
     )
     survivors = _prune_stale_local_runs(candidates)
 
@@ -245,9 +249,52 @@ def test_fetch_grouped_results_local_prunes_before_aggregating(tmp_path: Path):
     os.utime(new_dir / "summary.json", (new_time, new_time))
 
     grouped = _fetch_grouped_results_local(
-        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun")
+        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun"), 1, 10, [40]
     )
 
     assert not old_dir.exists()
     key = ("config6", "none", "x0_xhalf", 3, 4)
     assert grouped[key][40]["val"] == [0.9]
+
+
+def test_seed_and_n_allowed_filters_out_of_range_seed():
+    assert _seed_and_n_allowed(5, 40, min_seed=1, max_seed=10, n_values=[40]) is True
+    assert (
+        _seed_and_n_allowed(1234, 40, min_seed=1, max_seed=10, n_values=[40]) is False
+    )
+    assert _seed_and_n_allowed(0, 40, min_seed=1, max_seed=10, n_values=[40]) is False
+
+
+def test_seed_and_n_allowed_filters_unlisted_n():
+    assert (
+        _seed_and_n_allowed(1, 40, min_seed=1, max_seed=10, n_values=[40, 80]) is True
+    )
+    assert (
+        _seed_and_n_allowed(1, 30, min_seed=1, max_seed=10, n_values=[40, 80]) is False
+    )
+
+
+def test_find_local_candidates_excludes_out_of_range_seed(tmp_path: Path):
+    """An older experiment phase's seed=1234 run must not silently
+    pollute the mean of the current sweep's seeds 1-10."""
+    _write_summary(tmp_path / "multirun" / "old_phase", seed=1234)
+    _write_summary(tmp_path / "multirun" / "current", seed=3)
+
+    candidates = _find_local_candidates(
+        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun"), 1, 10, [40]
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0][0][2] == 3  # identity = (architecture, N, seed, ...)
+
+
+def test_find_local_candidates_excludes_unlisted_n(tmp_path: Path):
+    _write_summary(tmp_path / "multirun" / "old_n", N=30)
+    _write_summary(tmp_path / "multirun" / "current", N=40)
+
+    candidates = _find_local_candidates(
+        ["config6"], str(tmp_path / "outputs"), str(tmp_path / "multirun"), 1, 10, [40]
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0][0][1] == 40  # identity = (architecture, N, ...)

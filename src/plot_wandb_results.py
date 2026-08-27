@@ -9,6 +9,13 @@ readouts on one axis would conflate two different measured quantities.
 Doesn't touch the training pipeline — a standalone analysis utility over
 already-logged wandb runs.
 
+Only runs with seed in [--min-seed, --max-seed] (default 1-10) and N in
+--n-values (default 40/80/160/320/640/1280/2560/5120) are ever
+considered — this excludes older, unrelated experiment-phase runs (e.g.
+seed=1234, N=30) that would otherwise silently pollute the mean. This
+filter is applied at fetch time, before the diagnostic table, on both
+the wandb and --local paths.
+
 For each N, only the seeds present in EVERY (architecture, augment_train)
 series with data at that N are averaged, computed separately within each
 class pair (a classification task on 3-vs-4 has nothing to do with
@@ -91,6 +98,9 @@ def _sem(values: list[float]) -> float:
     return statistics.stdev(values) / len(values) ** 0.5
 
 
+DEFAULT_N_VALUES = [40, 80, 160, 320, 640, 1280, 2560, 5120]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -105,6 +115,28 @@ def parse_args() -> argparse.Namespace:
         default=["config6"],
         help="One or more architectures to overlay on the same plots "
         "(e.g. --architecture config6 config7).",
+    )
+    parser.add_argument(
+        "--min-seed",
+        type=int,
+        default=1,
+        help="Only include runs with seed >= this (default: 1) — excludes "
+        "old/unrelated runs (e.g. seed=1234 from an earlier experiment "
+        "phase) that would otherwise pollute the mean.",
+    )
+    parser.add_argument(
+        "--max-seed",
+        type=int,
+        default=10,
+        help="Only include runs with seed <= this (default: 10).",
+    )
+    parser.add_argument(
+        "--n-values",
+        type=int,
+        nargs="+",
+        default=DEFAULT_N_VALUES,
+        help=f"Only include runs whose N is one of these (default: "
+        f"{DEFAULT_N_VALUES}).",
     )
     parser.add_argument(
         "--readout",
@@ -154,8 +186,25 @@ GroupKey = tuple[
 Grouped = dict[GroupKey, dict[int, Bucket]]
 
 
+def _seed_and_n_allowed(
+    seed: Any, N: Any, min_seed: int, max_seed: int, n_values: list[int]
+) -> bool:
+    """Filters out runs outside the requested seed range / N whitelist —
+    e.g. seed=1234 or N=30 from an earlier experiment phase, which would
+    otherwise silently pollute the mean alongside the current sweep's
+    seeds 1-10 and N in {40, 80, ..., 5120}."""
+    if not isinstance(seed, int) or not (min_seed <= seed <= max_seed):
+        return False
+    return N in n_values
+
+
 def _fetch_grouped_results(
-    architectures: list[str], project: str, entity: str | None
+    architectures: list[str],
+    project: str,
+    entity: str | None,
+    min_seed: int,
+    max_seed: int,
+    n_values: list[int],
 ) -> Grouped:
     """Returns {(architecture, augment_train, readout, class1, class2):
     {N: {"val": [...], "val_aug": [...], "seed": [...]}}}, one accuracy
@@ -191,6 +240,8 @@ def _fetch_grouped_results(
             val_aug_acc = summary.get("val_aug/accuracy")
             if None in (N, augment_train, val_acc, val_aug_acc):
                 continue
+            if not _seed_and_n_allowed(seed, N, min_seed, max_seed, n_values):
+                continue
             bucket = grouped[(architecture, augment_train, readout, class1, class2)][N]
             bucket["val"].append(val_acc)
             bucket["val_aug"].append(val_aug_acc)
@@ -203,13 +254,20 @@ LocalCandidate = tuple[tuple[Any, ...], Path, float, float, float]
 
 
 def _find_local_candidates(
-    architectures: list[str], outputs_dir: str, multirun_dir: str
+    architectures: list[str],
+    outputs_dir: str,
+    multirun_dir: str,
+    min_seed: int,
+    max_seed: int,
+    n_values: list[int],
 ) -> list[LocalCandidate]:
     """Every local run with a usable summary.json, as (identity, run_dir,
     mtime, val_acc, val_aug_acc). identity = (architecture, N, seed,
     augment_train, readout, class1, class2) — a run missing from wandb or
     still uploading there is still included, since this only touches the
-    local filesystem."""
+    local filesystem. Runs outside [min_seed, max_seed] or with an N not
+    in n_values are excluded entirely (not pruned as duplicates — they're
+    just out of scope, e.g. an old experiment phase's seed=1234)."""
     candidates: list[LocalCandidate] = []
     for root in (outputs_dir, multirun_dir):
         root_path = Path(root)
@@ -233,6 +291,8 @@ def _find_local_candidates(
             val_acc = summary.get("val_accuracy")
             val_aug_acc = summary.get("val_aug_accuracy")
             if None in (N, augment_train, val_acc, val_aug_acc, seed):
+                continue
+            if not _seed_and_n_allowed(seed, N, min_seed, max_seed, n_values):
                 continue
             identity = (architecture, N, seed, augment_train, readout, class1, class2)
             candidates.append(
@@ -281,7 +341,12 @@ def _prune_stale_local_runs(candidates: list[LocalCandidate]) -> list[LocalCandi
 
 
 def _fetch_grouped_results_local(
-    architectures: list[str], outputs_dir: str, multirun_dir: str
+    architectures: list[str],
+    outputs_dir: str,
+    multirun_dir: str,
+    min_seed: int,
+    max_seed: int,
+    n_values: list[int],
 ) -> Grouped:
     """Same shape as _fetch_grouped_results, but scans local summary.json
     files under outputs_dir/multirun_dir instead of querying wandb — no
@@ -289,7 +354,9 @@ def _fetch_grouped_results_local(
     train.py writes summary.json with underscore keys (val_accuracy,
     val_aug_accuracy), unlike wandb's slash-separated summary keys.
     Prunes stale duplicate local runs first — see _prune_stale_local_runs."""
-    candidates = _find_local_candidates(architectures, outputs_dir, multirun_dir)
+    candidates = _find_local_candidates(
+        architectures, outputs_dir, multirun_dir, min_seed, max_seed, n_values
+    )
     survivors = _prune_stale_local_runs(candidates)
 
     grouped: Grouped = defaultdict(
@@ -404,12 +471,24 @@ def main() -> None:
 
     if args.local:
         grouped = _fetch_grouped_results_local(
-            args.architecture, args.outputs_dir, args.multirun_dir
+            args.architecture,
+            args.outputs_dir,
+            args.multirun_dir,
+            args.min_seed,
+            args.max_seed,
+            args.n_values,
         )
         source_desc = f"{args.outputs_dir!r}/{args.multirun_dir!r} (local)"
     else:
         project = args.project or os.environ.get("WANDB_PROJECT", "eqnn")
-        grouped = _fetch_grouped_results(args.architecture, project, args.entity)
+        grouped = _fetch_grouped_results(
+            args.architecture,
+            project,
+            args.entity,
+            args.min_seed,
+            args.max_seed,
+            args.n_values,
+        )
         source_desc = f"project {project!r}"
     if not grouped:
         raise SystemExit(
