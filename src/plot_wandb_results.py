@@ -241,32 +241,64 @@ def _mirror_into_results_def(dest_dir: Path) -> None:
     _copy_essentials(dest_dir_abs, _PROJECT_ROOT / "results_def", mirror_path)
 
 
+def _patch_downloaded_summary_config(dest_dir: Path, run: Any) -> None:
+    """The downloaded summary.json's "config" sub-dict can be stale for
+    older runs: train.py's checkpoint_config and wandb_extra_config are
+    two SEPARATE dicts (see main.py), and checkpoint_config didn't always
+    carry every field wandb_extra_config did — e.g. some historical 3-vs-4
+    once/online runs have augment_train missing (or explicit null) in
+    their archived summary.json's config, even though run.config (what
+    correctly builds the diagnostic table) has it. run.config is
+    authoritative; sync the identity-critical fields into the local file
+    so a later read (--local, collect_results.py) categorizes the run the
+    same way the diagnostic table already does. Best-effort: leaves the
+    file untouched if it's missing or malformed."""
+    summary_path = dest_dir / "summary.json"
+    if not summary_path.exists():
+        return
+    try:
+        with open(summary_path) as f:
+            summary = json.load(f)
+    except Exception:
+        return
+    config = summary.setdefault("config", {})
+    run_config = run.config
+    changed = False
+    for field in ("architecture", "readout", "augment_train", "class1", "class2"):
+        if field in run_config and config.get(field) != run_config[field]:
+            config[field] = run_config[field]
+            changed = True
+    if changed:
+        with open(summary_path, "w") as f:
+            json.dump(summary, f, indent=2)
+
+
 def _download_run_locally(run: Any, dest_root: Path) -> None:
     """Downloads this wandb run's logged model Artifact (final_model.pt,
     summary.json, and whatever else train.py attached — see train.py's
     wandb.Artifact block) into dest_root/<run.id>/, so a run that only
     exists on wandb also becomes visible to a future --local plot (see
-    _fetch_grouped_results_local). Skips runs already downloaded there
-    (checked via summary.json's presence) — idempotent, safe to call on
-    every fetched run every time. On success, also mirrors the same two
-    files into the git-trackable results_def/ (see
-    _mirror_into_results_def) — so --save-local alone is enough, no
-    separate collect_results.py run needed. Best-effort throughout: a
-    failure (or a run with no "model"-type artifact — reported, not
-    silently skipped) is printed but never aborts the whole fetch."""
+    _fetch_grouped_results_local). Skips the actual download if already
+    present there (checked via summary.json's presence), but ALWAYS
+    re-patches the local config (see _patch_downloaded_summary_config)
+    and re-mirrors into results_def/ — so a file downloaded before that
+    patching existed gets fixed retroactively on the next call, not just
+    on fresh downloads. Best-effort throughout: a failure (or a run with
+    no "model"-type artifact — reported, not silently skipped) is
+    printed but never aborts the whole fetch."""
     dest_dir = dest_root / run.id
-    if (dest_dir / "summary.json").exists():
-        _mirror_into_results_def(dest_dir)
-        return
-    try:
-        model_artifacts = [a for a in run.logged_artifacts() if a.type == "model"]
-        if not model_artifacts:
-            print(f"Warning: run {run.id} has no 'model'-type artifact — skipped.")
+    if not (dest_dir / "summary.json").exists():
+        try:
+            model_artifacts = [a for a in run.logged_artifacts() if a.type == "model"]
+            if not model_artifacts:
+                print(f"Warning: run {run.id} has no 'model'-type artifact — skipped.")
+                return
+            model_artifacts[0].download(root=str(dest_dir))
+        except Exception as exc:
+            print(f"Warning: failed to download artifact for run {run.id}: {exc}")
             return
-        model_artifacts[0].download(root=str(dest_dir))
-        _mirror_into_results_def(dest_dir)
-    except Exception as exc:
-        print(f"Warning: failed to download artifact for run {run.id}: {exc}")
+    _patch_downloaded_summary_config(dest_dir, run)
+    _mirror_into_results_def(dest_dir)
 
 
 def _fetch_grouped_results(

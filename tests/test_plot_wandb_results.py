@@ -318,6 +318,7 @@ class _FakeRun:
     def __init__(self, run_id: str, artifacts: list[_FakeArtifact]):
         self.id = run_id
         self._artifacts = artifacts
+        self.config: dict[str, object] = {}
 
     def logged_artifacts(self) -> list[_FakeArtifact]:
         return self._artifacts
@@ -481,3 +482,74 @@ def test_mirror_into_results_def_skips_when_outside_project_root(tmp_path: Path)
     pwr._mirror_into_results_def(outside_dir)  # must not raise
 
     assert not (pwr._PROJECT_ROOT / "results_def" / "elsewhere").exists()
+
+
+def test_patch_downloaded_summary_config_syncs_stale_fields(tmp_path: Path):
+    """train.py's checkpoint_config and wandb_extra_config are separate
+    dicts — some historical runs have augment_train missing/null in the
+    archived summary.json's config even though run.config (authoritative)
+    has it correctly. The local file must get synced to match."""
+    dest_dir = tmp_path / "run1"
+    dest_dir.mkdir()
+    (dest_dir / "summary.json").write_text(
+        json.dumps(
+            {"config": {"architecture": "config6", "augment_train": None, "class1": 3}}
+        )
+    )
+    run = _FakeRun("run1", [])
+    run.config = {
+        "architecture": "config6",
+        "augment_train": "once",
+        "readout": "x0_xhalf",
+        "class1": 3,
+        "class2": 4,
+    }
+
+    pwr._patch_downloaded_summary_config(dest_dir, run)
+
+    patched = json.loads((dest_dir / "summary.json").read_text())
+    assert patched["config"]["augment_train"] == "once"
+    assert patched["config"]["readout"] == "x0_xhalf"
+    assert patched["config"]["class2"] == 4
+
+
+def test_patch_downloaded_summary_config_leaves_matching_file_untouched(
+    tmp_path: Path,
+):
+    dest_dir = tmp_path / "run1"
+    dest_dir.mkdir()
+    original = json.dumps({"config": {"augment_train": "once"}})
+    (dest_dir / "summary.json").write_text(original)
+    run = _FakeRun("run1", [])
+    run.config = {"augment_train": "once"}
+
+    pwr._patch_downloaded_summary_config(dest_dir, run)
+
+    assert (dest_dir / "summary.json").read_text() == original
+
+
+def test_download_run_locally_patches_and_remirrors_already_downloaded_file(
+    monkeypatch, tmp_path: Path
+):
+    """A file downloaded before this patching existed must get fixed
+    retroactively on the next call, not just on fresh downloads."""
+    fake_root = tmp_path / "fake_project"
+    fake_root.mkdir()
+    monkeypatch.setattr(pwr, "_PROJECT_ROOT", fake_root)
+    dest_root = fake_root / "outputs" / "wandb_backfill"
+    dest_dir = dest_root / "run1"
+    dest_dir.mkdir(parents=True)
+    (dest_dir / "final_model.pt").write_bytes(b"model-bytes")
+    (dest_dir / "summary.json").write_text(
+        json.dumps({"config": {"augment_train": None}})
+    )
+    run = _FakeRun("run1", [])
+    run.config = {"augment_train": "online"}
+
+    pwr._download_run_locally(run, dest_root)
+
+    patched = json.loads((dest_dir / "summary.json").read_text())
+    assert patched["config"]["augment_train"] == "online"
+    mirrored = fake_root / "results_def" / "outputs" / "wandb_backfill" / "run1"
+    mirrored_summary = json.loads((mirrored / "summary.json").read_text())
+    assert mirrored_summary["config"]["augment_train"] == "online"
