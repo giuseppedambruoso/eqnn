@@ -136,7 +136,12 @@ def _fetch_grouped_results(
         lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": []})
     )
     for architecture in architectures:
-        runs = api.runs(path, filters={"config.architecture": architecture})
+        # per_page defaults to 50 — with hundreds of accumulated runs that
+        # means many sequential HTTP round trips; a large single page
+        # cuts this down to (usually) one request per architecture.
+        runs = api.runs(
+            path, filters={"config.architecture": architecture}, per_page=1000
+        )
         for run in runs:
             cfg = run.config
             summary = run.summary
