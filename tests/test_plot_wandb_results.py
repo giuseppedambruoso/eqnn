@@ -6,6 +6,7 @@ from typing import cast
 
 from src.plot_wandb_results import (
     _dedupe_by_seed,
+    _download_run_locally,
     _fetch_grouped_results_local,
     _find_local_candidates,
     _prune_stale_local_runs,
@@ -298,3 +299,55 @@ def test_find_local_candidates_excludes_unlisted_n(tmp_path: Path):
 
     assert len(candidates) == 1
     assert candidates[0][0][1] == 40  # identity = (architecture, N, ...)
+
+
+class _FakeArtifact:
+    def __init__(self, artifact_type: str):
+        self.type = artifact_type
+        self.downloaded_to: str | None = None
+
+    def download(self, root: str) -> None:
+        self.downloaded_to = root
+        Path(root).mkdir(parents=True, exist_ok=True)
+        (Path(root) / "summary.json").write_text("{}")
+
+
+class _FakeRun:
+    def __init__(self, run_id: str, artifacts: list[_FakeArtifact]):
+        self.id = run_id
+        self._artifacts = artifacts
+
+    def logged_artifacts(self) -> list[_FakeArtifact]:
+        return self._artifacts
+
+
+def test_download_run_locally_downloads_model_artifact(tmp_path: Path):
+    model_artifact = _FakeArtifact("model")
+    run = _FakeRun("run123", [_FakeArtifact("code"), model_artifact])
+
+    _download_run_locally(run, tmp_path)
+
+    assert model_artifact.downloaded_to == str(tmp_path / "run123")
+    assert (tmp_path / "run123" / "summary.json").exists()
+
+
+def test_download_run_locally_skips_if_already_downloaded(tmp_path: Path):
+    dest = tmp_path / "run123"
+    dest.mkdir(parents=True)
+    (dest / "summary.json").write_text("{}")
+    model_artifact = _FakeArtifact("model")
+    run = _FakeRun("run123", [model_artifact])
+
+    _download_run_locally(run, tmp_path)
+
+    assert model_artifact.downloaded_to is None
+
+
+def test_download_run_locally_does_not_raise_on_failure(tmp_path: Path):
+    class _BrokenRun:
+        id = "broken"
+
+        def logged_artifacts(self) -> list[_FakeArtifact]:
+            raise RuntimeError("network error")
+
+    _download_run_locally(_BrokenRun(), tmp_path)  # must not raise

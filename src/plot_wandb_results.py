@@ -50,6 +50,15 @@ finished uploading everything to wandb yet:
 
     docker compose run --rm --entrypoint python3 eqnn src/plot_wandb_results.py --architecture config6 config7 --readout x0_xhalf --local
 
+Pass --save-local (without --local — it fetches from wandb as usual)
+to also download every fetched run's model artifact into
+<outputs-dir>/wandb_backfill/<run_id>/, so runs that only ever existed
+on wandb (e.g. from an earlier machine/session, before local
+persistence to results_def/ existed) become visible to a future --local
+plot and to collect_results.py too:
+
+    docker compose run --rm --entrypoint python3 eqnn src/plot_wandb_results.py --architecture config6 config7 --readout x0_xhalf --save-local
+
 With --local, every run comes from re-scanning outputs/ and multirun/
 from scratch each time, and re-running the same sweep after fixing a bug
 leaves the old, stale directory sitting right there forever. Before
@@ -162,6 +171,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--outputs-dir", default="outputs")
     parser.add_argument("--multirun-dir", default="multirun")
+    parser.add_argument(
+        "--save-local",
+        action="store_true",
+        help="Only meaningful without --local (i.e. fetching from wandb): "
+        "downloads each fetched run's model artifact (final_model.pt, "
+        "summary.json, ...) into <outputs-dir>/wandb_backfill/<run_id>/, "
+        "so it becomes visible to a future --local plot and to "
+        "collect_results.py. Skips runs already downloaded there.",
+    )
     return parser.parse_args()
 
 
@@ -198,6 +216,27 @@ def _seed_and_n_allowed(
     return N in n_values
 
 
+def _download_run_locally(run: Any, dest_root: Path) -> None:
+    """Downloads this wandb run's logged model Artifact (final_model.pt,
+    summary.json, and whatever else train.py attached — see train.py's
+    wandb.Artifact block) into dest_root/<run.id>/, so a run that only
+    exists on wandb also becomes visible to a future --local plot (see
+    _fetch_grouped_results_local) and to collect_results.py. Skips runs
+    already downloaded there (checked via summary.json's presence) —
+    idempotent, safe to call on every fetched run every time. Best-effort:
+    a download failure is reported but never aborts the whole fetch."""
+    dest_dir = dest_root / run.id
+    if (dest_dir / "summary.json").exists():
+        return
+    try:
+        for artifact in run.logged_artifacts():
+            if artifact.type == "model":
+                artifact.download(root=str(dest_dir))
+                return
+    except Exception as exc:
+        print(f"Warning: failed to download artifact for run {run.id}: {exc}")
+
+
 def _fetch_grouped_results(
     architectures: list[str],
     project: str,
@@ -205,6 +244,7 @@ def _fetch_grouped_results(
     min_seed: int,
     max_seed: int,
     n_values: list[int],
+    save_local_dir: Path | None = None,
 ) -> Grouped:
     """Returns {(architecture, augment_train, readout, class1, class2):
     {N: {"val": [...], "val_aug": [...], "seed": [...]}}}, one accuracy
@@ -242,6 +282,8 @@ def _fetch_grouped_results(
                 continue
             if not _seed_and_n_allowed(seed, N, min_seed, max_seed, n_values):
                 continue
+            if save_local_dir is not None:
+                _download_run_locally(run, save_local_dir)
             bucket = grouped[(architecture, augment_train, readout, class1, class2)][N]
             bucket["val"].append(val_acc)
             bucket["val_aug"].append(val_aug_acc)
@@ -481,6 +523,9 @@ def main() -> None:
         source_desc = f"{args.outputs_dir!r}/{args.multirun_dir!r} (local)"
     else:
         project = args.project or os.environ.get("WANDB_PROJECT", "eqnn")
+        save_local_dir = (
+            Path(args.outputs_dir) / "wandb_backfill" if args.save_local else None
+        )
         grouped = _fetch_grouped_results(
             args.architecture,
             project,
@@ -488,6 +533,7 @@ def main() -> None:
             args.min_seed,
             args.max_seed,
             args.n_values,
+            save_local_dir,
         )
         source_desc = f"project {project!r}"
     if not grouped:
