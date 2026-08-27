@@ -42,6 +42,7 @@
     "reps": 2,
     "architecture": "config7",
     "readout": "x0_xhalf",
-    "img_size": 16
+    "img_size": 16,
+    "augment_train": "online"
   }
 }
