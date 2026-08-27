@@ -43,6 +43,16 @@ finished uploading everything to wandb yet:
 
     docker compose run --rm --entrypoint python3 eqnn src/plot_wandb_results.py --architecture config6 config7 --readout x0_xhalf --local
 
+With --local, every run comes from re-scanning outputs/ and multirun/
+from scratch each time, and re-running the same sweep after fixing a bug
+leaves the old, stale directory sitting right there forever. Before
+building the diagnostic table, --local PERMANENTLY DELETES (via
+shutil.rmtree) every local run directory that duplicates a more recently
+modified one's identity (architecture, N, seed, augment_train, readout,
+class1, class2), printing exactly what got removed — see
+_prune_stale_local_runs. A run still in progress is never touched (it
+has no summary.json yet, so it's never a candidate).
+
 Always prints a diagnostic table first (architecture, augment_train,
 readout, N, seed count, mean val/val_aug accuracy, the exact seeds found)
 — check it before trusting the plot: a combination with fewer seeds than
@@ -56,6 +66,7 @@ directory (mount ./outputs or similar if you want it to land on the host).
 import argparse
 import json
 import os
+import shutil
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -188,17 +199,18 @@ def _fetch_grouped_results(
     return grouped
 
 
-def _fetch_grouped_results_local(
+LocalCandidate = tuple[tuple[Any, ...], Path, float, float, float]
+
+
+def _find_local_candidates(
     architectures: list[str], outputs_dir: str, multirun_dir: str
-) -> Grouped:
-    """Same shape as _fetch_grouped_results, but scans local summary.json
-    files under outputs_dir/multirun_dir instead of querying wandb — no
-    network calls, and picks up runs from a sweep still in progress.
-    train.py writes summary.json with underscore keys (val_accuracy,
-    val_aug_accuracy), unlike wandb's slash-separated summary keys."""
-    grouped: Grouped = defaultdict(
-        lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": []})
-    )
+) -> list[LocalCandidate]:
+    """Every local run with a usable summary.json, as (identity, run_dir,
+    mtime, val_acc, val_aug_acc). identity = (architecture, N, seed,
+    augment_train, readout, class1, class2) — a run missing from wandb or
+    still uploading there is still included, since this only touches the
+    local filesystem."""
+    candidates: list[LocalCandidate] = []
     for root in (outputs_dir, multirun_dir):
         root_path = Path(root)
         if not root_path.is_dir():
@@ -220,12 +232,75 @@ def _fetch_grouped_results_local(
             class2 = config.get("class2", 4)
             val_acc = summary.get("val_accuracy")
             val_aug_acc = summary.get("val_aug_accuracy")
-            if None in (N, augment_train, val_acc, val_aug_acc):
+            if None in (N, augment_train, val_acc, val_aug_acc, seed):
                 continue
-            bucket = grouped[(architecture, augment_train, readout, class1, class2)][N]
-            bucket["val"].append(val_acc)
-            bucket["val_aug"].append(val_aug_acc)
-            bucket["seed"].append(seed)
+            identity = (architecture, N, seed, augment_train, readout, class1, class2)
+            candidates.append(
+                (
+                    identity,
+                    summary_path.parent,
+                    summary_path.stat().st_mtime,
+                    val_acc,
+                    val_aug_acc,
+                )
+            )
+    return candidates
+
+
+def _prune_stale_local_runs(candidates: list[LocalCandidate]) -> list[LocalCandidate]:
+    """outputs/ and multirun/ accumulate one directory per sweep launch
+    forever — re-running the same sweep twice (e.g. after fixing a bug)
+    leaves the old, stale local run sitting right next to the new one.
+    Deletes every run_dir that isn't the most recently modified one for
+    its identity (architecture, N, seed, augment_train, readout, class1,
+    class2), and returns only the survivors. Never touches a run still in
+    progress — those have no summary.json yet, so they're never in
+    `candidates` to begin with (see _find_local_candidates)."""
+    by_identity: dict[tuple[Any, ...], list[LocalCandidate]] = defaultdict(list)
+    for candidate in candidates:
+        by_identity[candidate[0]].append(candidate)
+
+    survivors: list[LocalCandidate] = []
+    removed: list[Path] = []
+    for group in by_identity.values():
+        if len(group) == 1:
+            survivors.append(group[0])
+            continue
+        group_sorted = sorted(group, key=lambda c: c[2], reverse=True)
+        survivors.append(group_sorted[0])
+        for stale in group_sorted[1:]:
+            shutil.rmtree(stale[1], ignore_errors=True)
+            removed.append(stale[1])
+
+    if removed:
+        print(f"Pruned {len(removed)} stale duplicate local run(s):")
+        for path in removed:
+            print(f"  removed {path}")
+
+    return survivors
+
+
+def _fetch_grouped_results_local(
+    architectures: list[str], outputs_dir: str, multirun_dir: str
+) -> Grouped:
+    """Same shape as _fetch_grouped_results, but scans local summary.json
+    files under outputs_dir/multirun_dir instead of querying wandb — no
+    network calls, and picks up runs from a sweep still in progress.
+    train.py writes summary.json with underscore keys (val_accuracy,
+    val_aug_accuracy), unlike wandb's slash-separated summary keys.
+    Prunes stale duplicate local runs first — see _prune_stale_local_runs."""
+    candidates = _find_local_candidates(architectures, outputs_dir, multirun_dir)
+    survivors = _prune_stale_local_runs(candidates)
+
+    grouped: Grouped = defaultdict(
+        lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": []})
+    )
+    for identity, _run_dir, _mtime, val_acc, val_aug_acc in survivors:
+        architecture, N, seed, augment_train, readout, class1, class2 = identity
+        bucket = grouped[(architecture, augment_train, readout, class1, class2)][N]
+        bucket["val"].append(val_acc)
+        bucket["val_aug"].append(val_aug_acc)
+        bucket["seed"].append(seed)
 
     return grouped
 

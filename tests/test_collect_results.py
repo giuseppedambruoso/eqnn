@@ -1,10 +1,14 @@
 import csv
 import json
+import os
+import time
 from pathlib import Path
 
 from src.collect_results import (
     _copy_essentials,
+    _dedupe_run_dirs,
     _find_run_dirs,
+    _identity_key,
     _relative_mirror_path,
     _summary_row,
     main,
@@ -119,6 +123,86 @@ def test_summary_row_missing_summary_json_returns_none(tmp_path: Path):
     (run_dir / "final_model.pt").write_bytes(b"x")
 
     assert _summary_row(run_dir) is None
+
+
+def test_identity_key_matches_only_when_every_field_matches():
+    row = {
+        "architecture": "config6",
+        "N": 40,
+        "seed": 1,
+        "dataset": "mnist",
+        "readout": "x0_xhalf",
+        "augment_train": "none",
+        "class1": 3,
+        "class2": 4,
+        "device": "default.qubit",
+        "num_qubits": 8,
+        "reps": 2,
+    }
+    other_seed = {**row, "seed": 2}
+    assert _identity_key(row) != _identity_key(other_seed)
+    assert _identity_key(row) == _identity_key(dict(row))
+
+
+def _row(run_dir: Path) -> dict[str, object]:
+    row = _summary_row(run_dir)
+    assert row is not None
+    return row
+
+
+def test_dedupe_run_dirs_keeps_most_recently_modified(tmp_path: Path):
+    old_dir = tmp_path / "old_run"
+    new_dir = tmp_path / "new_run"
+    _make_run(old_dir)
+    _make_run(new_dir)
+    old_time = time.time() - 1000
+    new_time = time.time()
+    os.utime(old_dir / "summary.json", (old_time, old_time))
+    os.utime(new_dir / "summary.json", (new_time, new_time))
+
+    candidates = [(old_dir, _row(old_dir)), (new_dir, _row(new_dir))]
+    kept, dropped = _dedupe_run_dirs(candidates)
+
+    assert dropped == 1
+    assert [run_dir for run_dir, _ in kept] == [new_dir]
+
+
+def test_dedupe_run_dirs_keeps_distinct_identities(tmp_path: Path):
+    run1 = tmp_path / "run1"
+    run2 = tmp_path / "run2"
+    _make_run(run1, seed=1)
+    _make_run(run2, seed=2)
+
+    candidates = [(run1, _row(run1)), (run2, _row(run2))]
+    kept, dropped = _dedupe_run_dirs(candidates)
+
+    assert dropped == 0
+    assert len(kept) == 2
+
+
+def test_main_end_to_end_dedupes_identical_runs(tmp_path: Path, monkeypatch):
+    """Two local run directories with the exact same identity (an
+    accidental duplicate, not two different seeds) must not both end up
+    copied into results_def/ — only the most recently modified survives."""
+    monkeypatch.chdir(tmp_path)
+    old_run = Path("multirun") / "2026-01-01" / "10-00-00" / "job0"
+    new_run = Path("multirun") / "2026-01-01" / "11-00-00" / "job0"
+    _make_run(old_run, val_accuracy=0.5)
+    _make_run(new_run, val_accuracy=0.9)
+    old_time = time.time() - 1000
+    new_time = time.time()
+    os.utime(old_run / "summary.json", (old_time, old_time))
+    os.utime(new_run / "summary.json", (new_time, new_time))
+
+    import sys
+
+    monkeypatch.setattr(sys, "argv", ["collect_results.py"])
+    main()
+
+    with open(Path("results_def") / "summary.csv") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 1
+    assert float(rows[0]["val_accuracy"]) == 0.9
 
 
 def test_main_end_to_end(tmp_path: Path, monkeypatch):

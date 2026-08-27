@@ -6,12 +6,18 @@ which stay local-only (outputs/ and multirun/ are gitignored), since
 wandb already has the complete artifact for every run.
 
 Also builds results_def/summary.csv, one row per run, pulling the full input
-config (architecture, N, seed, readout, augment_train, num_qubits, reps,
-device, img_size, dataset) alongside the accuracy metrics out of each
-summary.json — so every accuracy number is traceable to the exact config
-that produced it without opening 200+ files. The complete summary.json
-(including per-parameter final_params) is also kept alongside each
-model's final_model.pt for the full detail.
+config (architecture, N, seed, readout, augment_train, class1, class2,
+num_qubits, reps, device, img_size, dataset) alongside the accuracy
+metrics out of each summary.json — so every accuracy number is traceable
+to the exact config that produced it without opening 200+ files. The
+complete summary.json (including per-parameter final_params) is also
+kept alongside each model's final_model.pt for the full detail.
+
+Runs that share the exact same identity (architecture, N, seed, dataset,
+readout, augment_train, class1, class2, device, num_qubits, reps — i.e.
+an accidental duplicate local run, not two different seeds) are deduped
+before copying: only the one with the most recently modified summary.json
+is kept, so a duplicate never gets counted or copied twice.
 
 Doesn't touch wandb or the training pipeline — a standalone filesystem
 utility, no network access needed. Safe to re-run any time (idempotent):
@@ -28,6 +34,7 @@ import argparse
 import csv
 import json
 import shutil
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +47,8 @@ SUMMARY_CSV_COLUMNS = [
     "dataset",
     "readout",
     "augment_train",
+    "class1",
+    "class2",
     "device",
     "num_qubits",
     "reps",
@@ -50,6 +59,23 @@ SUMMARY_CSV_COLUMNS = [
     "val_accuracy",
     "val_aug_accuracy",
     "p4m_is_invariant",
+]
+
+# A duplicate is a run sharing every one of these — NOT epochs/learning_rate/
+# patience/min_delta (irrelevant to what model got trained) and NOT
+# accuracy/timing fields (those are outcomes, not identity).
+IDENTITY_FIELDS = [
+    "architecture",
+    "N",
+    "seed",
+    "dataset",
+    "readout",
+    "augment_train",
+    "class1",
+    "class2",
+    "device",
+    "num_qubits",
+    "reps",
 ]
 
 
@@ -121,6 +147,8 @@ def _summary_row(run_dir: Path) -> dict[str, Any] | None:
         "dataset": summary.get("dataset"),
         "readout": config.get("readout"),
         "augment_train": config.get("augment_train"),
+        "class1": config.get("class1", 3),
+        "class2": config.get("class2", 4),
         "device": config.get("device"),
         "num_qubits": config.get("num_qubits"),
         "reps": config.get("reps"),
@@ -134,6 +162,38 @@ def _summary_row(run_dir: Path) -> dict[str, Any] | None:
     }
 
 
+def _identity_key(row: dict[str, Any]) -> tuple[Any, ...]:
+    return tuple(row.get(field) for field in IDENTITY_FIELDS)
+
+
+def _dedupe_run_dirs(
+    candidates: list[tuple[Path, dict[str, Any]]],
+) -> tuple[list[tuple[Path, dict[str, Any]]], int]:
+    """Groups candidates by identity and keeps only the one with the most
+    recently modified summary.json per group — every candidate here
+    already has a usable summary.json (that's how row was built), so
+    there's no "finished vs crashed" distinction to make, just recency.
+    Returns (kept, number of duplicates dropped)."""
+    groups: dict[tuple[Any, ...], list[tuple[Path, dict[str, Any]]]] = defaultdict(list)
+    for run_dir, row in candidates:
+        groups[_identity_key(row)].append((run_dir, row))
+
+    kept: list[tuple[Path, dict[str, Any]]] = []
+    duplicates_dropped = 0
+    for group in groups.values():
+        if len(group) == 1:
+            kept.append(group[0])
+            continue
+        group_sorted = sorted(
+            group,
+            key=lambda item: (item[0] / "summary.json").stat().st_mtime,
+            reverse=True,
+        )
+        kept.append(group_sorted[0])
+        duplicates_dropped += len(group_sorted) - 1
+    return kept, duplicates_dropped
+
+
 def main() -> None:
     args = parse_args()
     results_root = Path(args.results_dir)
@@ -145,13 +205,22 @@ def main() -> None:
         )
         return
 
-    rows = []
+    candidates: list[tuple[Path, dict[str, Any]]] = []
+    skipped_no_summary = 0
     for run_dir in run_dirs:
-        dest_dir = _copy_essentials(run_dir, results_root)
         row = _summary_row(run_dir)
-        if row is not None:
-            row["run_dir"] = str(dest_dir)
-            rows.append(row)
+        if row is None:
+            skipped_no_summary += 1
+            continue
+        candidates.append((run_dir, row))
+
+    kept, duplicates_dropped = _dedupe_run_dirs(candidates)
+
+    rows = []
+    for run_dir, row in kept:
+        dest_dir = _copy_essentials(run_dir, results_root)
+        row["run_dir"] = str(dest_dir)
+        rows.append(row)
 
     results_root.mkdir(parents=True, exist_ok=True)
     csv_path = results_root / "summary.csv"
@@ -161,8 +230,11 @@ def main() -> None:
         writer.writerows(rows)
 
     print(
-        f"Collected {len(run_dirs)} run(s) into {results_root}/ "
-        f"({len(rows)} with a usable summary.json)."
+        f"Found {len(run_dirs)} run(s) under "
+        f"{args.outputs_dir!r}/{args.multirun_dir!r}: "
+        f"{skipped_no_summary} skipped (no summary.json), "
+        f"{duplicates_dropped} skipped (duplicate config+seed), "
+        f"{len(rows)} collected into {results_root}/."
     )
     print(f"Wrote {csv_path}")
 
