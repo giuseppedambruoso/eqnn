@@ -449,3 +449,35 @@ def test_fetch_grouped_results_downloads_when_not_known_locally(
 
     artifact = run.logged_artifacts()[0]
     assert artifact.downloaded_to == str(tmp_path / "run1")
+
+
+def test_mirror_into_results_def_copies_when_under_project_root(
+    monkeypatch, tmp_path: Path
+):
+    fake_root = tmp_path / "fake_project"
+    fake_root.mkdir()
+    monkeypatch.setattr(pwr, "_PROJECT_ROOT", fake_root)
+    dest_dir = fake_root / "outputs" / "wandb_backfill" / "run1"
+    dest_dir.mkdir(parents=True)
+    (dest_dir / "final_model.pt").write_bytes(b"model-bytes")
+    (dest_dir / "summary.json").write_text("{}")
+
+    pwr._mirror_into_results_def(dest_dir)
+
+    mirrored = fake_root / "results_def" / "outputs" / "wandb_backfill" / "run1"
+    assert (mirrored / "final_model.pt").read_bytes() == b"model-bytes"
+
+
+def test_mirror_into_results_def_skips_when_outside_project_root(tmp_path: Path):
+    """dest_dir under a pytest tmp_path (as in every other test in this
+    file that calls _download_run_locally) must never resolve to
+    somewhere under the REAL project root — that would silently write
+    into the real, git-tracked results_def/ during a test run."""
+    outside_dir = tmp_path / "elsewhere" / "run1"
+    outside_dir.mkdir(parents=True)
+    (outside_dir / "final_model.pt").write_bytes(b"model-bytes")
+    (outside_dir / "summary.json").write_text("{}")
+
+    pwr._mirror_into_results_def(outside_dir)  # must not raise
+
+    assert not (pwr._PROJECT_ROOT / "results_def" / "elsewhere").exists()

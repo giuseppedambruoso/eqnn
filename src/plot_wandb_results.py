@@ -55,7 +55,9 @@ to also download every fetched run's model artifact into
 <outputs-dir>/wandb_backfill/<run_id>/, so runs that only ever existed
 on wandb (e.g. from an earlier machine/session, before local
 persistence to results_def/ existed) become visible to a future --local
-plot and to collect_results.py too:
+plot too. Each successful download is also mirrored straight into the
+git-trackable results_def/ (same as train.py does after every local
+run) — no separate collect_results.py call needed:
 
     docker compose run --rm --entrypoint python3 eqnn src/plot_wandb_results.py --architecture config6 config7 --readout x0_xhalf --save-local
 
@@ -93,6 +95,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import wandb
+
+from src.collect_results import _copy_essentials
+
+# src/plot_wandb_results.py -> src -> project root — same anchoring as
+# train.py, for the same reason: results_def/ must always land at the
+# project root regardless of the current working directory.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 METRIC_LINESTYLES = {"val": "-", "val_aug": "--"}
 METRIC_MARKERS = {"val": "o", "val_aug": "s"}
@@ -216,23 +225,46 @@ def _seed_and_n_allowed(
     return N in n_values
 
 
+def _mirror_into_results_def(dest_dir: Path) -> None:
+    """Mirrors dest_dir's final_model.pt + summary.json into results_def/
+    at the project root — but only when dest_dir actually resolves to
+    somewhere under the project root. A test calling _download_run_locally
+    with a pytest tmp_path as dest_root would otherwise resolve outside
+    the repo entirely, and _copy_essentials would then write straight
+    into the real, git-tracked results_def/ (the exact same class of bug
+    train.py's _results_def_mirror_path guards against)."""
+    dest_dir_abs = dest_dir.resolve()
+    try:
+        mirror_path = dest_dir_abs.relative_to(_PROJECT_ROOT)
+    except ValueError:
+        return
+    _copy_essentials(dest_dir_abs, _PROJECT_ROOT / "results_def", mirror_path)
+
+
 def _download_run_locally(run: Any, dest_root: Path) -> None:
     """Downloads this wandb run's logged model Artifact (final_model.pt,
     summary.json, and whatever else train.py attached — see train.py's
     wandb.Artifact block) into dest_root/<run.id>/, so a run that only
     exists on wandb also becomes visible to a future --local plot (see
-    _fetch_grouped_results_local) and to collect_results.py. Skips runs
-    already downloaded there (checked via summary.json's presence) —
-    idempotent, safe to call on every fetched run every time. Best-effort:
-    a download failure is reported but never aborts the whole fetch."""
+    _fetch_grouped_results_local). Skips runs already downloaded there
+    (checked via summary.json's presence) — idempotent, safe to call on
+    every fetched run every time. On success, also mirrors the same two
+    files into the git-trackable results_def/ (see
+    _mirror_into_results_def) — so --save-local alone is enough, no
+    separate collect_results.py run needed. Best-effort throughout: a
+    failure (or a run with no "model"-type artifact — reported, not
+    silently skipped) is printed but never aborts the whole fetch."""
     dest_dir = dest_root / run.id
     if (dest_dir / "summary.json").exists():
+        _mirror_into_results_def(dest_dir)
         return
     try:
-        for artifact in run.logged_artifacts():
-            if artifact.type == "model":
-                artifact.download(root=str(dest_dir))
-                return
+        model_artifacts = [a for a in run.logged_artifacts() if a.type == "model"]
+        if not model_artifacts:
+            print(f"Warning: run {run.id} has no 'model'-type artifact — skipped.")
+            return
+        model_artifacts[0].download(root=str(dest_dir))
+        _mirror_into_results_def(dest_dir)
     except Exception as exc:
         print(f"Warning: failed to download artifact for run {run.id}: {exc}")
 
