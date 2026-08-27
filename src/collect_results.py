@@ -81,11 +81,21 @@ def _relative_mirror_path(path: Path) -> Path:
     return Path(*path.parts[1:]) if path.is_absolute() else path
 
 
-def _copy_essentials(run_dir: Path, results_root: Path) -> Path:
+def _copy_essentials(
+    run_dir: Path, results_root: Path, mirror_path: Path | None = None
+) -> Path:
     """Mirrors run_dir's path under results_root and copies only
     final_model.pt + summary.json into it (skipping the other, bulkier
-    per-run files)."""
-    dest_dir = results_root / _relative_mirror_path(run_dir)
+    per-run files). run_dir is always used to actually locate the source
+    files; mirror_path controls where they land under results_root and
+    defaults to run_dir itself (anchor-stripped) — pass it explicitly
+    when run_dir is an absolute path that must be read regardless of the
+    current working directory, but the mirrored structure should be
+    anchored to some other root instead (e.g. train.py calling this after
+    Hydra has already chdir'd into the job's own output directory)."""
+    if mirror_path is None:
+        mirror_path = _relative_mirror_path(run_dir)
+    dest_dir = results_root / mirror_path
     dest_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(run_dir / "final_model.pt", dest_dir / "final_model.pt")
     summary_path = run_dir / "summary.json"

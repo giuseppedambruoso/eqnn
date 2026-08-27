@@ -76,6 +76,24 @@ def test_copy_essentials_never_writes_onto_the_source(tmp_path: Path):
     assert str(dest_dir).startswith(str(results_root))
 
 
+def test_copy_essentials_reads_from_run_dir_but_mirrors_at_explicit_path(
+    tmp_path: Path,
+):
+    """mirror_path lets the caller read from an absolute run_dir (e.g.
+    Hydra having chdir'd into it) while anchoring the mirrored structure
+    somewhere else entirely — train.py's project-root anchoring relies on
+    this to avoid nesting results_def/ under each job's own directory."""
+    run_dir = tmp_path / "some" / "absolute" / "job_dir"
+    _make_run(run_dir)
+    results_root = tmp_path / "results_def"
+    mirror_path = Path("multirun") / "2026-01-01" / "job0"
+
+    dest_dir = _copy_essentials(run_dir, results_root, mirror_path)
+
+    assert dest_dir == results_root / mirror_path
+    assert (dest_dir / "final_model.pt").read_bytes() == b"fake-checkpoint-bytes"
+
+
 def test_relative_mirror_path_strips_absolute_anchor():
     assert not _relative_mirror_path(Path("/a/b/c")).is_absolute()
     assert _relative_mirror_path(Path("a/b/c")) == Path("a/b/c")

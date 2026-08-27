@@ -18,6 +18,12 @@ across augment_train modes or across architectures. See
 _restrict_to_common_seeds. The diagnostic table printed below still
 shows the raw, unrestricted seed counts, so you can see what got dropped.
 
+An exact duplicate run (same seed re-launched by mistake) is
+automatically deduped — only the first occurrence of each seed counts
+towards the mean — see _dedupe_by_seed. The diagnostic table still shows
+the raw, undeduped seed list so duplicates remain visible even though
+they no longer skew the plot.
+
 Older runs logged augment_train as a bool, before "once" existed —
 True/"true" is normalized to "online" and False/"false" to "none" (they
 were the same behavior, just re-randomized every epoch vs not), so those
@@ -29,20 +35,30 @@ wired via docker-compose.yml's env_file):
     docker compose run --rm --entrypoint python3 eqnn src/plot_wandb_results.py --architecture config6
     docker compose run --rm --entrypoint python3 eqnn src/plot_wandb_results.py --architecture config6 config7 --readout x0_xhalf
 
+Pass --local to read summary.json files directly from outputs/ and
+multirun/ instead of querying wandb — no network calls, so it's much
+faster once there are hundreds of accumulated runs, and it also picks up
+runs from a sweep that's still in progress and hasn't necessarily
+finished uploading everything to wandb yet:
+
+    docker compose run --rm --entrypoint python3 eqnn src/plot_wandb_results.py --architecture config6 config7 --readout x0_xhalf --local
+
 Always prints a diagnostic table first (architecture, augment_train,
 readout, N, seed count, mean val/val_aug accuracy, the exact seeds found)
 — check it before trusting the plot: a combination with fewer seeds than
 expected, or a missing row entirely, means those runs either weren't
-launched or aren't finished/logged in wandb yet.
+launched or aren't finished/logged yet (in wandb, or on disk if --local).
 
 Output: a PNG (default val_accuracy_vs_N.png) saved in the working
 directory (mount ./outputs or similar if you want it to land on the host).
 """
 
 import argparse
+import json
 import os
 import statistics
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 import matplotlib
@@ -94,6 +110,15 @@ def parse_args() -> argparse.Namespace:
         help="Defaults to your wandb account's default entity.",
     )
     parser.add_argument("--output", default="val_accuracy_vs_N.png")
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        help="Read summary.json files from outputs/ and multirun/ instead "
+        "of querying wandb — no network calls, much faster with many "
+        "accumulated runs, and picks up an in-progress sweep too.",
+    )
+    parser.add_argument("--outputs-dir", default="outputs")
+    parser.add_argument("--multirun-dir", default="multirun")
     return parser.parse_args()
 
 
@@ -161,6 +186,76 @@ def _fetch_grouped_results(
             bucket["seed"].append(seed)
 
     return grouped
+
+
+def _fetch_grouped_results_local(
+    architectures: list[str], outputs_dir: str, multirun_dir: str
+) -> Grouped:
+    """Same shape as _fetch_grouped_results, but scans local summary.json
+    files under outputs_dir/multirun_dir instead of querying wandb — no
+    network calls, and picks up runs from a sweep still in progress.
+    train.py writes summary.json with underscore keys (val_accuracy,
+    val_aug_accuracy), unlike wandb's slash-separated summary keys."""
+    grouped: Grouped = defaultdict(
+        lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": []})
+    )
+    for root in (outputs_dir, multirun_dir):
+        root_path = Path(root)
+        if not root_path.is_dir():
+            continue
+        for summary_path in root_path.rglob("summary.json"):
+            with open(summary_path) as f:
+                summary = json.load(f)
+            config = summary.get("config", {})
+            architecture = config.get("architecture")
+            if architecture not in architectures:
+                continue
+            N = summary.get("N")
+            augment_train = _normalize_augment_train(
+                config.get("augment_train", "none")
+            )
+            readout = config.get("readout")
+            seed = summary.get("seed")
+            class1 = config.get("class1", 3)
+            class2 = config.get("class2", 4)
+            val_acc = summary.get("val_accuracy")
+            val_aug_acc = summary.get("val_aug_accuracy")
+            if None in (N, augment_train, val_acc, val_aug_acc):
+                continue
+            bucket = grouped[(architecture, augment_train, readout, class1, class2)][N]
+            bucket["val"].append(val_acc)
+            bucket["val_aug"].append(val_aug_acc)
+            bucket["seed"].append(seed)
+
+    return grouped
+
+
+def _dedupe_by_seed(grouped: Grouped) -> Grouped:
+    """Keeps only the first occurrence of each seed within every (key, N)
+    bucket — an exact duplicate run (e.g. an accidental sweep re-launch)
+    would otherwise silently double-count that seed in the mean instead
+    of contributing once, like every other seed. Applied unconditionally
+    before plotting, on both the wandb and --local data paths, so the
+    plot is correct even if the underlying duplicate run still exists."""
+    deduped: Grouped = {}
+    for key, by_n in grouped.items():
+        deduped[key] = {}
+        for N, bucket in by_n.items():
+            seen: set[Any] = set()
+            val: list[Any] = []
+            val_aug: list[Any] = []
+            seed: list[Any] = []
+            for v, va, s in zip(
+                bucket["val"], bucket["val_aug"], bucket["seed"], strict=True
+            ):
+                if s in seen:
+                    continue
+                seen.add(s)
+                val.append(v)
+                val_aug.append(va)
+                seed.append(s)
+            deduped[key][N] = {"val": val, "val_aug": val_aug, "seed": seed}
+    return deduped
 
 
 def _print_diagnostics(grouped: Grouped) -> None:
@@ -231,16 +326,25 @@ def _restrict_to_common_seeds(grouped: Grouped) -> Grouped:
 
 def main() -> None:
     args = parse_args()
-    project = args.project or os.environ.get("WANDB_PROJECT", "eqnn")
 
-    grouped = _fetch_grouped_results(args.architecture, project, args.entity)
+    if args.local:
+        grouped = _fetch_grouped_results_local(
+            args.architecture, args.outputs_dir, args.multirun_dir
+        )
+        source_desc = f"{args.outputs_dir!r}/{args.multirun_dir!r} (local)"
+    else:
+        project = args.project or os.environ.get("WANDB_PROJECT", "eqnn")
+        grouped = _fetch_grouped_results(args.architecture, project, args.entity)
+        source_desc = f"project {project!r}"
     if not grouped:
         raise SystemExit(
             f"No finished runs with a logged val/accuracy found for "
-            f"architecture(s)={args.architecture} in project {project!r}."
+            f"architecture(s)={args.architecture} in {source_desc}."
         )
 
     _print_diagnostics(grouped)
+
+    grouped = _dedupe_by_seed(grouped)
 
     if args.readout is not None:
         grouped = {k: v for k, v in grouped.items() if k[2] == args.readout}

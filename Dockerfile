@@ -74,10 +74,10 @@ COPY --chown=appuser:appuser README.md pyproject.toml ./
 
 # Directories the training job writes/reads at runtime; mount these as
 # volumes (see docker-compose.yml) to persist data/results across runs.
-RUN mkdir -p data outputs multirun wandb \
-    && chown -R appuser:appuser data outputs multirun wandb
+RUN mkdir -p data outputs multirun wandb results_def \
+    && chown -R appuser:appuser data outputs multirun wandb results_def
 
-VOLUME ["/app/data", "/app/outputs", "/app/multirun", "/app/wandb"]
+VOLUME ["/app/data", "/app/outputs", "/app/multirun", "/app/wandb", "/app/results_def"]
 
 USER appuser
 

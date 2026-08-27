@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from multiprocessing import current_process
+from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
@@ -16,8 +17,30 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.ansatz_builder import check_p4m_invariance
+from src.collect_results import _copy_essentials
 
 logger = logging.getLogger(__name__)
+
+# src/train.py -> src -> project root. Anchoring here (rather than a
+# relative "results_def" path) matters because Hydra changes the process
+# cwd to the job's own output directory before running the task function
+# — a relative path would nest a new results_def/ inside every single
+# job's folder instead of landing at the project root, where the git-
+# tracked results_def/ actually lives.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _results_def_mirror_path(job_dir: str, project_root: Path) -> Path | None:
+    """None if job_dir isn't under project_root — e.g. pytest's tmp_path
+    in test_custom_training.py, where job_dir = os.getcwd() falls outside
+    the repo entirely. Mirroring an arbitrary temp directory's absolute
+    path there would pollute the git-tracked results_def/ with throwaway
+    test artifacts instead of skipping cleanly."""
+    job_dir_abs = Path(job_dir).resolve()
+    try:
+        return job_dir_abs.relative_to(project_root)
+    except ValueError:
+        return None
 
 
 def loss_function(predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
@@ -124,9 +147,13 @@ def _collect_predictions(
 
 
 def _plot_confusion_matrix(
-    predictions: torch.Tensor, labels: torch.Tensor, destination: str
+    predictions: torch.Tensor,
+    labels: torch.Tensor,
+    destination: str,
+    class1: int = 3,
+    class2: int = 4,
 ) -> None:
-    """0=digit 3, 1=digit 4 (see data_loading.py's tar_transform)."""
+    """0=digit class1, 1=digit class2 (see data_loading.py's tar_transform)."""
     predicted_classes = (predictions > 0.5).long()
     matrix = torch.zeros((2, 2), dtype=torch.long)
     for true_cls, pred_cls in zip(
@@ -140,8 +167,9 @@ def _plot_confusion_matrix(
     for i in range(2):
         for j in range(2):
             axis.text(j, i, str(matrix_np[i, j]), ha="center", va="center")
-    axis.set_xticks((0, 1), labels=("3", "4"))
-    axis.set_yticks((0, 1), labels=("3", "4"))
+    class_labels = (str(class1), str(class2))
+    axis.set_xticks((0, 1), labels=class_labels)
+    axis.set_yticks((0, 1), labels=class_labels)
     axis.set_xlabel("Cifra predetta")
     axis.set_ylabel("Cifra reale")
     fig.colorbar(image, ax=axis, fraction=0.046)
@@ -358,7 +386,13 @@ def train_loop(
         val_loader, qnn, torch_dev, params
     )
     confusion_path = os.path.join(job_dir, "confusion_matrix.png")
-    _plot_confusion_matrix(val_predictions, val_labels, confusion_path)
+    _plot_confusion_matrix(
+        val_predictions,
+        val_labels,
+        confusion_path,
+        checkpoint_config.get("class1", 3),
+        checkpoint_config.get("class2", 4),
+    )
 
     # Best-effort text + visual export of the trained circuit's diagram.
     sample_embedding = next(iter(val_loader))[0][0].to(torch_dev)
@@ -422,6 +456,18 @@ def train_loop(
             f,
             indent=2,
         )
+
+    # Best-effort: mirrors this run's final_model.pt + summary.json into
+    # the git-trackable results_def/ (see src/collect_results.py) right
+    # away, instead of requiring a manual re-scan after every job.
+    mirror_path = _results_def_mirror_path(job_dir, _PROJECT_ROOT)
+    if mirror_path is not None:
+        try:
+            _copy_essentials(
+                Path(job_dir).resolve(), _PROJECT_ROOT / "results_def", mirror_path
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to auto-collect results into results_def/: {exc}")
 
     wandb.log({"loss_history_plot": wandb.Image(loss_plot_path)})
     wandb.log({"confusion_matrix": wandb.Image(confusion_path)})
