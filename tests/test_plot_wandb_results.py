@@ -4,9 +4,11 @@ import time
 from pathlib import Path
 from typing import cast
 
+import src.plot_wandb_results as pwr
 from src.plot_wandb_results import (
     _dedupe_by_seed,
     _download_run_locally,
+    _fetch_grouped_results,
     _fetch_grouped_results_local,
     _find_local_candidates,
     _prune_stale_local_runs,
@@ -351,3 +353,99 @@ def test_download_run_locally_does_not_raise_on_failure(tmp_path: Path):
             raise RuntimeError("network error")
 
     _download_run_locally(_BrokenRun(), tmp_path)  # must not raise
+
+
+class _FakeWandbApi:
+    def __init__(self, runs: list[_FakeRun]):
+        self.default_entity = "test-entity"
+        self._runs = runs
+
+    def runs(
+        self, path: str, filters: object = None, per_page: object = None
+    ) -> list[_FakeRun]:
+        return self._runs
+
+
+class _FakeWandbModule:
+    def __init__(self, runs: list[_FakeRun]):
+        self._runs = runs
+
+    def Api(self) -> _FakeWandbApi:
+        return _FakeWandbApi(self._runs)
+
+
+def _fake_run(config: dict[str, object], summary: dict[str, object]) -> _FakeRun:
+    run = _FakeRun("run1", [_FakeArtifact("model")])
+    run.config = config  # type: ignore[attr-defined]
+    run.summary = summary  # type: ignore[attr-defined]
+    return run
+
+
+def test_fetch_grouped_results_skips_download_for_known_local_identity(
+    monkeypatch, tmp_path: Path
+):
+    """A run whose identity already exists locally (from actual training,
+    or a previous backfill) must not be re-downloaded — otherwise a later
+    --local prune deletes the redundant copy and the next --save-local
+    just re-downloads it, forever."""
+    run = _fake_run(
+        config={
+            "architecture": "config6",
+            "N": 40,
+            "seed": 1,
+            "augment_train": "none",
+            "readout": "x0_xhalf",
+            "class1": 3,
+            "class2": 4,
+        },
+        summary={"val/accuracy": 0.9, "val_aug/accuracy": 0.85},
+    )
+    monkeypatch.setattr(pwr, "wandb", _FakeWandbModule([run]))
+    known_local_identities = {("config6", 40, 1, "none", "x0_xhalf", 3, 4)}
+
+    grouped = _fetch_grouped_results(
+        ["config6"],
+        "proj",
+        None,
+        1,
+        10,
+        [40],
+        save_local_dir=tmp_path,
+        known_local_identities=known_local_identities,
+    )
+
+    artifact = run.logged_artifacts()[0]
+    assert artifact.downloaded_to is None
+    assert grouped[("config6", "none", "x0_xhalf", 3, 4)][40]["val"] == [0.9]
+
+
+def test_fetch_grouped_results_downloads_when_not_known_locally(
+    monkeypatch, tmp_path: Path
+):
+    run = _fake_run(
+        config={
+            "architecture": "config6",
+            "N": 40,
+            "seed": 1,
+            "augment_train": "none",
+            "readout": "x0_xhalf",
+            "class1": 3,
+            "class2": 4,
+        },
+        summary={"val/accuracy": 0.9, "val_aug/accuracy": 0.85},
+    )
+    monkeypatch.setattr(pwr, "wandb", _FakeWandbModule([run]))
+
+    _fetch_grouped_results(
+        ["config6"],
+        "proj",
+        None,
+        1,
+        10,
+        [40],
+        save_local_dir=tmp_path,
+        known_local_identities=set(),
+    )
+
+    artifact = run.logged_artifacts()[0]
+    assert artifact.downloaded_to == str(tmp_path / "run1")

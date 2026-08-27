@@ -245,6 +245,7 @@ def _fetch_grouped_results(
     max_seed: int,
     n_values: list[int],
     save_local_dir: Path | None = None,
+    known_local_identities: set[tuple[Any, ...]] | None = None,
 ) -> Grouped:
     """Returns {(architecture, augment_train, readout, class1, class2):
     {N: {"val": [...], "val_aug": [...], "seed": [...]}}}, one accuracy
@@ -252,7 +253,16 @@ def _fetch_grouped_results(
     never reached the final validation step (no val/accuracy in their
     summary) are silently skipped. Runs logged before DATA.class1/class2
     existed default to (3, 4), the only pair ever used back then.
-    """
+
+    known_local_identities (identity = (architecture, N, seed,
+    augment_train, readout, class1, class2), matching _find_local_candidates)
+    skips downloading (with save_local_dir) any run whose identity already
+    exists locally — e.g. from actual local training, not just a previous
+    backfill. Without this, --save-local would re-download a run into
+    wandb_backfill/<run_id>/ even though the identical config+seed already
+    exists locally under a different path, creating a duplicate that a
+    later --local prune would delete — and the next --save-local would
+    then re-download it again, forever."""
     api = wandb.Api()
     resolved_entity = entity or api.default_entity
     path = f"{resolved_entity}/{project}" if resolved_entity else project
@@ -283,7 +293,21 @@ def _fetch_grouped_results(
             if not _seed_and_n_allowed(seed, N, min_seed, max_seed, n_values):
                 continue
             if save_local_dir is not None:
-                _download_run_locally(run, save_local_dir)
+                identity = (
+                    architecture,
+                    N,
+                    seed,
+                    augment_train,
+                    readout,
+                    class1,
+                    class2,
+                )
+                already_local = (
+                    known_local_identities is not None
+                    and identity in known_local_identities
+                )
+                if not already_local:
+                    _download_run_locally(run, save_local_dir)
             bucket = grouped[(architecture, augment_train, readout, class1, class2)][N]
             bucket["val"].append(val_acc)
             bucket["val_aug"].append(val_aug_acc)
@@ -523,9 +547,23 @@ def main() -> None:
         source_desc = f"{args.outputs_dir!r}/{args.multirun_dir!r} (local)"
     else:
         project = args.project or os.environ.get("WANDB_PROJECT", "eqnn")
-        save_local_dir = (
-            Path(args.outputs_dir) / "wandb_backfill" if args.save_local else None
-        )
+        save_local_dir = None
+        known_local_identities = None
+        if args.save_local:
+            save_local_dir = Path(args.outputs_dir) / "wandb_backfill"
+            # Skip downloading a run whose identity already exists locally
+            # (from actual training, or a previous backfill) — otherwise a
+            # later --local prune deletes the redundant copy and the next
+            # --save-local just re-downloads it, forever.
+            existing_candidates = _find_local_candidates(
+                args.architecture,
+                args.outputs_dir,
+                args.multirun_dir,
+                args.min_seed,
+                args.max_seed,
+                args.n_values,
+            )
+            known_local_identities = {c[0] for c in existing_candidates}
         grouped = _fetch_grouped_results(
             args.architecture,
             project,
@@ -534,6 +572,7 @@ def main() -> None:
             args.max_seed,
             args.n_values,
             save_local_dir,
+            known_local_identities,
         )
         source_desc = f"project {project!r}"
     if not grouped:
