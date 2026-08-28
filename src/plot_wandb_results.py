@@ -170,7 +170,14 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Defaults to your wandb account's default entity.",
     )
-    parser.add_argument("--output", default="val_accuracy_vs_N.png")
+    parser.add_argument(
+        "--output",
+        default="outputs/val_accuracy_vs_N.png",
+        help="Where to save the plot. Defaults under outputs/ (writable "
+        "and volume-mounted in the eqnn container — /app itself, the "
+        "container's cwd, is neither: a bare filename would fail to save "
+        "and, even if writable, would be lost once the container exits).",
+    )
     parser.add_argument(
         "--local",
         action="store_true",
@@ -319,9 +326,9 @@ def _fetch_grouped_results(
     existed default to (3, 4), the only pair ever used back then.
 
     known_local_identities (identity = (architecture, N, seed,
-    augment_train, readout, class1, class2), matching _find_local_candidates)
-    skips downloading (with save_local_dir) any run whose identity already
-    exists locally — e.g. from actual local training, not just a previous
+    augment_train, readout, class1, class2, dataset), matching
+    _find_local_candidates) skips downloading (with save_local_dir) any run
+    whose identity already exists locally — e.g. from actual local training, not just a previous
     backfill. Without this, --save-local would re-download a run into
     wandb_backfill/<run_id>/ even though the identical config+seed already
     exists locally under a different path, creating a duplicate that a
@@ -332,7 +339,7 @@ def _fetch_grouped_results(
     path = f"{resolved_entity}/{project}" if resolved_entity else project
 
     grouped: Grouped = defaultdict(
-        lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": []})
+        lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": [], "dataset": []})
     )
     for architecture in architectures:
         # per_page defaults to 50 — with hundreds of accumulated runs that
@@ -350,6 +357,7 @@ def _fetch_grouped_results(
             seed = cfg.get("seed")
             class1 = cfg.get("class1", 3)
             class2 = cfg.get("class2", 4)
+            dataset = cfg.get("dataset", "mnist")
             val_acc = summary.get("val/accuracy")
             val_aug_acc = summary.get("val_aug/accuracy")
             if None in (N, augment_train, val_acc, val_aug_acc):
@@ -365,6 +373,7 @@ def _fetch_grouped_results(
                     readout,
                     class1,
                     class2,
+                    dataset,
                 )
                 already_local = (
                     known_local_identities is not None
@@ -376,6 +385,7 @@ def _fetch_grouped_results(
             bucket["val"].append(val_acc)
             bucket["val_aug"].append(val_aug_acc)
             bucket["seed"].append(seed)
+            bucket["dataset"].append(dataset)
 
     return grouped
 
@@ -393,7 +403,7 @@ def _find_local_candidates(
 ) -> list[LocalCandidate]:
     """Every local run with a usable summary.json, as (identity, run_dir,
     mtime, val_acc, val_aug_acc). identity = (architecture, N, seed,
-    augment_train, readout, class1, class2) — a run missing from wandb or
+    augment_train, readout, class1, class2, dataset) — a run missing from wandb or
     still uploading there is still included, since this only touches the
     local filesystem. Runs outside [min_seed, max_seed] or with an N not
     in n_values are excluded entirely (not pruned as duplicates — they're
@@ -418,13 +428,23 @@ def _find_local_candidates(
             seed = summary.get("seed")
             class1 = config.get("class1", 3)
             class2 = config.get("class2", 4)
+            dataset = summary.get("dataset", "mnist")
             val_acc = summary.get("val_accuracy")
             val_aug_acc = summary.get("val_aug_accuracy")
             if None in (N, augment_train, val_acc, val_aug_acc, seed):
                 continue
             if not _seed_and_n_allowed(seed, N, min_seed, max_seed, n_values):
                 continue
-            identity = (architecture, N, seed, augment_train, readout, class1, class2)
+            identity = (
+                architecture,
+                N,
+                seed,
+                augment_train,
+                readout,
+                class1,
+                class2,
+                dataset,
+            )
             candidates.append(
                 (
                     identity,
@@ -490,14 +510,15 @@ def _fetch_grouped_results_local(
     survivors = _prune_stale_local_runs(candidates)
 
     grouped: Grouped = defaultdict(
-        lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": []})
+        lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": [], "dataset": []})
     )
     for identity, _run_dir, _mtime, val_acc, val_aug_acc in survivors:
-        architecture, N, seed, augment_train, readout, class1, class2 = identity
+        architecture, N, seed, augment_train, readout, class1, class2, dataset = identity
         bucket = grouped[(architecture, augment_train, readout, class1, class2)][N]
         bucket["val"].append(val_acc)
         bucket["val_aug"].append(val_aug_acc)
         bucket["seed"].append(seed)
+        bucket["dataset"].append(dataset)
 
     return grouped
 
@@ -517,8 +538,13 @@ def _dedupe_by_seed(grouped: Grouped) -> Grouped:
             val: list[Any] = []
             val_aug: list[Any] = []
             seed: list[Any] = []
-            for v, va, s in zip(
-                bucket["val"], bucket["val_aug"], bucket["seed"], strict=True
+            dataset: list[Any] = []
+            for v, va, s, d in zip(
+                bucket["val"],
+                bucket["val_aug"],
+                bucket["seed"],
+                bucket["dataset"],
+                strict=True,
             ):
                 if s in seen:
                     continue
@@ -526,14 +552,20 @@ def _dedupe_by_seed(grouped: Grouped) -> Grouped:
                 val.append(v)
                 val_aug.append(va)
                 seed.append(s)
-            deduped[key][N] = {"val": val, "val_aug": val_aug, "seed": seed}
+                dataset.append(d)
+            deduped[key][N] = {
+                "val": val,
+                "val_aug": val_aug,
+                "seed": seed,
+                "dataset": dataset,
+            }
     return deduped
 
 
 def _print_diagnostics(grouped: Grouped) -> None:
     header = (
-        f"{'architecture':<14}{'augment_train':<15}{'readout':<12}{'classes':<10}"
-        f"{'N':<8}{'n_seeds':<9}{'mean_val':<10}{'mean_val_aug':<14}seeds"
+        f"{'architecture':<14}{'augment_train':<15}{'readout':<12}{'dataset':<11}"
+        f"{'classes':<10}{'N':<8}{'n_seeds':<9}{'mean_val':<10}{'mean_val_aug':<14}seeds"
     )
     print(header)
     print("-" * len(header))
@@ -546,10 +578,17 @@ def _print_diagnostics(grouped: Grouped) -> None:
             seeds = sorted(bucket["seed"])
             mean_val = sum(bucket["val"]) / len(bucket["val"])
             mean_val_aug = sum(bucket["val_aug"]) / len(bucket["val_aug"])
+            # All entries in a bucket share one (architecture, augment_train,
+            # readout, class1, class2) identity, and in practice one dataset
+            # too — but showing every distinct value found (instead of just
+            # bucket["dataset"][0]) makes a mixed bucket visible as itself
+            # rather than silently hiding it behind whichever run happened
+            # to be appended first.
+            dataset_str = "/".join(sorted(set(bucket["dataset"])))
             print(
                 f"{architecture:<14}{str(augment_train):<15}{str(readout):<12}"
-                f"{classes_str:<10}{N:<8}{len(seeds):<9}{mean_val:<10.4f}"
-                f"{mean_val_aug:<14.4f}{seeds}"
+                f"{dataset_str:<11}{classes_str:<10}{N:<8}{len(seeds):<9}"
+                f"{mean_val:<10.4f}{mean_val_aug:<14.4f}{seeds}"
             )
     print("-" * len(header))
 
@@ -568,7 +607,7 @@ def _restrict_to_common_seeds(grouped: Grouped) -> Grouped:
     already fixed to a single value (see main: this runs after the
     --readout filter)."""
     restricted: Grouped = defaultdict(
-        lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": []})
+        lambda: defaultdict(lambda: {"val": [], "val_aug": [], "seed": [], "dataset": []})
     )
     class_pairs = {(key[3], key[4]) for key in grouped}
     for class_pair in class_pairs:
@@ -592,6 +631,7 @@ def _restrict_to_common_seeds(grouped: Grouped) -> Grouped:
                     "val": [bucket["val"][i] for i in keep],
                     "val_aug": [bucket["val_aug"][i] for i in keep],
                     "seed": [bucket["seed"][i] for i in keep],
+                    "dataset": [bucket["dataset"][i] for i in keep],
                 }
     return restricted
 
@@ -724,6 +764,9 @@ def main() -> None:
         "di classi; righe=coppia di classi, colonne=augment_train)"
     )
     fig.tight_layout()
+    output_dir = os.path.dirname(args.output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     fig.savefig(args.output, dpi=150)
     print(f"Saved to {args.output}")
 

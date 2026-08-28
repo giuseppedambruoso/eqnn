@@ -22,6 +22,7 @@ def _bucket(seeds: list[int]) -> dict[str, list[object]]:
         "val": [0.1 * s for s in seeds],
         "val_aug": [0.2 * s for s in seeds],
         "seed": cast(list[object], list(seeds)),
+        "dataset": cast(list[object], ["mnist"] * len(seeds)),
     }
 
 
@@ -402,7 +403,7 @@ def test_fetch_grouped_results_skips_download_for_known_local_identity(
         summary={"val/accuracy": 0.9, "val_aug/accuracy": 0.85},
     )
     monkeypatch.setattr(pwr, "wandb", _FakeWandbModule([run]))
-    known_local_identities = {("config6", 40, 1, "none", "x0_xhalf", 3, 4)}
+    known_local_identities = {("config6", 40, 1, "none", "x0_xhalf", 3, 4, "mnist")}
 
     grouped = _fetch_grouped_results(
         ["config6"],
