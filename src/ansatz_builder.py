@@ -35,6 +35,7 @@ import pennylane as qml
 import torch
 
 from src.data_encoding import embedding_unitary
+from src.noise import apply_gate_noise, make_noise_rng
 from src.qnn import (
     ARCHITECTURES,
     FROZEN_ENTANGLER_ANGLE,
@@ -292,6 +293,8 @@ def build_qnn_from_spec(
     twirled: bool = False,
     readout: str = "sum_z",
     diff_method: str = "backprop",
+    noise_p: float = 0.0,
+    noise_seed: int = 0,
 ) -> tuple[Any, torch.Tensor, list[dict[str, Any]]]:
     """Builds a QNN from a user-drawn circuit spec.
 
@@ -320,6 +323,15 @@ def build_qnn_from_spec(
         statistics) but requires ~2 extra full circuit evaluations per
         trainable parameter for every gradient — much slower here, but the
         only option if the circuit needs to stay hardware-realistic.
+    noise_p: probability of a single-qubit depolarizing error (a random
+        Pauli X/Y/Z) at every gate application, independently per wire the
+        gate touches — see src.noise's module docstring for why this is a
+        Monte Carlo realization rather than the analytic channel. 0.0
+        (default) disables noise entirely, with zero overhead.
+    noise_seed: seeds the noise realization — which sites get hit and
+        which Pauli they get — reproducibly. Must differ from the seed
+        used to draw the initial parameters (a separate, independent
+        source of randomness), and is otherwise unused when noise_p<=0.
 
     Returns (qnn_forward, initial_params, resolved_spec):
       - initial_params holds ONLY the trainable parameters, in first-seen
@@ -368,10 +380,16 @@ def build_qnn_from_spec(
         params: torch.Tensor,
         g_idx: int = 0,
     ) -> Any:
+        # Re-seeded fresh on every call (rather than built once outside
+        # qnn_base) so the exact same noise realization recurs every time
+        # this QNode runs — see src.noise's module docstring.
+        noise_rng = make_noise_rng(noise_seed, noise_p)
+
         qml.QubitUnitary(embedding_unitary_matrix, wires=range(num_qubits))
+        apply_gate_noise(range(num_qubits), noise_rng, noise_p)
 
         if twirled:
-            apply_group_element(g_idx, num_qubits)
+            apply_group_element(g_idx, num_qubits, noise_rng, noise_p)
 
         for idx, gate_spec in enumerate(spec):
             name = gate_spec["gate"]
@@ -391,9 +409,10 @@ def build_qnn_from_spec(
             else:
                 op, _ = _FIXED_GATES[name]
                 op(wires=wires)
+            apply_gate_noise(wires, noise_rng, noise_p)
 
         if twirled:
-            apply_group_element(g_idx, num_qubits)
+            apply_group_element(g_idx, num_qubits, noise_rng, noise_p)
 
         if readout == "sum_z":
             equiv_measure(num_qubits)

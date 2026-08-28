@@ -1,52 +1,73 @@
 import logging
 import math
+import random
 from typing import Any
 
 import pennylane as qml
 import torch
+
+from src.noise import apply_gate_noise, make_noise_rng
 
 logger = logging.getLogger(__name__)
 
 # --- Symmetries p4m (D4) ---
 
 
-def V_x(num_qubits: int) -> None:
+def V_x(
+    num_qubits: int, noise_rng: random.Random | None = None, noise_p: float = 0.0
+) -> None:
     half = num_qubits // 2
     for i in range(half):
         qml.X(wires=i)
+        apply_gate_noise([i], noise_rng, noise_p)
 
 
-def V_y(num_qubits: int) -> None:
+def V_y(
+    num_qubits: int, noise_rng: random.Random | None = None, noise_p: float = 0.0
+) -> None:
     half = num_qubits // 2
     for i in range(half, num_qubits):
         qml.X(wires=i)
+        apply_gate_noise([i], noise_rng, noise_p)
 
 
-def apply_group_element(g_idx: int, num_qubits: int) -> None:
-    """Applies one of the 8 p4m group elements for explicit twirling."""
+def apply_group_element(
+    g_idx: int,
+    num_qubits: int,
+    noise_rng: random.Random | None = None,
+    noise_p: float = 0.0,
+) -> None:
+    """Applies one of the 8 p4m group elements for explicit twirling.
+    noise_rng/noise_p: see src.noise's module docstring — applied after
+    every X/SWAP below, same as any other gate in the ansatz."""
     half = num_qubits // 2
+
+    def _swap_pairs() -> None:
+        for i in range(half):
+            qml.SWAP(wires=[i, i + half])
+            apply_gate_noise([i, i + half], noise_rng, noise_p)
+
     if g_idx == 0:
         pass  # Identity
     elif g_idx == 1:
-        V_x(num_qubits)  # Reflection X
+        V_x(num_qubits, noise_rng, noise_p)  # Reflection X
     elif g_idx == 2:
-        V_y(num_qubits)  # Reflection Y
+        V_y(num_qubits, noise_rng, noise_p)  # Reflection Y
     elif g_idx == 3:  # Reflection XY (180 Rotation)
-        V_x(num_qubits)
-        V_y(num_qubits)
+        V_x(num_qubits, noise_rng, noise_p)
+        V_y(num_qubits, noise_rng, noise_p)
     elif g_idx == 4:  # Transpose (x-y swap)
-        for i in range(half):
-            qml.SWAP(wires=[i, i + half])
+        _swap_pairs()
     elif g_idx == 5:  # 90 Rotation
-        V_x(num_qubits)
-        [qml.SWAP(wires=[i, i + half]) for i in range(half)]
+        V_x(num_qubits, noise_rng, noise_p)
+        _swap_pairs()
     elif g_idx == 6:  # -90 Rotation
-        V_y(num_qubits)
-        [qml.SWAP(wires=[i, i + half]) for i in range(half)]
+        V_y(num_qubits, noise_rng, noise_p)
+        _swap_pairs()
     elif g_idx == 7:  # Anti-diagonal reflection
-        V_x(num_qubits)
-        V_y(num_qubits)
-        [qml.SWAP(wires=[i, i + half]) for i in range(half)]
+        V_x(num_qubits, noise_rng, noise_p)
+        V_y(num_qubits, noise_rng, noise_p)
+        _swap_pairs()
 
 
 def equiv_measure(num_qubits: int) -> None:
@@ -153,14 +174,22 @@ ARCHITECTURES: dict[str, dict[str, Any]] = {
 }
 
 
-def frozen_rxy_cascade(num_qubits: int) -> None:
+def frozen_rxy_cascade(
+    num_qubits: int, noise_rng: random.Random | None = None, noise_p: float = 0.0
+) -> None:
     """Cascade of fixed-angle XY rotations (PauliRot(pi/2, "XY")) over
     adjacent qubits — the entangler for config3/config4."""
     for i in range(num_qubits - 1):
         qml.PauliRot(FROZEN_ENTANGLER_ANGLE, "XY", wires=[i, i + 1])
+        apply_gate_noise([i, i + 1], noise_rng, noise_p)
 
 
-def frozen_ryy_cascade(num_qubits: int, cross_edge_index: int) -> None:
+def frozen_ryy_cascade(
+    num_qubits: int,
+    cross_edge_index: int,
+    noise_rng: random.Random | None = None,
+    noise_p: float = 0.0,
+) -> None:
     """Cascade of fixed-angle RYY gates (IsingYY(pi/2)) over adjacent qubits.
 
     At the single step that would act on the two central qubits
@@ -176,8 +205,10 @@ def frozen_ryy_cascade(num_qubits: int, cross_edge_index: int) -> None:
                 cross_edge_index + 2,
             ]
             qml.PauliRot(FROZEN_ENTANGLER_ANGLE, "YYYY", wires=wires)
+            apply_gate_noise(wires, noise_rng, noise_p)
         else:
             qml.IsingYY(FROZEN_ENTANGLER_ANGLE, wires=[i, i + 1])
+            apply_gate_noise([i, i + 1], noise_rng, noise_p)
 
 
 def architecture_param_names(
@@ -215,6 +246,8 @@ def create_qnn(
     architecture: str = "config1",
     diff_method: str = "backprop",
     readout: str | None = None,
+    noise_p: float = 0.0,
+    noise_seed: int = 0,
 ) -> Any:
     """diff_method: "backprop" (default) is fast in simulation — src.train's
     execute_batch relies on it to run a whole batch through the QNN in a
@@ -228,6 +261,12 @@ def create_qnn(
     measures the mean of X over every qubit; "x0_xhalf" measures only
     0.5*(X_0 + X_{num_qubits//2}) — see
     src.ansatz_builder.build_qnn_from_spec's docstring for both.
+
+    noise_p/noise_seed: Monte Carlo single-qubit depolarizing noise
+    inserted after every gate (see src.noise's module docstring). 0.0
+    (default) disables it entirely. noise_seed must differ from whatever
+    seed drew the initial parameters — it seeds an independent source of
+    randomness (which sites get a noise hit, and which Pauli).
     """
     if architecture not in ARCHITECTURES:
         raise ValueError(
@@ -254,6 +293,8 @@ def create_qnn(
             twirled=False,
             readout=readout or "avg_x",
             diff_method=diff_method,
+            noise_p=noise_p,
+            noise_seed=noise_seed,
         )
         return paper_qnn_forward
 
@@ -270,10 +311,16 @@ def create_qnn(
         params: torch.Tensor,
         g_idx: int = 0,
     ) -> Any:
+        # Re-seeded fresh on every call — see src.noise's module
+        # docstring for why this reproduces the same noise realization
+        # every time instead of a fresh one per call.
+        noise_rng = make_noise_rng(noise_seed, noise_p)
+
         qml.QubitUnitary(embedding_unitary, wires=range(num_qubits))
+        apply_gate_noise(range(num_qubits), noise_rng, noise_p)
 
         if twirled:
-            apply_group_element(g_idx, num_qubits)
+            apply_group_element(g_idx, num_qubits, noise_rng, noise_p)
 
         for rep in range(reps):
             for i in range(num_qubits):
@@ -281,19 +328,21 @@ def create_qnn(
                     qml.RX(params[i + num_qubits * rep], wires=i)
                 else:
                     qml.RY(params[i + num_qubits * rep], wires=i)
+                apply_gate_noise([i], noise_rng, noise_p)
 
             if entangler == "frozen_ryy":
-                frozen_ryy_cascade(num_qubits, cross_edge_index)
+                frozen_ryy_cascade(num_qubits, cross_edge_index, noise_rng, noise_p)
                 continue
             if entangler == "frozen_rxy":
-                frozen_rxy_cascade(num_qubits)
+                frozen_rxy_cascade(num_qubits, noise_rng, noise_p)
                 continue
 
             for i in range(num_qubits - 1):
                 qml.CNOT(wires=[i, i + 1])
+                apply_gate_noise([i, i + 1], noise_rng, noise_p)
 
         if twirled:
-            apply_group_element(g_idx, num_qubits)
+            apply_group_element(g_idx, num_qubits, noise_rng, noise_p)
 
         equiv_measure(num_qubits)
 

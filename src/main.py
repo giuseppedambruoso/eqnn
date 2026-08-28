@@ -39,6 +39,13 @@ def main(cfg: DictConfig) -> None:
     # Only meaningful for config6-config9 — see src.qnn.create_qnn's
     # docstring. config1-config5 ignore it.
     readout = cfg.QNN.readout
+    # Monte Carlo depolarizing noise — see src.noise's module docstring.
+    # noise_seed must differ from GENERAL.seed (which drives parameter
+    # init and everything else): they're independent random streams by
+    # design, not enforced here since equal values aren't actually
+    # invalid, just not meaningfully different.
+    noise_p = cfg.QNN.noise_p
+    noise_seed = cfg.QNN.noise_seed
 
     epochs = cfg.TRAINING.epochs
     learning_rate = cfg.TRAINING.learning_rate
@@ -117,13 +124,23 @@ def main(cfg: DictConfig) -> None:
         "augment_train": augment_train,
         "class1": class1,
         "class2": class2,
+        "noise_p": noise_p,
+        "noise_seed": noise_seed,
     }
     config_hash = hashlib.sha1(
         json.dumps(config_identity, sort_keys=True).encode()
     ).hexdigest()[:8]
     os.environ.setdefault("WANDB_RUN_GROUP", f"{architecture}_N{N}_{config_hash}")
 
-    qnn = create_qnn(device, num_qubits, reps, architecture, readout=readout)
+    qnn = create_qnn(
+        device,
+        num_qubits,
+        reps,
+        architecture,
+        readout=readout,
+        noise_p=noise_p,
+        noise_seed=noise_seed,
+    )
     is_equivariant = ARCHITECTURES[architecture]["is_equivariant"]
 
     param_names = architecture_param_names(architecture, num_qubits, reps)
@@ -158,6 +175,8 @@ def main(cfg: DictConfig) -> None:
             "augment_train": augment_train,
             "class1": class1,
             "class2": class2,
+            "noise_p": noise_p,
+            "noise_seed": noise_seed,
         },
         wandb_extra_config={
             "device": device,
@@ -170,6 +189,8 @@ def main(cfg: DictConfig) -> None:
             "img_size": img_size,
             "class1": class1,
             "class2": class2,
+            "noise_p": noise_p,
+            "noise_seed": noise_seed,
         },
         verbose=verbose,
     )

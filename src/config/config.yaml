@@ -43,6 +43,20 @@ QNN:
   # "x0_xhalf" measures only 0.5*(X_0 + X_{num_qubits//2}) — the paper's
   # own readout, i.e. only the first and (num_qubits//2+1)-th qubit.
   readout: null
+  # Monte Carlo single-qubit depolarizing noise, inserted after every gate
+  # application (independently per wire touched, so a 2-qubit gate can hit
+  # 0/1/2 of its qubits) — a random Pauli X/Y/Z with probability noise_p,
+  # nothing otherwise. See src/noise.py's module docstring for why this
+  # is a Monte Carlo realization rather than the analytic depolarizing
+  # channel (this stays on default.qubit's fast statevector simulation;
+  # the analytic channel needs default.mixed and would break batched
+  # backprop training everywhere it's used).
+  noise_p: 0.0  # 0.0 (default) disables noise entirely, at zero cost
+  # Seeds which sites get hit and which Pauli they get — reproducible per
+  # seed, like a fixed "noise realization". Must be a DIFFERENT value from
+  # GENERAL.seed (which drives parameter initialization instead) — they
+  # are two independent sources of randomness. Unused when noise_p is 0.
+  noise_seed: 0
 
 TRAINING:
   epochs: 80
