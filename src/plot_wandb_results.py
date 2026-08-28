@@ -158,9 +158,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--readout",
+        nargs="+",
         default=None,
-        help="Only plot this readout (e.g. x0_xhalf or avg_x). "
-        "Default: plot every readout found, one row per value.",
+        help="Which readout to plot. Either a single bare value applied to "
+        "every dataset (e.g. --readout x0_xhalf), or one or more "
+        "dataset=readout pairs to pick a different readout per dataset "
+        "(e.g. --readout mnist=x0_xhalf satellite=avg_x). Default: plot "
+        "every readout found — errors if more than one is found for the "
+        "same dataset's class pair, since that would conflate two "
+        "different measured quantities in one row.",
     )
     parser.add_argument(
         "--project", default=None, help="Defaults to $WANDB_PROJECT or 'eqnn'."
@@ -197,6 +203,24 @@ def parse_args() -> argparse.Namespace:
         "collect_results.py. Skips runs already downloaded there.",
     )
     return parser.parse_args()
+
+
+def _resolve_readout_selector(raw_values: list[str]) -> dict[str, str]:
+    """Parses --readout's values into a {dataset: readout} mapping. A
+    single bare value (no "=") applies to every dataset, keyed under
+    "__default__"; otherwise every value must be "dataset=readout"."""
+    if len(raw_values) == 1 and "=" not in raw_values[0]:
+        return {"__default__": raw_values[0]}
+    mapping: dict[str, str] = {}
+    for value in raw_values:
+        if "=" not in value:
+            raise SystemExit(
+                f"--readout value {value!r} must be dataset=readout "
+                "when passing more than one value."
+            )
+        dataset, readout = value.split("=", 1)
+        mapping[dataset] = readout
+    return mapping
 
 
 def _normalize_augment_train(value: Any) -> Any:
@@ -562,6 +586,18 @@ def _dedupe_by_seed(grouped: Grouped) -> Grouped:
     return deduped
 
 
+def _group_dataset(grouped: Grouped, key: GroupKey) -> str | None:
+    """The dataset a group's runs belong to — all runs under one key share
+    one (architecture, augment_train, readout, class1, class2) identity,
+    and in practice one dataset too, so any bucket's first entry gives the
+    answer. None if the group has no buckets at all (shouldn't happen for
+    a key actually present in `grouped`, but keeps this total)."""
+    for bucket in grouped[key].values():
+        if bucket["dataset"]:
+            return bucket["dataset"][0]
+    return None
+
+
 def _print_diagnostics(grouped: Grouped) -> None:
     header = (
         f"{'architecture':<14}{'augment_train':<15}{'readout':<12}{'dataset':<11}"
@@ -690,24 +726,43 @@ def main() -> None:
     grouped = _dedupe_by_seed(grouped)
 
     if args.readout is not None:
-        grouped = {k: v for k, v in grouped.items() if k[2] == args.readout}
+        selector = _resolve_readout_selector(args.readout)
+
+        def _wanted_readout(key: GroupKey) -> str | None:
+            dataset = _group_dataset(grouped, key)
+            if "__default__" in selector:
+                return selector["__default__"]
+            return selector.get(dataset)
+
+        grouped = {k: v for k, v in grouped.items() if k[2] == _wanted_readout(k)}
         if not grouped:
-            raise SystemExit(f"No runs found with readout={args.readout!r}.")
+            raise SystemExit(f"No runs found matching --readout {args.readout}.")
 
     architectures = sorted({key[0] for key in grouped})
     colors = {arch: f"C{i}" for i, arch in enumerate(architectures)}
-    readouts = sorted({key[2] for key in grouped}, key=str)
-    if len(readouts) > 1:
-        raise SystemExit(
-            f"Found multiple readouts {readouts} — a single combined plot "
-            "would conflate two different measured quantities. Pass "
-            "--readout to pick one."
-        )
-    readout = readouts[0]
 
     grouped = _restrict_to_common_seeds(grouped)
 
     class_pairs = sorted({(key[3], key[4]) for key in grouped})
+    # One readout per class pair (dataset), not one for the whole plot —
+    # --readout mnist=x0_xhalf satellite=avg_x legitimately produces two
+    # different readouts across different rows. Still an error if the SAME
+    # class pair has more than one readout left after filtering: that would
+    # conflate two different measured quantities within one row.
+    row_readout: dict[tuple[int, int], str] = {}
+    for class1, class2 in class_pairs:
+        readouts_here = sorted(
+            {key[2] for key in grouped if (key[3], key[4]) == (class1, class2)},
+            key=str,
+        )
+        if len(readouts_here) > 1:
+            raise SystemExit(
+                f"Found multiple readouts {readouts_here} for class pair "
+                f"{class1}v{class2} — a single combined plot would conflate "
+                "two different measured quantities. Pass --readout to pick "
+                "one (e.g. dataset=readout pairs)."
+            )
+        row_readout[(class1, class2)] = readouts_here[0]
     augment_train_modes = ["none", "online", "once"]
     fig, axes = plt.subplots(
         len(class_pairs),
@@ -721,7 +776,13 @@ def main() -> None:
         panels = dict(zip(augment_train_modes, axes[row], strict=True))
         for augment_train, ax in panels.items():
             for architecture in architectures:
-                key = (architecture, augment_train, readout, class1, class2)
+                key = (
+                    architecture,
+                    augment_train,
+                    row_readout[(class1, class2)],
+                    class1,
+                    class2,
+                )
                 if key not in grouped:
                     continue
                 points = sorted(grouped[key].items())
@@ -750,7 +811,10 @@ def main() -> None:
                         capsize=3,
                         elinewidth=1,
                     )
-            ax.set_title(f"class {class1} vs {class2}, augment_train={augment_train}")
+            ax.set_title(
+                f"class {class1} vs {class2}, augment_train={augment_train}, "
+                f"readout={row_readout[(class1, class2)]}"
+            )
             ax.set_xlabel("N")
             ax.legend(fontsize="small", loc="best")
             ax.grid(True, alpha=0.3)
@@ -758,7 +822,7 @@ def main() -> None:
 
     fig.suptitle(
         f"{', '.join(architectures)}: accuracy vs N, averaged over seeds "
-        f"— readout={readout}\n"
+        "(readout per row — see each row's title)\n"
         "(colore=architettura, continua ●=val, tratteggiata ■=val_aug, "
         "barre=±SEM sui seed comuni a tutte le serie della stessa coppia "
         "di classi; righe=coppia di classi, colonne=augment_train)"

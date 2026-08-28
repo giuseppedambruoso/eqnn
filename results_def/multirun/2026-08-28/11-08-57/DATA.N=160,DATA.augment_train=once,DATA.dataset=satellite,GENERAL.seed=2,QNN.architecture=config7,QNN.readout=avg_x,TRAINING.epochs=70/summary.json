@@ -1,0 +1,50 @@
+{
+  "run_name": "config7_N=160_seed=2",
+  "seed": 2,
+  "N": 160,
+  "dataset": "satellite",
+  "epochs_configured": 70,
+  "epochs_completed": 70,
+  "convergence_epoch": 45,
+  "training_time_sec": 60.799498558044434,
+  "epoch_time_sec": 0.8685642651149205,
+  "train_loss": 0.6877633188717411,
+  "train_accuracy": 0.5249999999671875,
+  "val_loss": 0.6882778475058854,
+  "val_accuracy": 0.49999999996875,
+  "val_aug_loss": 0.6872804875275255,
+  "val_aug_accuracy": 0.49999999996875,
+  "param_names": [
+    "g0_RX_w0",
+    "g2_RX_w1",
+    "g4_PAULIROT_w0-1-4-5",
+    "g20_RX_w0",
+    "g22_RX_w2",
+    "g24_PAULIROT_w0-2-4-6"
+  ],
+  "final_params": [
+    0.7172825932502747,
+    -0.044279757887125015,
+    1.2418702840805054,
+    1.1702841520309448,
+    1.5178776979446411,
+    1.579039216041565
+  ],
+  "p4m_equivariance": {
+    "checked": true,
+    "is_invariant": false,
+    "max_deviation": 0.025284719142876506,
+    "error": null
+  },
+  "config": {
+    "device": "default.qubit",
+    "num_qubits": 8,
+    "reps": 2,
+    "architecture": "config7",
+    "readout": "avg_x",
+    "img_size": 16,
+    "augment_train": "once",
+    "class1": 0,
+    "class2": 1
+  }
+}
