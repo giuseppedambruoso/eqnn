@@ -3,7 +3,15 @@ hydra:
     root:
       level: INFO
   sweep:
-    subdir: ${hydra.job.override_dirname}
+    # A short, sequential per-sweep index rather than the concatenated
+    # override string: that string only grows as more parameters get
+    # swept (dataset, readout, augment_train, noise_p, noise_seed, ...)
+    # and had already exceeded both eCryptfs's 143-byte filename limit
+    # and the standard 255-byte ENAMETOOLONG limit on some sweeps. The
+    # parameters a job actually used are still fully recoverable from
+    # its summary.json / .hydra/overrides.yaml — nothing is lost, just
+    # not visible in the directory name itself anymore.
+    subdir: ${hydra.job.num}
 
 GENERAL:
   seed: 1234
