@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from omegaconf import DictConfig
 
-from src.data_loading import load_mnist_data_full
+from src.data_loading import AERO_LABELS, load_aero_data_full, load_mnist_data_full
 from src.qnn import ARCHITECTURES, architecture_param_names, create_qnn
 from src.train import train_loop
 
@@ -71,9 +71,25 @@ def main(cfg: DictConfig) -> None:
             class1,
             class2,
         )
+    elif dataset == "satellite":
+        # Ship vs plane is fixed by the dataset itself, not a CLI-selectable
+        # pair like MNIST's digit classes — override whatever class1/class2
+        # config.yaml happens to have (its 3/4 default is MNIST-specific) so
+        # every downstream record (checkpoint, wandb, results_def) reflects
+        # the actual labels instead of a stale, meaningless digit pair.
+        class1, class2 = AERO_LABELS["ship"], AERO_LABELS["plane"]
+        train_loader, test_loader, aug_test_loader = load_aero_data_full(
+            batch_size,
+            N,
+            num_workers,
+            img_size,
+            SEED,
+            verbose,
+            augment_train,
+        )
     else:
         raise ValueError(
-            "Only 'mnist' is currently supported in this modularized example."
+            f"Unknown DATA.dataset {dataset!r}; must be one of 'mnist', 'satellite'."
         )
 
     # Default wandb group: every config.yaml parameter that defines the

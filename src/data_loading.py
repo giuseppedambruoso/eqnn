@@ -1,12 +1,16 @@
+import glob
 import logging
+import os
 import random
 
+import kagglehub
 import numpy as np
 import torch
 import torchvision
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
-from torch.utils.data import DataLoader, Subset, TensorDataset
+from PIL import Image
+from torch.utils.data import DataLoader, Dataset, Subset, TensorDataset
 
 from src.data_encoding import embedding_unitary
 
@@ -40,7 +44,7 @@ class L2Normalize:
         return tensor / (l2_norm + 1e-12)
 
 
-def _materialize(dataset: Subset) -> TensorDataset:
+def _materialize(dataset: Dataset) -> TensorDataset:
     """Runs every item's transform pipeline (including the expensive
     embedding_unitary encoding, ~0.2-0.3s/image) exactly once, instead of
     on every DataLoader access. torchvision's Dataset/Subset apply their
@@ -288,6 +292,200 @@ def load_mnist_data_full(
     )
     test_final = _materialize(Subset(test_full, test_balanced_idx))
     aug_test_final = _materialize(Subset(aug_test_full, test_balanced_idx))
+
+    g_loader = torch.Generator().manual_seed(seed)
+    train_loader = DataLoader(
+        train_final,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        worker_init_fn=seed_worker,
+        generator=g_loader,
+    )
+    test_loader = DataLoader(
+        test_final,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        worker_init_fn=seed_worker,
+    )
+    aug_test_loader = DataLoader(
+        aug_test_final,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        worker_init_fn=seed_worker,
+    )
+
+    return train_loader, test_loader, aug_test_loader
+
+
+# Label convention for load_aero_data_full: 0 = ship, 1 = plane.
+AERO_LABELS = {"ship": 0, "plane": 1}
+
+
+class _FileListDataset(Dataset):
+    """A dataset over a flat list of (image_path, label) pairs, applying
+    `transform` to each PIL image on access — the ships/planesnet chips
+    aren't laid out as an ImageFolder (both classes come from separate
+    Kaggle datasets, pre-filtered to only the positive-class files), so
+    there's no torchvision dataset class that fits directly."""
+
+    def __init__(self, samples: list[tuple[str, int]], transform) -> None:
+        self.samples = samples
+        self.transform = transform
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
+        path, label = self.samples[idx]
+        with Image.open(path) as img:
+            return self.transform(img.convert("RGB")), label
+
+
+def _positive_chip_files(kaggle_slug: str) -> list[str]:
+    """Downloads (or reuses the local kagglehub cache for) one of
+    rhammell's chip datasets and returns only the "object present" chips
+    — filenames prefixed "1_" — sorted for a deterministic file order
+    (glob's own order is filesystem-dependent). The "0_" (no object)
+    chips are discarded entirely: neither class in the combined
+    ship-vs-plane task is "background"."""
+    dataset_path = kagglehub.dataset_download(kaggle_slug)
+    return sorted(glob.glob(os.path.join(dataset_path, "**", "1_*.png"), recursive=True))
+
+
+def _split_pool(
+    files: list[str], train_frac: float, generator: torch.Generator
+) -> tuple[list[str], list[str]]:
+    """One-time, deterministic (seeded) train/test split of one class's
+    file list, done BEFORE any N-based sampling — so the same image can
+    never land in both the train and test set, for any N."""
+    perm = torch.randperm(len(files), generator=generator).tolist()
+    n_train = int(len(files) * train_frac)
+    train_files = [files[i] for i in perm[:n_train]]
+    test_files = [files[i] for i in perm[n_train:]]
+    return train_files, test_files
+
+
+def _sample_labeled(
+    pool: list[str], n: int, generator: torch.Generator, label: int, pool_name: str
+) -> list[tuple[str, int]]:
+    """Samples exactly n files from pool without replacement, pairing each
+    with `label`. Raises rather than silently truncating if the pool is
+    too small — sampling with replacement here would mean the same chip
+    appears more than once in a single train or test set."""
+    if n > len(pool):
+        raise ValueError(
+            f"Requested {n} images from {pool_name}, but it only has "
+            f"{len(pool)} available. Lower DATA.N or raise train_frac "
+            "(if the shortfall is in a test pool) so every class has "
+            "enough images to sample without duplicates."
+        )
+    idx = torch.randperm(len(pool), generator=generator)[:n].tolist()
+    return [(pool[i], label) for i in idx]
+
+
+def load_aero_data_full(
+    batch_size: int,
+    N: int,
+    num_workers: int,
+    img_size: int = 16,
+    seed: int = 42,
+    verbose: bool = False,
+    augment_train: str = "none",
+    train_frac: float = 0.5,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Ship-vs-plane binary classification, combined from two Kaggle
+    satellite-chip datasets: rhammell/ships-in-satellite-imagery (label 0)
+    and rhammell/planesnet (label 1). Only each dataset's positive-class
+    chips are used (see _positive_chip_files) — the "no object" chips are
+    discarded, since neither class here is meant to be "background".
+
+    Each class's positive files are split ONCE, deterministically (seeded
+    by `seed`), into a train pool and a test pool (train_frac each) before
+    any N-based sampling — so no image is ever in both splits. For a given
+    N, N//2 images are then sampled (without replacement) from each
+    class's train pool for the train set, and N//2 from each class's test
+    pool for the test set — guaranteeing perfect class balance in BOTH
+    sets at every N, matching load_mnist_data_full's use of a single N for
+    both loaders.
+
+    Raises ValueError (via _sample_labeled) if N//2 exceeds either class's
+    train or test pool size, rather than silently sampling fewer or
+    duplicate images. The bottleneck is the ships dataset (1000 positive
+    chips total, vs. planesnet's 8000): with the default train_frac=0.5,
+    that allows N up to 1000 (500 ships + 500 planes) in each of the
+    train/test sets.
+    """
+    if augment_train not in AUGMENT_TRAIN_MODES:
+        raise ValueError(
+            f"augment_train must be one of {AUGMENT_TRAIN_MODES}, got {augment_train!r}"
+        )
+    torch.manual_seed(seed)
+
+    ship_files = _positive_chip_files("rhammell/ships-in-satellite-imagery")
+    plane_files = _positive_chip_files("rhammell/planesnet")
+    if verbose:
+        logger.info(
+            f"aero dataset: {len(ship_files)} ship chips, {len(plane_files)} plane chips"
+        )
+
+    g_split = torch.Generator().manual_seed(seed)
+    ship_train_pool, ship_test_pool = _split_pool(ship_files, train_frac, g_split)
+    plane_train_pool, plane_test_pool = _split_pool(plane_files, train_frac, g_split)
+
+    n_ship, n_plane = N // 2, N - (N // 2)
+    g_select = torch.Generator().manual_seed(seed)
+    train_samples = _sample_labeled(
+        ship_train_pool, n_ship, g_select, AERO_LABELS["ship"], "ship train pool"
+    ) + _sample_labeled(
+        plane_train_pool, n_plane, g_select, AERO_LABELS["plane"], "plane train pool"
+    )
+    test_samples = _sample_labeled(
+        ship_test_pool, n_ship, g_select, AERO_LABELS["ship"], "ship test pool"
+    ) + _sample_labeled(
+        plane_test_pool, n_plane, g_select, AERO_LABELS["plane"], "plane test pool"
+    )
+    train_samples = [
+        train_samples[i]
+        for i in torch.randperm(len(train_samples), generator=g_select).tolist()
+    ]
+    test_samples = [
+        test_samples[i]
+        for i in torch.randperm(len(test_samples), generator=g_select).tolist()
+    ]
+
+    base_transforms = [
+        transforms.Resize(img_size),
+        transforms.Grayscale(num_output_channels=1),
+        transforms.ToTensor(),
+    ]
+    post_transforms = [
+        L2Normalize(),
+        transforms.Lambda(lambda x: x.squeeze(0)),
+        transforms.Lambda(lambda x: embedding_unitary(x)),
+    ]
+    train_transform_list = list(base_transforms)
+    if augment_train in ("online", "once"):
+        train_transform_list.append(D4Augmentation(p=1))
+    train_transform = transforms.Compose(train_transform_list + post_transforms)
+    test_transform = transforms.Compose(base_transforms + post_transforms)
+    aug_test_transform = transforms.Compose(
+        base_transforms + [D4Augmentation(p=1)] + post_transforms
+    )
+
+    train_full = _FileListDataset(train_samples, train_transform)
+    test_full = _FileListDataset(test_samples, test_transform)
+    aug_test_full = _FileListDataset(test_samples, aug_test_transform)
+
+    # Same "online" caveat as load_mnist_data_full: left un-cached so the
+    # random p4m transform is re-drawn every epoch instead of frozen.
+    train_final: Dataset | TensorDataset = (
+        train_full if augment_train == "online" else _materialize(train_full)
+    )
+    test_final = _materialize(test_full)
+    aug_test_final = _materialize(aug_test_full)
 
     g_loader = torch.Generator().manual_seed(seed)
     train_loader = DataLoader(

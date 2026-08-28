@@ -43,3 +43,6 @@ dist/
 
 # local env vars / secrets
 .env
+
+# kagglehub dataset cache (docker-compose volume)
+/.kagglehub_cache/

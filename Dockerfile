@@ -74,8 +74,14 @@ COPY --chown=appuser:appuser README.md pyproject.toml ./
 
 # Directories the training job writes/reads at runtime; mount these as
 # volumes (see docker-compose.yml) to persist data/results across runs.
-RUN mkdir -p data outputs multirun wandb results_def \
-    && chown -R appuser:appuser data outputs multirun wandb results_def
+# /home/appuser/.cache is pre-created here (not just left to whichever
+# library needs it first) because docker-compose bind-mounts a host dir
+# onto /home/appuser/.cache/kagglehub — without .cache already existing
+# and owned by appuser, Docker creates it as root while setting up that
+# mount, blocking appuser from writing sibling dirs like .cache/wandb or
+# .cache/matplotlib.
+RUN mkdir -p data outputs multirun wandb results_def /home/appuser/.cache \
+    && chown -R appuser:appuser data outputs multirun wandb results_def /home/appuser/.cache
 
 VOLUME ["/app/data", "/app/outputs", "/app/multirun", "/app/wandb", "/app/results_def"]
 

@@ -13,6 +13,11 @@ services:
       - ./multirun:/app/multirun
       - ./wandb:/app/wandb
       - ./results_def:/app/results_def
+      # Persists downloaded Kaggle datasets (DATA.dataset=satellite) across
+      # container runs — without this, every `docker compose run` re-downloads
+      # ~270MB from Kaggle since the container filesystem is otherwise thrown
+      # away on exit.
+      - ./.kagglehub_cache:/home/appuser/.cache/kagglehub
     # Pass Hydra overrides after `--`, e.g.:
     #   docker compose run --rm eqnn TRAINING.epochs=10 DATA.N=100
     command: []
