@@ -14,11 +14,15 @@ echo "== Python environment (.venv)"
     --extra-index-url https://download.pytorch.org/whl/cpu
 
 echo "== Kaggle credentials (SATELLITE, PlanesNet)"
-if [ ! -f "$HOME/.kaggle/kaggle.json" ] && [ -z "${KAGGLE_USERNAME:-}" ]; then
-  echo "ERROR: put your Kaggle API token in ~/.kaggle/kaggle.json (kaggle.com -> Settings -> API -> Create New Token)"
+# Accepted: new-style API token (~/.kaggle/access_token or $KAGGLE_API_TOKEN)
+# or legacy credentials (~/.kaggle/kaggle.json or $KAGGLE_USERNAME/$KAGGLE_KEY).
+if [ ! -f "$HOME/.kaggle/access_token" ] && [ -z "${KAGGLE_API_TOKEN:-}" ] \
+   && [ ! -f "$HOME/.kaggle/kaggle.json" ] && [ -z "${KAGGLE_USERNAME:-}" ]; then
+  echo "ERROR: no Kaggle credentials. kaggle.com -> Settings -> API Tokens -> Generate New Token, then:"
+  echo "  mkdir -p ~/.kaggle && echo <TOKEN> > ~/.kaggle/access_token && chmod 600 ~/.kaggle/access_token"
   exit 1
 fi
-chmod 600 "$HOME/.kaggle/kaggle.json" 2>/dev/null || true
+chmod 600 "$HOME/.kaggle/access_token" "$HOME/.kaggle/kaggle.json" 2>/dev/null || true
 
 echo "== Shared results and Ising data (branch campaign-results)"
 scripts/sync_results.sh

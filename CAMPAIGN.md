@@ -17,8 +17,8 @@ local + imported results, so **every machine sees all results**.
 ```bash
 git clone -b feature/paper-campaign git@github.com:giuseppedambruoso/eqnn.git eqnn-campaign
 cd eqnn-campaign
-# Kaggle API token (kaggle.com -> Settings -> API -> Create New Token):
-mkdir -p ~/.kaggle && mv ~/Downloads/kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
+# Kaggle API token (kaggle.com -> Settings -> API Tokens -> Generate New Token):
+mkdir -p ~/.kaggle && echo <TOKEN> > ~/.kaggle/access_token && chmod 600 ~/.kaggle/access_token
 scripts/setup_campaign_machine.sh
 ```
 
