@@ -4,6 +4,9 @@
 torch==2.9.1
 torchvision==0.24.1
 pennylane==0.44.0
+# needed by pennylane's autograph (diastatic-malt) but not declared by it
+gast==0.6.0
+astunparse==1.6.3
 numpy==2.2.6
 matplotlib==3.10.7
 pillow==12.3.0
