@@ -4,6 +4,8 @@
 
 Writes:
   accuracy_vs_N.pdf   noiseless test accuracy vs N, one panel per task
+  watermark.pdf       watermark study: accuracy vs N on the three test sets
+  gaps.pdf            invariance, shortcut and generalization gaps
   noise.pdf           accuracy vs depolarizing probability (N = 80):
                       noise in training and test / in test only
   dataset_samples.png examples of every task as seen by the model
@@ -175,6 +177,110 @@ def fig_samples(out: str, n_per_class: int = 5) -> None:
     plt.close(fig)
 
 
+
+WM_TASKS = ("mnist45", "satellite", "eurosat_fi", "galaxy_round_edgeon",
+            "galaxy_round_spiral", "resisc_airport_harbor")
+WM_STYLES = (("shortcut_acc", "-", "o", "watermarked test"),
+             ("transformed_acc", "--", "s", "watermark transformed"),
+             ("clean_acc", ":", "^", "no watermark"))
+SHORT_LABEL = {"mnist45": "MNIST", "satellite": "SATELLITE", "ising": "Ising",
+               "eurosat_fi": "EuroSAT", "galaxy_round_edgeon": "Gal. edge-on",
+               "galaxy_round_spiral": "Gal. spiral", "resisc_airport_harbor": "RESISC45"}
+
+
+def fig_watermark(records: list[dict], out: str) -> dict:
+    """Watermark study: accuracy vs N on the three test sets, per task."""
+    groups = collections.defaultdict(list)
+    for r in records:
+        if r["kind"] == "watermark":
+            groups[(r["task"], r["arch"], r["N"])].append(r)
+    agg = {k: [mean_sem([r[f] for r in rs]) for f, *_ in WM_STYLES] for k, rs in groups.items()}
+    ncols = 3
+    nrows = math.ceil(len(WM_TASKS) / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(11, 2.9 * nrows + 0.8), sharey=True, squeeze=False)
+    for ax, task in zip(axes.flat, WM_TASKS):
+        for arch in ARCHS:
+            Ns = sorted(N for (t, a, N) in agg if t == task and a == arch)
+            for k, (_, ls, marker, _) in enumerate(WM_STYLES):
+                ax.errorbar(Ns, [agg[(task, arch, N)][k][0] for N in Ns],
+                            yerr=[agg[(task, arch, N)][k][1] for N in Ns], color=COLORS[arch],
+                            ls=ls, marker=marker, ms=3.5, lw=1.2, capsize=2)
+        ax.set_xscale("log", base=2)
+        ax.set_xticks(N_VALUES, [str(n) for n in N_VALUES])
+        ax.set_ylim(0.2, 1.02)
+        ax.axhline(0.5, color="gray", lw=0.7, ls=":")
+        ax.grid(alpha=0.3)
+        ax.set_title(TITLES[task])
+        ax.set_xlabel("training-set size $N$")
+    for row in axes:
+        row[0].set_ylabel("test accuracy")
+    handles = [plt.Line2D([], [], color=COLORS[a], ls=ls, marker=m, ms=4, label=f"{ARCH_LABELS[a]}, {lab}")
+               for a in ARCHS for _, ls, m, lab in WM_STYLES]
+    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.01))
+    fig.tight_layout(rect=(0, 0.1, 1, 1))
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    return {f"{t}|{a}|{N}": v for (t, a, N), v in agg.items()}
+
+
+def _bars(ax, tasks: tuple, values: dict, ylabel: str) -> None:
+    """Grouped bars: one group per task, one bar per architecture (mean +- SEM)."""
+    width = 0.27
+    for k, arch in enumerate(ARCHS):
+        xs = [i + (k - 1) * width for i in range(len(tasks))]
+        ms = [values.get((t, arch), (float("nan"), 0.0)) for t in tasks]
+        ax.bar(xs, [m for m, _ in ms], width, yerr=[e for _, e in ms], color=COLORS[arch],
+               capsize=2, label=ARCH_LABELS[arch])
+    ax.set_xticks(range(len(tasks)), [SHORT_LABEL[t] for t in tasks], rotation=35, ha="right")
+    ax.axhline(0, color="black", lw=0.6)
+    ax.set_ylabel(ylabel)
+    ax.grid(alpha=0.3, axis="y")
+
+
+def fig_gaps(records: list[dict], records_wm: list[dict], out: str) -> dict:
+    """(a) invariance gap (original - transformed test accuracy) without the
+    watermark; (b) shortcut gap (watermarked - transformed-watermark test
+    accuracy); both averaged over all N and seeds (mean +- SEM over runs);
+    (c) generalization gap (train - test accuracy) vs N without the
+    watermark, averaged over the tasks (mean +- SEM over tasks)."""
+    inv, short = collections.defaultdict(list), collections.defaultdict(list)
+    gen = collections.defaultdict(list)
+    for r in records:
+        if r["kind"] == "sweep":
+            inv[(r["task"], r["arch"])].append(r["val_acc"] - r["val_aug_acc"])
+            gen[(r["task"], r["arch"], r["N"])].append(r["train_acc"] - r["val_acc"])
+    for r in records_wm:
+        if r["kind"] == "watermark":
+            short[(r["task"], r["arch"])].append(r["shortcut_acc"] - r["transformed_acc"])
+    inv_ms = {k: mean_sem(v) for k, v in inv.items()}
+    short_ms = {k: mean_sem(v) for k, v in short.items()}
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.3), gridspec_kw={"width_ratios": [1.15, 1, 0.9]})
+    _bars(axes[0], TASKS, inv_ms, "original $-$ transformed test acc.")
+    axes[0].set_title("(a) invariance gap, no watermark")
+    _bars(axes[1], WM_TASKS, short_ms, "watermarked $-$ transformed test acc.")
+    axes[1].set_title("(b) shortcut gap, watermark in training")
+    gen_ms = {}
+    for arch in ARCHS:
+        pts = [mean_sem([statistics.mean(gen[(t, arch, N)]) for t in TASKS if gen.get((t, arch, N))])
+               for N in N_VALUES]
+        gen_ms[arch] = dict(zip(map(str, N_VALUES), pts))
+        axes[2].errorbar(N_VALUES, [m for m, _ in pts], yerr=[e for _, e in pts], color=COLORS[arch],
+                         marker="o", ms=3.5, lw=1.2, capsize=2, label=ARCH_LABELS[arch])
+    axes[2].set_xscale("log", base=2)
+    axes[2].set_xticks(N_VALUES, [str(n) for n in N_VALUES])
+    axes[2].axhline(0, color="black", lw=0.6)
+    axes[2].set_xlabel("training-set size $N$")
+    axes[2].set_ylabel("train $-$ test accuracy")
+    axes[2].set_title("(c) train $-$ test, no watermark")
+    axes[2].grid(alpha=0.3)
+    axes[1].legend(frameon=False, loc="upper left")
+    fig.tight_layout()
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    return {"invariance_gap": {f"{t}|{a}": v for (t, a), v in inv_ms.items()},
+            "shortcut_gap": {f"{t}|{a}": v for (t, a), v in short_ms.items()},
+            "generalization_gap": gen_ms}
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("out_dir")
@@ -188,6 +294,11 @@ def main() -> None:
     summary = {
         "accuracy_vs_N": fig_accuracy(records, os.path.join(args.out_dir, "accuracy_vs_N.pdf")),
     }
+    records_wm = [r for r in load(f"results_paper/campaign_v2_wm_{args.qubits}q.jsonl")
+                  if r["task"] in WM_TASKS]
+    if records_wm:
+        summary["watermark"] = fig_watermark(records_wm, os.path.join(args.out_dir, "watermark.pdf"))
+        summary["gaps"] = fig_gaps(records, records_wm, os.path.join(args.out_dir, "gaps.pdf"))
     if args.noise:
         summary["noise"] = fig_noise(records, os.path.join(args.out_dir, "noise.pdf"))
     sweeps = [r for r in records if r["kind"] == "sweep"]
