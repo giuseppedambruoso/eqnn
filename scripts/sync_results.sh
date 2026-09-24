@@ -2,8 +2,8 @@
 # Shares campaign results between machines through the `campaign-results`
 # branch of this repository on GitHub.
 #
-# Every machine only ever pushes ITS OWN file
-#   results/campaign_<q>q.<machine>.jsonl
+# Every machine only ever pushes ITS OWN files
+#   results/<campaign_<q>q | init_comparison>.<machine>.jsonl
 # so pushes from different machines never conflict; the files of all the
 # other machines are copied into results_paper/imported/, where the
 # campaign (to skip jobs already done elsewhere), src.plot_campaign and
@@ -28,12 +28,12 @@ sync_once() {
   fi
   git -C "$RESULTS_REPO" pull -q --rebase || return 1
   mkdir -p "$RESULTS_REPO/results" results_paper/imported
-  for q in 8 10 12; do
-    local_file="results_paper/campaign_${q}q.jsonl"
+  for stem in campaign_8q campaign_10q campaign_12q init_comparison; do
+    local_file="results_paper/${stem}.jsonl"
     [ -f "$local_file" ] || continue
-    # Only complete (newline-terminated) lines: the campaign may be
-    # appending to the file right now.
-    head -n "$(wc -l < "$local_file")" "$local_file" > "$RESULTS_REPO/results/campaign_${q}q.${MACHINE}.jsonl"
+    # Only complete (newline-terminated) lines: the job may be appending
+    # to the file right now.
+    head -n "$(wc -l < "$local_file")" "$local_file" > "$RESULTS_REPO/results/${stem}.${MACHINE}.jsonl"
   done
   git -C "$RESULTS_REPO" add results
   if ! git -C "$RESULTS_REPO" diff --cached --quiet; then
@@ -43,7 +43,7 @@ sync_once() {
       git -C "$RESULTS_REPO" pull -q --rebase
     done
   fi
-  for f in "$RESULTS_REPO"/results/campaign_*q.*.jsonl; do
+  for f in "$RESULTS_REPO"/results/*.*.jsonl; do
     [ -e "$f" ] || continue
     case "$(basename "$f")" in *".${MACHINE}.jsonl") continue ;; esac
     cp "$f" results_paper/imported/

@@ -52,3 +52,17 @@ jobs (here or on any other machine) are skipped.
 .venv/bin/python -m src.plot_campaign results_paper/campaign_8q.jsonl results_paper/accuracy_grid_8q.pdf
 tail -f results_paper/sync.log
 ```
+
+## Preliminary test: output-bias initialization (run BEFORE the campaign)
+
+Compares the default output-bias init (w = 1, b = 0) with a data-dependent
+one (output z-scored on the training set) for Equiv and NonEquiv on all six
+tasks, N = 80, 5 seeds (120 runs, resumable):
+
+```bash
+export EQNN_MACHINE=server
+nohup scripts/sync_results.sh --loop 600 > results_paper/sync.log 2>&1 &
+nohup .venv/bin/python -m src.init_comparison > results_paper/init_comparison.log 2>&1 &
+tail -f results_paper/init_comparison.log          # progress; the table is printed at the end
+.venv/bin/python -m src.init_comparison --summary-only   # table at any time
+```
