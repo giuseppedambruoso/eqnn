@@ -3,13 +3,13 @@ import pytest
 import torch
 
 from src.ansatz_builder import (
-    architecture_to_spec,
     build_qnn_from_spec,
     check_p4m_invariance,
     param_labels,
     validate_spec,
 )
 from src.data_encoding import embedding_unitary
+from src.paper_ansatzes import paper_architecture_spec
 from src.qnn import ARCHITECTURES, create_qnn
 
 DEVICE_NAME = "default.qubit"
@@ -203,43 +203,27 @@ def test_invalid_specs_raise(bad_spec, match):
         validate_spec(bad_spec, num_qubits=8)
 
 
-@pytest.mark.parametrize(
-    "architecture",
-    sorted(a for a in ARCHITECTURES if ARCHITECTURES[a]["kind"] == "uniform"),
-)
-def test_architecture_to_spec_matches_create_qnn(architecture):
-    """Every one of config1-config5, expanded into a spec (with twirled=
-    matching ARCHITECTURES[architecture]["twirled"]), must give numerically
-    identical output to the real fixed architecture for the same
-    parameters — not just "something plausible"."""
-    num_qubits, reps = 8, 2
-    spec = architecture_to_spec(architecture, num_qubits, reps)
-    twirled = ARCHITECTURES[architecture]["twirled"]
+@pytest.mark.parametrize("architecture", sorted(ARCHITECTURES))
+def test_paper_spec_matches_create_qnn(architecture):
+    """The spec of every architecture, built with build_qnn_from_spec (with
+    twirled= matching ARCHITECTURES[architecture]["twirled"]), must give
+    numerically identical output to create_qnn for the same parameters."""
+    num_qubits = 8
+    meta = ARCHITECTURES[architecture]
+    spec = paper_architecture_spec(meta["paper_ansatz"], meta["symmetry"], num_qubits)
     qnn_spec, initial_params, _ = build_qnn_from_spec(
-        DEVICE_NAME, num_qubits, spec, twirled=twirled
+        DEVICE_NAME, num_qubits, spec, twirled=meta["twirled"], readout="avg_x"
     )
-    qnn_fixed = create_qnn(DEVICE_NAME, num_qubits, reps, architecture)
+    qnn_fixed = create_qnn(DEVICE_NAME, num_qubits, 1, architecture)
 
-    assert initial_params.shape == (num_qubits * reps,)
-
-    params = torch.empty(num_qubits * reps).uniform_(-0.1, 0.1)
+    params = torch.empty(initial_params.shape[0]).uniform_(-0.1, 0.1)
     emb = _sample_embedding(num_qubits)
-
-    out_spec = qnn_spec(emb, params)
-    out_fixed = qnn_fixed(emb, params)
-
-    assert torch.allclose(out_spec, out_fixed, atol=1e-6)
-
-
-@pytest.mark.parametrize("architecture", ["config6", "config7", "config8", "config9"])
-def test_architecture_to_spec_rejects_paper_architectures(architecture):
-    with pytest.raises(ValueError, match="paper_architecture_spec"):
-        architecture_to_spec(architecture, 8, 2)
+    assert torch.allclose(qnn_spec(emb, params), qnn_fixed(emb, params), atol=1e-6)
 
 
 def test_tied_group_parameters_share_one_slot():
     """Two gates sharing a "group" must collapse to ONE trainable slot —
-    the mechanism config6-config9's paired row/column rotations rely on
+    the mechanism config6/config7's paired row/column rotations rely on
     (see src.paper_ansatzes)."""
     spec = [
         {
@@ -290,7 +274,7 @@ def test_readout_avg_x_is_bounded():
 
 
 def test_readout_avg_x_matches_sum_z():
-    """config1-config5's "sum_z" readout (H then measure Z) is
+    """The "sum_z" readout (H then measure Z) is
     mathematically the same as measuring X directly (H Z H = X) — so
     "avg_x" must give an identical output for the same spec/params."""
     spec = [
@@ -324,8 +308,8 @@ def test_unknown_readout_raises():
 def test_twirled_spec_is_p4m_invariant():
     """Wrapping ANY spec in twirled=True must make it exactly
     p4m-equivariant, regardless of the spec's own content — here applied
-    to config1's (normally non-equivariant) inner pattern."""
-    spec = architecture_to_spec("config1", 8, 2)
+    to config7's (normally non-equivariant) circuit."""
+    spec = paper_architecture_spec("6", "nonequivariant", 8)
     qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, spec, twirled=True)
     is_invariant, deviation = check_p4m_invariance(
         qnn, params, img_size=16, n_samples=2
@@ -335,7 +319,7 @@ def test_twirled_spec_is_p4m_invariant():
 
 
 def test_untwirled_spec_is_not_p4m_invariant():
-    spec = architecture_to_spec("config1", 8, 2)
+    spec = paper_architecture_spec("6", "nonequivariant", 8)
     qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, spec, twirled=False)
     is_invariant, _deviation = check_p4m_invariance(
         qnn, params, img_size=16, n_samples=2

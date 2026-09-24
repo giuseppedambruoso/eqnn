@@ -7,8 +7,8 @@ from src.qnn import ARCHITECTURES, architecture_param_names, create_qnn
 
 DEVICE_NAME = "default.qubit"
 
-EQUIVARIANT_CONFIGS = ["config2", "config4", "config5", "config6", "config8"]
-NON_EQUIVARIANT_CONFIGS = ["config1", "config3", "config7", "config9"]
+EQUIVARIANT_CONFIGS = ["config6", "config10"]
+NON_EQUIVARIANT_CONFIGS = ["config7"]
 
 
 def _params_for(architecture: str, num_qubits: int, reps: int) -> torch.Tensor:
@@ -19,7 +19,7 @@ def _params_for(architecture: str, num_qubits: int, reps: int) -> torch.Tensor:
 
 @pytest.mark.parametrize("architecture", EQUIVARIANT_CONFIGS)
 def test_p4m_equivariance(device_and_tensors, architecture):
-    """config2/4/5 (twirled) and config6/8 (D4-generator-commuting by
+    """config10 (twirled) and config6 (D4-generator-commuting by
     construction) must be p4m-equivariant. Uses check_p4m_invariance (max
     deviation over several random images and both flips + transpose)
     rather than a single fixed image/transform: a pointwise comparison on
@@ -42,9 +42,9 @@ def test_p4m_equivariance(device_and_tensors, architecture):
 
 @pytest.mark.parametrize("architecture", NON_EQUIVARIANT_CONFIGS)
 def test_not_p4m_equivariant(device_and_tensors, architecture):
-    """config1/config3 have no twirling, and config7/config9 deliberately
-    misalign their generators with the image symmetry (axis-scrambled
-    column register) — all four must generically NOT be p4m-equivariant.
+    """config7 deliberately misaligns its generators with the image
+    symmetry (axis-scrambled column register) — it must generically NOT be
+    p4m-equivariant.
     See test_p4m_equivariance's docstring for why this uses
     check_p4m_invariance rather than a single fixed (image, transform)
     comparison.
@@ -78,15 +78,14 @@ def test_invalid_architecture_raises():
         create_qnn(DEVICE_NAME, 8, 2, architecture="config99")
 
 
-@pytest.mark.parametrize("architecture", ["config6", "config7", "config8", "config9"])
-def test_paper_architectures_require_8_qubits(architecture):
+@pytest.mark.parametrize("architecture", ["config6", "config7", "config10"])
+def test_architectures_reject_unsupported_qubit_counts(architecture):
     with pytest.raises(ValueError, match="num_qubits"):
         create_qnn(DEVICE_NAME, 4, 2, architecture=architecture)
 
 
 def test_readout_override_changes_paper_architecture_output():
-    """readout is only meaningful for config6-config9 (see create_qnn's
-    docstring) — passing "x0_xhalf" instead of the default ("avg_x") must
+    """Passing readout="x0_xhalf" instead of the default ("avg_x") must
     actually change the measured output, proving the override takes
     effect rather than being silently ignored."""
     num_qubits, reps = 8, 2
@@ -101,18 +100,3 @@ def test_readout_override_changes_paper_architecture_output():
     out_default = qnn_default(emb, params)
     out_x0_xhalf = qnn_x0_xhalf(emb, params)
     assert not torch.allclose(out_default, out_x0_xhalf)
-
-
-def test_readout_override_is_ignored_for_uniform_architectures():
-    """config1-config5's measurement is hardcoded and doesn't go through
-    the readout mechanism at all — passing readout= for one of them must
-    not raise or change anything."""
-    num_qubits, reps = 8, 2
-    params = _params_for("config1", num_qubits, reps)
-    emb = embedding_unitary(torch.rand(16, 16))
-
-    qnn_default = create_qnn(DEVICE_NAME, num_qubits, reps, "config1")
-    qnn_with_readout = create_qnn(
-        DEVICE_NAME, num_qubits, reps, "config1", readout="x0_xhalf"
-    )
-    assert torch.allclose(qnn_default(emb, params), qnn_with_readout(emb, params))

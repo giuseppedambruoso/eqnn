@@ -15,29 +15,29 @@ def test_app_loads_without_error():
     assert any("Nessun gate ancora" in i.value for i in at.info)
 
 
-def test_load_config1_preset_populates_circuit():
+def test_load_config7_preset_populates_circuit():
     at = AppTest.from_file(APP_PATH)
     at.run(timeout=TIMEOUT)
 
-    at.selectbox[0].select("config1")  # architecture preset selector
+    at.selectbox[0].select("config7")  # architecture preset selector
     load_button = next(b for b in at.button if "Carica come punto" in b.label)
     load_button.click()
     at.run(timeout=TIMEOUT)
 
     assert not at.exception
-    # config1, reps=2 (default), 8 qubits: 2 * (8 RY + 7 CNOT) = 30 gates
-    assert len(at.markdown) == 30
-    assert any("Parametri allenabili: 16" in c.value for c in at.caption)
+    # 5 blocks x (4 single-qubit rotations + 1 four-qubit Pauli rotation)
+    assert len(at.markdown) == 25
+    assert any("Parametri allenabili: 6" in c.value for c in at.caption)
     assert any("twirling: no" in c.value for c in at.caption)
 
 
-def test_load_config2_preset_enables_twirling():
-    """config2 = twirled config1 — loading it must auto-check the twirling
+def test_load_config10_preset_enables_twirling():
+    """config10 = twirled config7 — loading it must auto-check the twirling
     toggle (see ARCHITECTURES[architecture]["twirled"] in src/qnn.py)."""
     at = AppTest.from_file(APP_PATH)
     at.run(timeout=TIMEOUT)
 
-    at.selectbox[0].select("config2")
+    at.selectbox[0].select("config10")
     next(b for b in at.button if "Carica come punto" in b.label).click()
     at.run(timeout=TIMEOUT)
 
@@ -46,9 +46,8 @@ def test_load_config2_preset_enables_twirling():
 
 
 def test_load_config6_preset_uses_avg_x_readout():
-    """config6 (paper6, equivariant) defaults to the avg_x readout — the
-    same measurement config1-config5 already do in effect (H before
-    measuring Z) — auto-set when the preset is loaded."""
+    """config6 (equivariant) defaults to the avg_x readout, auto-set when
+    the preset is loaded."""
     at = AppTest.from_file(APP_PATH)
     at.run(timeout=TIMEOUT)
 

@@ -14,22 +14,11 @@ def _train_a_few_steps(architecture: str) -> tuple[torch.Tensor, torch.Tensor]:
     final_params). Uses the same num_qubits=8/reps=2 as the project's
     actual defaults (src/config/config.yaml) rather than a shrunk toy
     circuit: with diff_method="backprop" + batched execution (see
-    src.train.execute_batch), even config8/config9 (18 trainable
-    parameters, the most expensive) run a full step in well under a
-    second, so there's no real speed reason to test a different, smaller
-    circuit than what's actually used — and doing so isn't free: config4
-    (twirled) at a shrunk num_qubits=4/reps=1 turned out to have an
-    accidental *total* zero-gradient degeneracy (not just its documented
-    frozen first qubit), an artifact of that specific tiny size, not a
-    real property of the architecture.
-
-    float64 matters here too: an analytically *exact* zero gradient (e.g.
-    config3/config4's frozen first qubit per rep, see
-    test_config3_config4_first_qubit_stays_frozen) only reliably rounds to
-    ~1e-18 at float64 precision — at the default float32, backprop's
-    specific rounding path for a near-zero gradient can land around ~1e-10
-    instead, small but large enough for 3 Adam steps to move a "frozen"
-    parameter well past a reasonable tolerance.
+    src.train.execute_batch), even the twirled config10 (8 circuit
+    evaluations per image) runs a full step in well under a second, so
+    there's no speed reason to test a smaller circuit than the one actually
+    used. float64 keeps near-zero gradients from being rounded into
+    spurious parameter updates.
     """
     torch.manual_seed(0)
     num_qubits, reps = 8, 2
@@ -61,7 +50,7 @@ def _train_a_few_steps(architecture: str) -> tuple[torch.Tensor, torch.Tensor]:
 
 @pytest.mark.parametrize("architecture", sorted(ARCHITECTURES))
 def test_training_updates_params(architecture):
-    """Params must actually move during training for every one of the 5
+    """Params must actually move during training for every one of the 3
     architectures — a sanity check that gradients flow end-to-end
     (embedding -> QNN -> loss -> optimizer), independent of the
     equivariance checks in test_equivariance.py.
@@ -70,20 +59,3 @@ def test_training_updates_params(architecture):
 
     assert not torch.allclose(final_params, initial_params, atol=1e-6)
     assert torch.isfinite(final_params).all()
-
-
-def test_config3_config4_first_qubit_stays_frozen():
-    """Known, expected behavior: config3/config4 use a frozen RXY entangler
-    to fix the exact-zero-gradient issue CNOT/RXX had with RX rotations
-    (see ARCHITECTURES' comment in src/qnn.py). RXY only breaks the
-    RX/measurement commutation for qubits that play the "Y" role in the
-    wires=[i, i+1] convention — the very first qubit in the chain (index 0)
-    always plays the "X" role, so it never gets a gradient and its
-    parameter stays exactly at its initial value, while every other
-    parameter moves normally.
-    """
-    for architecture in ["config3", "config4"]:
-        initial_params, final_params = _train_a_few_steps(architecture)
-
-        assert torch.allclose(final_params[0], initial_params[0], atol=1e-12)
-        assert not torch.allclose(final_params[1:], initial_params[1:], atol=1e-6)

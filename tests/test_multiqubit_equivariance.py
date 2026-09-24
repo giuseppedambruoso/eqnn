@@ -38,3 +38,15 @@ def test_invariant_architectures(arch: str, num_qubits: int, readout: str) -> No
 @pytest.mark.parametrize("num_qubits", [8, 10, 12])
 def test_nonequivariant_architecture_breaks_symmetry(num_qubits: int) -> None:
     assert max_orbit_deviation("config7", num_qubits, "avg_x") > 1e-3
+
+
+@pytest.mark.parametrize("arch", ["config6", "config10"])
+def test_stacked_layers_stay_invariant(arch: str) -> None:
+    torch.manual_seed(1)
+    qnn = create_qnn("default.qubit", 8, 2, arch, readout="avg_x", layers=3)
+    n = len(architecture_param_names(arch, 8, 2, layers=3))
+    assert n == 18
+    params = torch.empty(n).uniform_(-3, 3)
+    img = torch.randn(16, 16, dtype=torch.float64)
+    out = qnn(torch.stack([embedding_state(v) for v in d4_orbit(img / img.norm())]), params)
+    assert (out - out[0]).abs().max().item() < 1e-10

@@ -8,8 +8,8 @@ from PIL import Image
 
 @pytest.fixture()
 def checkpoint_path(tmp_path):
-    num_qubits, reps = 4, 1
-    params = torch.empty(num_qubits * reps).uniform_(-0.1, 0.1)
+    num_qubits, reps = 8, 1
+    params = torch.empty(6).uniform_(-0.1, 0.1)
     path = tmp_path / "final_model.pt"
     torch.save(
         {
@@ -19,8 +19,8 @@ def checkpoint_path(tmp_path):
                 "device": "default.qubit",
                 "num_qubits": num_qubits,
                 "reps": reps,
-                "architecture": "config1",
-                "img_size": 4,
+                "architecture": "config6",
+                "img_size": 16,
             },
         },
         path,
@@ -55,8 +55,8 @@ def test_model_info(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["classes"] == [3, 4]
-    assert body["img_size"] == 4
-    assert body["architecture"] == "config1"
+    assert body["img_size"] == 16
+    assert body["architecture"] == "config6"
     assert body["val_acc"] == pytest.approx(0.9)
 
 

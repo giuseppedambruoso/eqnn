@@ -79,13 +79,15 @@ def load_model(model_path: str | None = None) -> None:
         )
         architecture_label = "custom"
     else:
-        architecture = cfg.get("architecture", "config1")
+        architecture = cfg.get("architecture", "config6")
         qnn = create_qnn(
             cfg["device"],
             cfg["num_qubits"],
             cfg["reps"],
             architecture,
             readout=cfg.get("readout"),
+            output_bias=cfg.get("output_bias", False),
+            layers=cfg.get("layers", 1),
         )
         architecture_label = architecture
 

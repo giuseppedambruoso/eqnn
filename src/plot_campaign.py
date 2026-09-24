@@ -34,6 +34,9 @@ TASK_TITLES = {
     "satellite": "SATELLITE (ship vs plane)",
     "ising": "Ising (ordered vs disordered)",
     "eurosat_fi": "EuroSAT Forest vs Industrial",
+    "galaxy_round_edgeon": "Galaxy10 round vs edge-on",
+    "galaxy_round_spiral": "Galaxy10 round vs spiral",
+    "resisc_airport_harbor": "RESISC45 airport vs harbor",
 }
 COLORS = {"config6": "#1f5fa8", "config7": "#b8202e", "config10": "#d9a21b"}
 
@@ -56,7 +59,33 @@ def result_files(path: str) -> list[str]:
     return [p for p in [path] + sorted(imported) if os.path.exists(p)]
 
 
-TASK_MAX_QUBITS = {"mnist45": 8, "satellite": 8, "ising": 12, "eurosat_fi": 12}
+TASK_MAX_QUBITS = {"mnist45": 8, "satellite": 8, "ising": 12, "eurosat_fi": 12,
+                   "galaxy_round_edgeon": 12, "galaxy_round_spiral": 12,
+                   "resisc_airport_harbor": 12}
+
+# (kind, [(record field, line style, marker, label)]) per study
+STANDARD = ("sweep", [("val_acc", "-", "o", "test"), ("val_aug_acc", "--", "s", "rotated test")])
+WATERMARK = ("watermark", [("shortcut_acc", "-", "o", "watermarked test"),
+                           ("transformed_acc", "--", "s", "watermark transformed"),
+                           ("clean_acc", ":", "^", "no watermark")])
+
+
+def study_of(path: str) -> tuple:
+    return WATERMARK if "_wm" in os.path.basename(path) else STANDARD
+
+
+def tasks_with_data(path: str) -> list[str]:
+    """Tasks for this qubit count that appear in the results (the standard
+    grid also works while only some tasks have been run)."""
+    kind, _ = study_of(path)
+    present = set()
+    for file in result_files(path):
+        with open(file) as f:
+            for line in f:
+                r = json.loads(line)
+                if r["kind"] == kind:
+                    present.add(r["task"])
+    return [t for t in tasks_for(qubits_of(path)) if t in present] or tasks_for(qubits_of(path))
 
 
 def qubits_of(path: str) -> int:
@@ -71,31 +100,30 @@ def tasks_for(qubits: int) -> list[str]:
 
 
 def load_points(path: str) -> tuple[dict, int]:
-    """Returns ({(task, arch): {N: ((clean_mean, clean_sem), (aug_mean,
-    aug_sem), n_seeds)}}, completed rounds), where a round r is complete
-    once every (task, arch, N) point has at least r seeds."""
+    """Returns ({(task, arch): {N: ([(mean, sem) per plotted field], n_seeds)}},
+    completed rounds), where a round r is complete once every
+    (task, arch, N) point has at least r seeds."""
+    kind, fields = study_of(path)
     runs = collections.defaultdict(dict)
     for file in result_files(path):
         with open(file) as f:
             for line in f:
                 r = json.loads(line)
-                if r["kind"] == "sweep":
+                if r["kind"] == kind:
                     runs[(r["task"], r["arch"], r["N"])][r["seed"]] = r
     points = collections.defaultdict(dict)
     for (task, arch, N), by_seed in runs.items():
         rs = list(by_seed.values())
-        points[(task, arch)][N] = (
-            mean_sem([r["val_acc"] for r in rs]),
-            mean_sem([r["val_aug_acc"] for r in rs]),
-            len(rs),
-        )
-    all_keys = [(t, a, n) for t in tasks_for(qubits_of(path)) for a in ARCHS for n in N_VALUES]
+        points[(task, arch)][N] = ([mean_sem([r[f] for r in rs]) for f, *_ in fields], len(rs))
+    all_keys = [(t, a, n) for t in tasks_with_data(path) for a in ARCHS for n in N_VALUES]
     rounds = min(len(runs.get(k, {})) for k in all_keys)
     return points, rounds
 
 
-def plot(points: dict, rounds: int, out: str, qubits: int = 8) -> int:
-    tasks = tasks_for(qubits)
+def plot(points: dict, rounds: int, out: str, path: str) -> int:
+    qubits = qubits_of(path)
+    _, fields = study_of(path)
+    tasks = tasks_with_data(path)
     ncols = 3  # one extra panel slot holds the legend
     nrows = math.ceil((len(tasks) + 1) / ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(4.2 * ncols, 3.4 * nrows), squeeze=False)
@@ -105,42 +133,32 @@ def plot(points: dict, rounds: int, out: str, qubits: int = 8) -> int:
             pts = points.get((task, arch), {})
             Ns = sorted(pts)
             n_points += len(Ns)
-            if not Ns:
-                continue
-            for k, (style, marker, suffix) in enumerate(
-                [("-", "o", "test"), ("--", "s", "rotated test")]
-            ):
-                ys = [pts[N][k][0] for N in Ns]
-                es = [pts[N][k][1] for N in Ns]
-                ax.errorbar(Ns, ys, yerr=es, color=COLORS[arch], ls=style, marker=marker,
-                            ms=4, capsize=2, lw=1.4,
-                            label=f"{ARCH_LABELS[arch]} ({suffix})")
+            for k, (_, style, marker, label) in enumerate(fields):
+                if not Ns:
+                    continue
+                ax.errorbar(Ns, [pts[N][0][k][0] for N in Ns], yerr=[pts[N][0][k][1] for N in Ns],
+                            color=COLORS[arch], ls=style, marker=marker, ms=4, capsize=2, lw=1.4)
         ax.set_title(TASK_TITLES[task], fontsize=10)
         ax.set_xscale("log", base=2)
         ax.set_xticks(N_VALUES, [str(n) for n in N_VALUES])
         ax.set_xlim(32, 800)
-        ax.set_ylim(0.3, 1.0)
+        ax.set_ylim(0.3, 1.02)
         ax.axhline(0.5, color="gray", lw=0.8, ls=":")
         ax.set_xlabel("N (training-set size)")
         ax.set_ylabel("accuracy")
         ax.grid(alpha=0.3)
     for ax in list(axes.flat)[len(tasks):]:
         ax.axis("off")
-    handles = [
-        plt.Line2D([], [], color=COLORS[a], ls=ls, marker=m, label=f"{ARCH_LABELS[a]} ({s})")
-        for a in ARCHS
-        for ls, m, s in [("-", "o", "test"), ("--", "s", "rotated test")]
-    ]
-    legend_ax = list(axes.flat)[-1]
-    legend_ax.legend(handles=handles, loc="center", fontsize=9, frameon=False)
+    handles = [plt.Line2D([], [], color=COLORS[a], ls=ls, marker=m, label=f"{ARCH_LABELS[a]} ({lab})")
+               for a in ARCHS for _, ls, m, lab in fields]
+    list(axes.flat)[-1].legend(handles=handles, loc="center", fontsize=8, frameon=False)
     total = len(tasks) * len(ARCHS) * len(N_VALUES)
     status = (f"all {len(SEEDS)} seeds complete" if rounds >= len(SEEDS)
               else f"round {rounds + 1}/{len(SEEDS)} in progress, {rounds} seed(s) complete everywhere")
-    fig.suptitle(
-        f"Noiseless test accuracy vs N ({qubits} qubits) - mean over finished seeds "
-        f"($\\pm$ SEM from 2 seeds on) - {n_points}/{total} points - {status}",
-        fontsize=11,
-    )
+    what = ("Watermark shortcut study (watermark in training)" if fields is WATERMARK[1]
+            else "Noiseless test accuracy vs N")
+    fig.suptitle(f"{what} ({qubits} qubits) - mean over finished seeds ($\\pm$ SEM from 2 seeds on)"
+                 f" - {n_points}/{total} points - {status}", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     fig.savefig(out)
     plt.close(fig)
@@ -149,4 +167,4 @@ def plot(points: dict, rounds: int, out: str, qubits: int = 8) -> int:
 
 if __name__ == "__main__":
     pts, rnd = load_points(sys.argv[1])
-    print(plot(pts, rnd, sys.argv[2], qubits=qubits_of(sys.argv[1])), rnd)
+    print(plot(pts, rnd, sys.argv[2], sys.argv[1]), rnd)

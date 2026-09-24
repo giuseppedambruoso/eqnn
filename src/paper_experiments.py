@@ -42,6 +42,7 @@ from src.data_loading import (
 )
 from src.qnn import architecture_param_names, create_qnn, initial_parameters
 from src.train import execute_batch, loss_function, validate
+from src.watermark import TEST_SETS, watermark_loaders
 
 ARCHS = ("config6", "config7", "config10")
 ARCH_LABELS = {"config6": "Equiv", "config7": "NonEquiv", "config10": "NonEquiv-Twirled"}
@@ -82,6 +83,15 @@ TASKS = {
     "ising": ("avg_x", 12),  # generated natively at any size
     "eurosat_fi": ("avg_x", 12),  # 64x64
 }
+# Candidate tasks (src.dataset_screening): only run when requested with
+# --tasks, never part of the default task list.
+EXTRA_TASKS = {
+    "galaxy_round_spiral": ("avg_x", 12),  # Galaxy10 SDSS, 64x64 crop
+    "galaxy_round_edgeon": ("avg_x", 12),
+    "resisc_airport_harbor": ("avg_x", 12),  # RESISC45, 256x256
+    "resisc_farmland": ("avg_x", 12),
+}
+ALL_TASKS = {**TASKS, **EXTRA_TASKS}
 
 
 def readout_for(task: str) -> str:
@@ -131,12 +141,14 @@ def _make_qnn(job: dict, noise_p: float = 0.0, noise_seed: int = 0):
 def _raw_qnn(job: dict, noise_p: float = 0.0, noise_seed: int = 0):
     """The circuit alone: returns the measured <O> (no output map)."""
     return create_qnn("default.qubit", job["qubits"], 2, job["arch"],
-                      readout=readout_for(job["task"]), noise_p=noise_p, noise_seed=noise_seed)
+                      readout=readout_for(job["task"]), noise_p=noise_p, noise_seed=noise_seed,
+                      layers=job.get("layers", 1))
 
 
 def _init_params(job: dict) -> torch.Tensor:
     names = architecture_param_names(job["arch"], job["qubits"], 2,
-                                     output_bias=MODEL_OPTIONS["output_bias"])
+                                     output_bias=MODEL_OPTIONS["output_bias"],
+                                     layers=job.get("layers", 1))
     return initial_parameters(names, torch.Generator().manual_seed(job["seed"]))
 
 
@@ -236,6 +248,19 @@ def run_job(job: dict) -> list[dict]:
                 noisy = _model(_raw_qnn(job, p, ns), stats)
                 records.append({**job, "kind": "test_noise", "noise_p": p, "noise_seed": ns,
                                 **_evaluate(noisy, loaders, params)})
+    elif job["kind"] == "watermark":
+        # Decoy-style orientation shortcut: see src.watermark. Noiseless.
+        train, tests = watermark_loaders(loaders, job["N"], job["seed"])
+        raw = _raw_qnn(job)
+        stats = _output_stats(raw, train, params0)
+        qnn = _model(raw, stats)
+        params = _train(qnn, train, params0, job)
+        dev = torch.device("cpu")
+        accs = {f"{name}_acc": validate(tests[name], qnn, dev, params)[1] for name in TEST_SETS}
+        records.append({**job, "noise_p": 0.0, "noise_seed": None,
+                        "train_acc": validate(train, qnn, dev, params)[1], **accs,
+                        # the generic fields, for logs and progress tools
+                        "val_acc": accs["shortcut_acc"], "val_aug_acc": accs["transformed_acc"]})
     elif job["kind"] == "train_noise":
         raw = _raw_qnn(job, job["noise_p"], job["noise_seed"])
         stats = _output_stats(raw, loaders[0], params0)
@@ -254,18 +279,22 @@ def run_job(job: dict) -> list[dict]:
 
 def job_key(job: dict) -> tuple:
     return (job["kind"], job["task"], job["qubits"], job["arch"], job["N"], job["seed"],
-            job.get("noise_p", 0.0), job.get("noise_seed"))
+            job.get("noise_p", 0.0), job.get("noise_seed"), job.get("layers", 1))
 
 
-def build_jobs(tasks, kinds, qubits: int, seeds=SEEDS, n_values=N_VALUES) -> list[dict]:
+def build_jobs(tasks, kinds, qubits: int, seeds=SEEDS, n_values=N_VALUES,
+               layers: int = 1) -> list[dict]:
     jobs = []
     for task in tasks:
-        if qubits > TASKS[task][1]:
+        if qubits > ALL_TASKS[task][1]:
             raise ValueError(f"{task} has too few pixels for {qubits} qubits")
         base = {"task": task, "qubits": qubits}
-        if "sweep" in kinds:
-            for arch, N, seed in itertools.product(ARCHS, n_values, seeds):
-                jobs.append({**base, "kind": "sweep", "arch": arch, "N": N, "seed": seed})
+        if layers != 1:
+            base["layers"] = layers
+        for kind in ("sweep", "watermark"):
+            if kind in kinds:
+                for arch, N, seed in itertools.product(ARCHS, n_values, seeds):
+                    jobs.append({**base, "kind": kind, "arch": arch, "N": N, "seed": seed})
         if "train_noise" in kinds:
             for arch, p, ns in itertools.product(ARCHS, NOISE_P_TRAIN, NOISE_SEEDS):
                 if p == 0.0 and ns != NOISE_SEEDS[0]:
@@ -281,7 +310,8 @@ QUBIT_COST = {8: 1.0, 10: 1.8, 12: 3.4}
 
 
 def estimated_cost(job: dict) -> float:
-    cost = job["N"] * QUBIT_COST[job["qubits"]] * (8 if job["arch"] == "config10" else 1)
+    cost = (job["N"] * QUBIT_COST[job["qubits"]] * (8 if job["arch"] == "config10" else 1)
+            * job.get("layers", 1))
     if job["kind"] == "sweep" and (job["N"], job["seed"]) == (NOISE_N, NOISE_PARAM_SEED):
         cost *= 1.6  # + 61 test-time-noise evaluations of the trained model
     return cost + 5.0  # fixed per-job overhead (data loading)
@@ -298,7 +328,7 @@ def job_round(job: dict) -> int:
     parameter seed; noisy-training jobs by their noise realization
     (NOISE_SEEDS[k] -> round k+1, the p = 0 reference run -> round 1).
     After round 1 every panel has a complete (single-seed) picture."""
-    if job["kind"] == "sweep":
+    if job["kind"] in ("sweep", "watermark"):
         return SEEDS.index(job["seed"]) + 1
     if job["noise_p"] == 0.0:
         return 1
@@ -319,15 +349,23 @@ def rounds_in_lpt_order(jobs: list[dict]) -> list[tuple[int, list[dict]]]:
 RESULTS_STEM = "campaign_v2"
 
 
-def out_path(qubits: int) -> str:
-    return f"results_paper/{RESULTS_STEM}_{qubits}q.jsonl"
+def results_stem(layers: int = 1, watermark: bool = False) -> str:
+    """campaign_v2, plus _wm for the watermark study and _L<layers> for
+    stacked circuits (e.g. campaign_v2_wm_L3)."""
+    stem = RESULTS_STEM + ("_wm" if watermark else "")
+    return stem if layers == 1 else f"{stem}_L{layers}"
 
 
-def imported_paths(qubits: int) -> list[str]:
+def out_path(qubits: int, layers: int = 1, watermark: bool = False) -> str:
+    return f"results_paper/{results_stem(layers, watermark)}_{qubits}q.jsonl"
+
+
+def imported_paths(qubits: int, layers: int = 1, watermark: bool = False) -> list[str]:
     """Results produced on OTHER machines, brought here by src.sync_results."""
     import glob
 
-    return sorted(glob.glob(f"results_paper/imported/{RESULTS_STEM}_{qubits}q.*.jsonl"))
+    stem = results_stem(layers, watermark)
+    return sorted(glob.glob(f"results_paper/imported/{stem}_{qubits}q.*.jsonl"))
 
 
 def default_workers(gb_per_worker: float = 0.7) -> int:
@@ -353,23 +391,28 @@ def main() -> None:
     ap.add_argument("--kinds", nargs="+", default=["sweep", "train_noise"])
     ap.add_argument("--seeds", nargs="+", type=int, default=list(SEEDS))
     ap.add_argument("--n-values", nargs="+", type=int, default=list(N_VALUES))
+    ap.add_argument("--layers", type=int, default=1,
+                    help="stacked copies of the circuit, each with its own angles")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+    wm = "watermark" in args.kinds
+    if wm and set(args.kinds) != {"watermark"}:
+        ap.error("the watermark study is stored separately: run --kinds watermark alone")
 
     os.makedirs("results_paper", exist_ok=True)
     jobs = []
     for q in args.qubits:
-        tasks = [t for t in (args.tasks or TASKS) if TASKS[t][1] >= q]
+        tasks = [t for t in (args.tasks or TASKS) if ALL_TASKS[t][1] >= q]
         done = set()
-        for path in [out_path(q)] + imported_paths(q):
+        for path in [out_path(q, args.layers, wm)] + imported_paths(q, args.layers, wm):
             if not os.path.exists(path):
                 continue
             with open(path) as f:
                 for line in f:
                     r = json.loads(line)
-                    if r["kind"] in ("sweep", "train_noise"):
+                    if r["kind"] in ("sweep", "train_noise", "watermark"):
                         done.add(job_key(r))
-        jobs += [j for j in build_jobs(tasks, args.kinds, q, args.seeds, args.n_values)
+        jobs += [j for j in build_jobs(tasks, args.kinds, q, args.seeds, args.n_values, args.layers)
                  if job_key(j) not in done]
     rounds = rounds_in_lpt_order(jobs)
     if args.rounds:
@@ -387,7 +430,7 @@ def main() -> None:
         loaders_for(task, 40, 1, q)  # warm dataset caches once, serially
 
     ctx = get_context("spawn")
-    files = {q: open(out_path(q), "a") for q in args.qubits}
+    files = {q: open(out_path(q, args.layers, wm), "a") for q in args.qubits}
     try:
         with ctx.Pool(args.workers, maxtasksperchild=10) as pool:
             for rnd, round_jobs in rounds:

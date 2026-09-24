@@ -13,7 +13,6 @@ import streamlit as st
 import torch
 
 from src.ansatz_builder import (
-    architecture_to_spec,
     build_qnn_from_spec,
     check_p4m_invariance,
     is_parametric_gate,
@@ -52,9 +51,9 @@ GATE_CATALOG: dict[str, tuple[str, int | None]] = {
 }
 
 READOUT_LABELS = {
-    "Somma Z (config1-5, equivalente a media delle X — vedi H prima di Z)": "sum_z",
-    "Media delle X su tutti i qubit (config6-9)": "avg_x",
-    "X0 + X_{n/2} (alternativa per config6-9)": "x0_xhalf",
+    "Somma Z (H prima di Z, equivalente a media delle X)": "sum_z",
+    "Media delle X su tutti i qubit (config6/7/10)": "avg_x",
+    "X0 + X_{n/2} (alternativa per config6/7/10)": "x0_xhalf",
 }
 READOUT_LABELS_INV = {v: k for k, v in READOUT_LABELS.items()}
 
@@ -81,7 +80,7 @@ def _gate_summary(gate_spec: dict) -> str:
 def _final_spec() -> list[dict]:
     """The circuit actually built/trained: the current gate list repeated
     `layer_reps` times (each repetition gets its own independent
-    parameters, exactly like config1-5's own `reps` — see
+    parameters, like the `layers` option of config6/7/10 — see
     src.ansatz_builder.build_qnn_from_spec)."""
     return st.session_state.spec * int(st.session_state.layer_reps)
 
@@ -91,7 +90,7 @@ def main() -> None:
     st.title("🔧 Ansatz Designer — circuito a 8 qubit")
     st.caption(
         "Disegna un circuito gate-per-gate e addestralo su MNIST (cifra 3 vs 4). "
-        "config1-config9 sono casi particolari di quello che puoi costruire qui."
+        "config6, config7 e config10 sono casi particolari di quello che puoi costruire qui."
     )
 
     if "spec" not in st.session_state:
@@ -110,27 +109,17 @@ def main() -> None:
             with preset_col1:
                 preset = st.selectbox("Architettura", sorted(ARCHITECTURES))
                 st.caption(
-                    "config1-config5: pattern rotazione+entangler generico "
-                    "(twirling impostato automaticamente se previsto). "
-                    "config6-config9: ansatz D4-equivarianti/non-equivarianti "
-                    "a budget fisso di parametri (vedi src/paper_ansatzes.py)."
+                    "config6: Equiv (equivariante per costruzione); config7: "
+                    "NonEquiv; config10: NonEquiv con twirling p4m "
+                    "(vedi src/paper_ansatzes.py)."
                 )
             with preset_col2:
-                preset_reps = st.number_input(
-                    "Ripetizioni (solo config1-5)", min_value=1, value=2, step=1
-                )
                 if st.button("Carica come punto di partenza"):
                     meta = ARCHITECTURES[preset]
-                    if meta["kind"] == "uniform":
-                        st.session_state.spec = architecture_to_spec(
-                            preset, NUM_QUBITS, int(preset_reps)
-                        )
-                        st.session_state.readout = "sum_z"
-                    else:
-                        st.session_state.spec = paper_architecture_spec(
-                            meta["paper_ansatz"], meta["symmetry"], NUM_QUBITS
-                        )
-                        st.session_state.readout = "avg_x"
+                    st.session_state.spec = paper_architecture_spec(
+                        meta["paper_ansatz"], meta["symmetry"], NUM_QUBITS
+                    )
+                    st.session_state.readout = "avg_x"
                     st.session_state.twirled = meta["twirled"]
                     st.session_state.layer_reps = 1
                     st.rerun()
@@ -142,7 +131,7 @@ def main() -> None:
                 help=(
                     "Rende il circuito ESATTAMENTE p4m-equivariante per "
                     "costruzione, indipendentemente da cosa hai disegnato — "
-                    "lo stesso meccanismo di config2/config4/config5."
+                    "lo stesso meccanismo di config10."
                 ),
             )
             readout_label = st.selectbox(
@@ -158,8 +147,8 @@ def main() -> None:
                 step=1,
                 help=(
                     "Il circuito disegnato sotto viene ripetuto N volte, ognuna "
-                    "con parametri allenabili indipendenti (come 'reps' in "
-                    "config1-config5)."
+                    "con parametri allenabili indipendenti (come l'opzione "
+                    "'layers' di config6/7/10)."
                 ),
             )
 

@@ -1,4 +1,5 @@
-"""config6-config9: a matched D4(p4m)-equivariant / non-equivariant ansatz
+"""config6 / config7 (and config10 = twirled config7): a matched
+D4(p4m)-equivariant / non-equivariant ansatz
 pair for 16x16 images (coordinate-aware amplitude encoding), adapted from
 Chang et al., expressed as gate-by-gate specs for
 src.ansatz_builder.build_qnn_from_spec.
@@ -14,25 +15,23 @@ flipping row/column wires with X gates complements the row/column index
 the image. The finite image-symmetry group is the D4 point group generated
 by those three operations.
 
-Two ansatzes are available, named by their TOTAL trainable-parameter count:
-"6" (paper6, 3 angles/block) and "18" (shared18, 9 angles/block). Both use
-the same 5-block schedule: 4 "fine" blocks share ONE set of trainable
-angles (stage 0, "fine_shared"), and the final "coarse" block gets its own
-(stage 1) — hence only 2 * parameters_per_block total trainable angles,
-tied via the spec's "group" mechanism, regardless of there being 5 blocks.
+The ansatz ("6", 3 angles per block) uses a 5-block schedule: 4 "fine"
+blocks share ONE set of trainable angles (stage 0), and the final "coarse"
+block gets its own (stage 1) — hence 6 trainable angles per layer, tied
+via the spec's "group" mechanism, regardless of there being 5 blocks.
+Several layers (each with its own angles) can be stacked.
 
 Measured with readout="avg_x" in build_qnn_from_spec (the mean of X over
-every qubit — the same quantity config1-config5 measure in effect, via
-H-then-Z) by default; readout="x0_xhalf" (0.5*(X_0 + X_4)) is an available
+every qubit) by default; readout="x0_xhalf" (0.5*(X_0 + X_4)) is an
 alternative that reads only the two "pooled-to" wires instead of all 8 —
-both preserve p4m-equivariance for config6/config8.
+both preserve the p4m-equivariance of config6.
 
 The equivariant trainable blocks commute with the three D4 generators
 above. Their non-equivariant counterparts are obtained by cycling the
 Pauli axis on the column register only (X -> Y, Y -> Z, Z -> X). This
 preserves parameter count, parameter sharing, gate arities, gate count, and
 depth while deliberately misaligning the ansatz with the image symmetry —
-config6/config8 (equivariant) vs config7/config9 (non-equivariant).
+config6 (equivariant) vs config7 (non-equivariant).
 
 num_qubits may be 8, 10 or 12 (16x16, 32x32 or 64x64 images): see
 block_schedule, which reproduces the original hand-crafted 8-qubit
@@ -86,20 +85,8 @@ def block_schedule(n_coord: int) -> tuple[OrbitBlockSpec, ...]:
 BLOCK_SCHEDULE: tuple[OrbitBlockSpec, ...] = block_schedule(N_COORD_QUBITS)
 
 PAPER6_PARAMETER_NAMES = ("rx_a", "rx_b", "ryyyy_cross")
-SHARED18_PARAMETER_NAMES = (
-    "rx_pre_a",
-    "rx_pre_b",
-    "ryy_within",
-    "rzz_within",
-    "rx_mid_a",
-    "rx_mid_b",
-    "ryyyy_cross",
-    "rzzzz_cross",
-    "mixed_cross",
-)
 PAPER_ANSATZ_PARAMETER_NAMES = {
     "6": PAPER6_PARAMETER_NAMES,
-    "18": SHARED18_PARAMETER_NAMES,
 }
 PAPER_ANSATZ_CHOICES = tuple(PAPER_ANSATZ_PARAMETER_NAMES)
 
@@ -171,146 +158,10 @@ def _paper6_block_spec(
     return gates
 
 
-def _shared18_block_spec(
-    stage: int, a: int, b: int, equivariant: bool, coord: int = N_COORD_QUBITS
-) -> list[dict[str, Any]]:
-    names = SHARED18_PARAMETER_NAMES
-    cross_wires = [a, b, a + coord, b + coord]
-    rx = _paired_rx_spec if equivariant else _axis_scrambled_rx_spec
-
-    gates: list[dict[str, Any]] = []
-    gates += rx(stage, names[0], a, coord)
-    gates += rx(stage, names[1], b, coord)
-
-    if equivariant:
-        # Two identical gates together exponentiate the swap-invariant
-        # generators YY_row + YY_col and ZZ_row + ZZ_col.
-        for offset in (0, coord):
-            gates.append(
-                {
-                    "gate": "ISINGYY",
-                    "wires": [a + offset, b + offset],
-                    "param": _param(f"stage{stage}_{names[2]}"),
-                }
-            )
-            gates.append(
-                {
-                    "gate": "ISINGZZ",
-                    "wires": [a + offset, b + offset],
-                    "param": _param(f"stage{stage}_{names[3]}"),
-                }
-            )
-    else:
-        # Cycle the Pauli axis on the column register only.
-        gates.append(
-            {
-                "gate": "ISINGYY",
-                "wires": [a, b],
-                "param": _param(f"stage{stage}_{names[2]}"),
-            }
-        )
-        gates.append(
-            {
-                "gate": "ISINGZZ",
-                "wires": [a + coord, b + coord],
-                "param": _param(f"stage{stage}_{names[2]}"),
-            }
-        )
-        gates.append(
-            {
-                "gate": "ISINGZZ",
-                "wires": [a, b],
-                "param": _param(f"stage{stage}_{names[3]}"),
-            }
-        )
-        gates.append(
-            {
-                "gate": "ISINGXX",
-                "wires": [a + coord, b + coord],
-                "param": _param(f"stage{stage}_{names[3]}"),
-            }
-        )
-
-    gates += rx(stage, names[4], a, coord)
-    gates += rx(stage, names[5], b, coord)
-
-    if equivariant:
-        # These Pauli words have even Y/Z parity in each coordinate
-        # register and are fixed by row/column exchange.
-        gates.append(
-            {
-                "gate": "PAULIROT",
-                "wires": cross_wires,
-                "pauli_word": "YYYY",
-                "param": _param(f"stage{stage}_{names[6]}"),
-            }
-        )
-        gates.append(
-            {
-                "gate": "PAULIROT",
-                "wires": cross_wires,
-                "pauli_word": "ZZZZ",
-                "param": _param(f"stage{stage}_{names[7]}"),
-            }
-        )
-        # The two mixed Pauli words are exchanged by the row<->column swap;
-        # tying their angle exactly exponentiates their twirled sum.
-        gates.append(
-            {
-                "gate": "PAULIROT",
-                "wires": cross_wires,
-                "pauli_word": "YYZZ",
-                "param": _param(f"stage{stage}_{names[8]}"),
-            }
-        )
-        gates.append(
-            {
-                "gate": "PAULIROT",
-                "wires": cross_wires,
-                "pauli_word": "ZZYY",
-                "param": _param(f"stage{stage}_{names[8]}"),
-            }
-        )
-    else:
-        gates.append(
-            {
-                "gate": "PAULIROT",
-                "wires": cross_wires,
-                "pauli_word": "YYZZ",
-                "param": _param(f"stage{stage}_{names[6]}"),
-            }
-        )
-        gates.append(
-            {
-                "gate": "PAULIROT",
-                "wires": cross_wires,
-                "pauli_word": "ZZXX",
-                "param": _param(f"stage{stage}_{names[7]}"),
-            }
-        )
-        gates.append(
-            {
-                "gate": "PAULIROT",
-                "wires": cross_wires,
-                "pauli_word": "YYXX",
-                "param": _param(f"stage{stage}_{names[8]}"),
-            }
-        )
-        gates.append(
-            {
-                "gate": "PAULIROT",
-                "wires": cross_wires,
-                "pauli_word": "ZZZZ",
-                "param": _param(f"stage{stage}_{names[8]}"),
-            }
-        )
-    return gates
-
-
 def paper_architecture_spec(
-    paper_ansatz: str, symmetry: str, num_qubits: int
+    paper_ansatz: str, symmetry: str, num_qubits: int, layers: int = 1
 ) -> list[dict[str, Any]]:
-    """Builds the config6-config9 gate-by-gate spec (see module docstring)
+    """Builds the config6/config7 gate-by-gate spec (see module docstring)
     for src.ansatz_builder.build_qnn_from_spec — use with readout="avg_x"
     (the default create_qnn uses) or readout="x0_xhalf" to preserve the
     intended (non-)equivariance.
@@ -324,10 +175,25 @@ def paper_architecture_spec(
             f"paper_ansatz must be one of {PAPER_ANSATZ_CHOICES}, got {paper_ansatz!r}"
         )
     equivariant = get_symmetry_mode(symmetry) == EQUIVARIANT
-    block_fn = _paper6_block_spec if paper_ansatz == "6" else _shared18_block_spec
+    block_fn = _paper6_block_spec
 
     spec: list[dict[str, Any]] = []
     coord = num_qubits // 2
     for block in block_schedule(coord):
         spec += block_fn(block.stage, block.a, block.b, equivariant, coord)
-    return spec
+    if layers == 1:
+        return spec
+    if layers < 1:
+        raise ValueError(f"layers must be >= 1, got {layers}")
+    # `layers` stacked copies of the whole block schedule, each with its OWN
+    # trainable angles (distinct parameter groups): layers x the parameter
+    # count, same (non-)equivariance as a single layer, since every copy
+    # uses the same generators.
+    stacked: list[dict[str, Any]] = []
+    for layer in range(layers):
+        for gate in spec:
+            gate = {**gate}
+            if "param" in gate:
+                gate["param"] = {**gate["param"], "group": f"L{layer}_{gate['param']['group']}"}
+            stacked.append(gate)
+    return stacked

@@ -20,14 +20,20 @@ import time
 PROGRESS_DIR = "results_paper/progress"
 ARCH_LABELS = {"config6": "Equiv", "config7": "NonEquiv", "config10": "NonEquiv-Twirled"}
 TASK_MAX_QUBITS = {"mnist45": 8, "satellite": 8, "ising": 12, "eurosat_fi": 12}
+# Tasks added later and run noiseless only (sweep jobs, no noise jobs).
+SWEEP_ONLY_TASKS = {"galaxy_round_edgeon": 12, "galaxy_round_spiral": 12,
+                    "resisc_airport_harbor": 12}
 N_SEEDS = 6
 SWEEP_JOBS_PER_TASK = 3 * 5 * N_SEEDS  # archs x N values x seeds
 NOISE_JOBS_PER_TASK = 3 * (1 + 10 * 3)  # archs x (p=0 + 10 p values x 3 realizations)
 POINTS_PER_TASK = 3 * 5
 
 
+STEM = "campaign_v2"  # set to "campaign_v2_wm" by --watermark
+
+
 def out_path(qubits: int) -> str:
-    return f"results_paper/campaign_v2_{qubits}q.jsonl"
+    return f"results_paper/{STEM}_{qubits}q.jsonl"
 
 
 def result_files(path: str) -> list[str]:
@@ -42,7 +48,8 @@ def read_records(path: str) -> list[dict]:
     records = []
     for file in result_files(path):
         with open(file) as f:
-            records += [r for r in map(json.loads, f) if r["task"] in TASK_MAX_QUBITS]
+            records += [r for r in map(json.loads, f)
+                        if r["task"] in TASK_MAX_QUBITS or r["task"] in SWEEP_ONLY_TASKS]
     return records
 
 
@@ -83,19 +90,25 @@ def _bar(done: int, total: int) -> str:
 def snapshot(qubits: int) -> str:
     lines = []
     tasks = [t for t, q in TASK_MAX_QUBITS.items() if q >= qubits]
-    total_jobs = len(tasks) * (SWEEP_JOBS_PER_TASK + NOISE_JOBS_PER_TASK)
+    extra = [t for t, q in SWEEP_ONLY_TASKS.items() if q >= qubits]
+    if STEM.endswith("_wm"):
+        tasks, total_jobs = tasks + extra, (len(tasks) + len(extra)) * SWEEP_JOBS_PER_TASK
+    else:
+        total_jobs = len(tasks) * (SWEEP_JOBS_PER_TASK + NOISE_JOBS_PER_TASK)
+        total_jobs += len(extra) * SWEEP_JOBS_PER_TASK
+        tasks = tasks + extra
     path = out_path(qubits)
     done = 0
     if result_files(path):
         records = read_records(path)
-        done = len({job_key(r) for r in records if r["kind"] in ("sweep", "train_noise")})
+        done = len({job_key(r) for r in records if r["kind"] in ("sweep", "train_noise", "watermark")})
         n_imported = len(result_files(path)) - 1
         n_points, seeds = count_points(path)
     else:
         n_points, seeds, n_imported = 0, {}, 0
     total_points = len(tasks) * POINTS_PER_TASK
     rounds = min(len(v) for v in seeds.values()) if n_points == total_points else 0
-    lines.append(time.strftime("%H:%M:%S") + f"  campaign {qubits} qubits"
+    lines.append(time.strftime("%H:%M:%S") + f"  {STEM} {qubits} qubits"
                  + (f"  (incl. results imported from {n_imported} other machine(s))" if n_imported else ""))
     lines.append(f"jobs completed : {done}/{total_jobs} {_bar(done, total_jobs)} "
                  f"{100 * done / total_jobs:.1f}%")
@@ -141,7 +154,11 @@ def main() -> None:
     ap.add_argument("--qubits", type=int, default=8, choices=(8, 10, 12))
     ap.add_argument("--interval", type=float, default=5.0)
     ap.add_argument("--once", action="store_true")
+    ap.add_argument("--watermark", action="store_true", help="the watermark study")
     args = ap.parse_args()
+    global STEM
+    if args.watermark:
+        STEM = "campaign_v2_wm"
     if args.once:
         print(snapshot(args.qubits))
         return

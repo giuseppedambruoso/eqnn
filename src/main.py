@@ -48,10 +48,10 @@ def main(cfg: DictConfig) -> None:
     # Parametrized configuration variables
     device = cfg.QNN.device
     num_qubits = cfg.QNN.num_qubits
-    reps = cfg.QNN.reps
+    reps = 1  # unused by config6/7/10; kept for the checkpoint format
+    layers = int(cfg.QNN.get("layers", 1))
     architecture = cfg.QNN.architecture
-    # Only meaningful for config6-config9 — see src.qnn.create_qnn's
-    # docstring. config1-config5 ignore it.
+    # "avg_x" (default) or "x0_xhalf" — see src.qnn.create_qnn.
     readout = cfg.QNN.readout
     # Monte Carlo depolarizing noise — see src.noise's module docstring.
     # noise_seed must differ from GENERAL.seed (which drives parameter
@@ -177,6 +177,7 @@ def main(cfg: DictConfig) -> None:
         "noise_seed": noise_seed,
         "output_bias": output_bias,
         "center": center,
+        "layers": layers,
     }
     config_hash = hashlib.sha1(
         json.dumps(config_identity, sort_keys=True).encode()
@@ -192,11 +193,12 @@ def main(cfg: DictConfig) -> None:
         noise_p=noise_p,
         noise_seed=noise_seed,
         output_bias=output_bias,
+        layers=layers,
     )
     is_equivariant = ARCHITECTURES[architecture]["is_equivariant"]
 
     param_names = architecture_param_names(
-        architecture, num_qubits, reps, output_bias=output_bias
+        architecture, num_qubits, reps, output_bias=output_bias, layers=layers
     )
     g = torch.Generator(device=torch.device(dev)).manual_seed(SEED)
     initial_params = initial_parameters(param_names, g, dev)
@@ -229,6 +231,8 @@ def main(cfg: DictConfig) -> None:
             "class2": class2,
             "noise_p": noise_p,
             "noise_seed": noise_seed,
+            "output_bias": output_bias,
+            "layers": layers,
         },
         wandb_extra_config={
             "device": device,
@@ -243,6 +247,8 @@ def main(cfg: DictConfig) -> None:
             "class2": class2,
             "noise_p": noise_p,
             "noise_seed": noise_seed,
+            "output_bias": output_bias,
+            "layers": layers,
         },
         verbose=verbose,
     )

@@ -11,12 +11,12 @@ from src.paper_ansatzes import PAPER_ANSATZ_PARAMETER_NAMES, paper_architecture_
 DEVICE_NAME = "default.qubit"
 
 
-@pytest.mark.parametrize("paper_ansatz", ["6", "18"])
+@pytest.mark.parametrize("paper_ansatz", ["6"])
 @pytest.mark.parametrize("symmetry", ["equivariant", "nonequivariant"])
 def test_paper_architecture_spec_param_count(paper_ansatz, symmetry):
-    """config6-config9 have a fixed, tied parameter budget: 2 * per-block
-    (6 total for paper_ansatz="6", 18 for "18"), regardless of the 5-block
-    schedule — see the module docstring."""
+    """config6/config7 have a fixed, tied parameter budget: 2 * per-block
+    = 6 per layer, regardless of the 5-block schedule — see the module
+    docstring."""
     spec = paper_architecture_spec(paper_ansatz, symmetry, num_qubits=8)
     validate_spec(spec, num_qubits=8)
     expected = 2 * len(PAPER_ANSATZ_PARAMETER_NAMES[paper_ansatz])
@@ -30,7 +30,7 @@ def test_paper_architecture_spec_rejects_unsupported_qubit_counts(num_qubits):
 
 
 @pytest.mark.parametrize("num_qubits", [8, 10, 12])
-@pytest.mark.parametrize("paper_ansatz", ["6", "18"])
+@pytest.mark.parametrize("paper_ansatz", ["6"])
 def test_parameter_count_is_independent_of_qubit_count(paper_ansatz, num_qubits):
     spec = paper_architecture_spec(paper_ansatz, "equivariant", num_qubits)
     validate_spec(spec, num_qubits=num_qubits)
@@ -49,12 +49,11 @@ def test_unknown_symmetry_raises():
 
 
 @pytest.mark.parametrize("readout", ["avg_x", "x0_xhalf"])
-@pytest.mark.parametrize("paper_ansatz", ["6", "18"])
+@pytest.mark.parametrize("paper_ansatz", ["6"])
 def test_equivariant_paper_ansatz_is_p4m_invariant(paper_ansatz, readout):
-    """config6/config8: the generator-commuting design must be exactly
-    p4m-equivariant WITHOUT any explicit group-twirling — "avg_x" (the
-    default create_qnn now uses, matching config1-config5's effective
-    measurement) and "x0_xhalf" (the alternative) must both hold."""
+    """config6: the generator-commuting design must be exactly
+    p4m-equivariant WITHOUT any explicit group-twirling, with both the
+    default "avg_x" readout and the "x0_xhalf" alternative."""
     spec = paper_architecture_spec(paper_ansatz, "equivariant", 8)
     qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, spec, readout=readout)
     is_invariant, deviation = check_p4m_invariance(
@@ -65,9 +64,9 @@ def test_equivariant_paper_ansatz_is_p4m_invariant(paper_ansatz, readout):
 
 
 @pytest.mark.parametrize("readout", ["avg_x", "x0_xhalf"])
-@pytest.mark.parametrize("paper_ansatz", ["6", "18"])
+@pytest.mark.parametrize("paper_ansatz", ["6"])
 def test_nonequivariant_paper_ansatz_is_not_p4m_invariant(paper_ansatz, readout):
-    """config7/config9: the axis-scrambled column register must generically
+    """config7: the axis-scrambled column register must generically
     break p4m-equivariance, regardless of readout choice."""
     spec = paper_architecture_spec(paper_ansatz, "nonequivariant", 8)
     qnn, params, _ = build_qnn_from_spec(DEVICE_NAME, 8, spec, readout=readout)

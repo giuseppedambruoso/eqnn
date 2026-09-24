@@ -104,26 +104,9 @@ def test_build_qnn_from_spec_noise_changes_output_vs_clean():
     assert not torch.allclose(out_clean, out_noisy)
 
 
-def test_create_qnn_uniform_kind_supports_noise():
-    """config1-config5 (the "uniform" kind, a separate code path from
-    build_qnn_from_spec) must support noise_p/noise_seed too."""
-    emb = _sample_embedding(8)
-    params = torch.zeros(16, dtype=torch.float64) + 0.05
-
-    qnn_clean = create_qnn(DEVICE_NAME, 8, 2, "config1", noise_p=0.0)
-    qnn_noisy = create_qnn(DEVICE_NAME, 8, 2, "config1", noise_p=0.5, noise_seed=3)
-
-    out_clean = qnn_clean(emb, params)
-    out_noisy_1 = qnn_noisy(emb, params)
-    out_noisy_2 = qnn_noisy(emb, params)
-
-    assert not torch.allclose(out_clean, out_noisy_1)
-    assert torch.allclose(out_noisy_1, out_noisy_2)
-
-
-def test_create_qnn_paper_kind_supports_noise():
-    """config6-config9 (the "paper" kind, delegating to
-    build_qnn_from_spec) must support noise_p/noise_seed too."""
+def test_create_qnn_supports_noise():
+    """create_qnn (delegating to build_qnn_from_spec) must support
+    noise_p/noise_seed, with a reproducible noise realization."""
     emb = _sample_embedding(8)
     params = torch.zeros(6, dtype=torch.float64) + 0.05
 

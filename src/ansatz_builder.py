@@ -3,14 +3,11 @@
 Lets a circuit be described as a plain JSON-serializable list of gate
 placements instead of one of the fixed architectures in src/qnn.py — the
 backend for the interactive circuit designer (src/designer_app.py). This
-module makes no assumption about circuit structure (no fixed reps/entangler
-pattern). config1-config5 can be expanded into an equivalent spec via
-architecture_to_spec() (the inner, untwirled rotation+entangler pattern —
-whether the architecture additionally needs p4m twirling on top is exposed
-separately via ARCHITECTURES[architecture]["twirled"], see qnn.py).
-config6-config9 (the paper-style D4-equivariant/nonequivariant ansatzes) are
-built via src.paper_ansatzes.paper_architecture_spec instead — see that
-module.
+module makes no assumption about circuit structure. The project's three
+architectures (config6, config7, config10) are built from specs produced by
+src.paper_ansatzes.paper_architecture_spec; whether an architecture also
+needs explicit p4m twirling is ARCHITECTURES[architecture]["twirled"]
+(see src/qnn.py).
 
 Spec format — a list of gate dicts, applied in order:
     {
@@ -23,7 +20,7 @@ Spec format — a list of gate dicts, applied in order:
             "frozen": False,      # if True, the angle is fixed and never trained
             "group": None,        # optional: gates sharing the same group string
                                    # share ONE trainable parameter (tied weights) —
-                                   # needed by e.g. config6-9's paired row/column
+                                   # needed by e.g. config6/7's paired row/column
                                    # rotations. Omit for an independent parameter.
         },
     }
@@ -36,12 +33,7 @@ import torch
 
 from src.data_encoding import as_state_vector, embedding_state
 from src.noise import apply_gate_noise, make_noise_rng
-from src.qnn import (
-    ARCHITECTURES,
-    FROZEN_ENTANGLER_ANGLE,
-    apply_group_element,
-    equiv_measure,
-)
+from src.qnn import apply_group_element, equiv_measure
 
 # name -> (pennylane operation, arity)
 _FIXED_GATES: dict[str, tuple[Any, int]] = {
@@ -163,93 +155,6 @@ def param_labels(spec: list[dict[str, Any]]) -> list[str]:
     return labels
 
 
-def architecture_to_spec(
-    architecture: str, num_qubits: int, reps: int
-) -> list[dict[str, Any]]:
-    """Expands config1-config5 into an equivalent gate-by-gate spec — the
-    "inner" rotation+entangler pattern, e.g. as a starting point in the
-    designer. Whether the architecture additionally needs p4m twirling on
-    top of this spec is NOT encoded here: check
-    ARCHITECTURES[architecture]["twirled"] and set build_qnn_from_spec's
-    twirled= accordingly (the designer does this automatically when loading
-    a preset).
-
-    config6-config9 raise ValueError — use
-    src.paper_ansatzes.paper_architecture_spec for those instead.
-    """
-    if architecture not in ARCHITECTURES:
-        raise ValueError(f"Unknown architecture {architecture!r}")
-    arch_spec = ARCHITECTURES[architecture]
-    if arch_spec.get("kind", "uniform") != "uniform":
-        raise ValueError(
-            f"{architecture!r} isn't a uniform rotation+entangler architecture "
-            "— use src.paper_ansatzes.paper_architecture_spec for config6-config9."
-        )
-    rotation_gate = arch_spec["rotation_gate"]
-    entangler = arch_spec["entangler"]
-    cross_edge_index = (num_qubits // 2) - 1
-
-    spec: list[dict[str, Any]] = []
-    for _ in range(reps):
-        for i in range(num_qubits):
-            spec.append(
-                {
-                    "gate": rotation_gate,
-                    "wires": [i],
-                    "param": {"init": "random", "value": None, "frozen": False},
-                }
-            )
-
-        if entangler == "cnot":
-            for i in range(num_qubits - 1):
-                spec.append({"gate": "CNOT", "wires": [i, i + 1]})
-        elif entangler == "frozen_rxy":
-            for i in range(num_qubits - 1):
-                spec.append(
-                    {
-                        "gate": "PAULIROT",
-                        "wires": [i, i + 1],
-                        "pauli_word": "XY",
-                        "param": {
-                            "init": "custom",
-                            "value": FROZEN_ENTANGLER_ANGLE,
-                            "frozen": True,
-                        },
-                    }
-                )
-        elif entangler == "frozen_ryy":
-            for i in range(num_qubits - 1):
-                if i == cross_edge_index:
-                    wires = [i - 1, i, i + 1, i + 2]
-                    spec.append(
-                        {
-                            "gate": "PAULIROT",
-                            "wires": wires,
-                            "pauli_word": "YYYY",
-                            "param": {
-                                "init": "custom",
-                                "value": FROZEN_ENTANGLER_ANGLE,
-                                "frozen": True,
-                            },
-                        }
-                    )
-                else:
-                    spec.append(
-                        {
-                            "gate": "ISINGYY",
-                            "wires": [i, i + 1],
-                            "param": {
-                                "init": "custom",
-                                "value": FROZEN_ENTANGLER_ANGLE,
-                                "frozen": True,
-                            },
-                        }
-                    )
-        else:
-            raise ValueError(f"Unknown entangler {entangler!r}")
-    return spec
-
-
 def resolve_spec(spec: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Returns a copy of spec where every parametric gate's random initial
     value has been drawn and fixed as an explicit "custom" value.
@@ -300,19 +205,18 @@ def build_qnn_from_spec(
 
     twirled: wrap the spec in explicit p4m group-twirling (apply one of the
         8 p4m group elements before AND after the spec, averaged over all
-        8) — the same mechanism that makes config2/config4/config5
-        p4m-equivariant in src.qnn.create_qnn.
+        8) — the mechanism that makes config10 p4m-invariant.
     readout: "sum_z" (default) measures the average of qml.Z over every
-        qubit, preceded by the H-basis-change layer used by config1-config5
-        (see src.qnn.equiv_measure). "x0_xhalf" measures
-        0.5*(X_0 + X_{num_qubits//2}) with no basis-change layer — the
-        readout config6-config9 (src.paper_ansatzes) default to, to
-        preserve their exact p4m-equivariance. "avg_x" measures the average
+        qubit, preceded by an H-basis-change layer (see
+        src.qnn.equiv_measure; equal to "avg_x" in the noiseless case).
+        "x0_xhalf" measures 0.5*(X_0 + X_{num_qubits//2}) with no
+        basis-change layer, preserving the exact p4m-invariance of
+        config6/config10. "avg_x" measures the average
         of qml.X over every qubit (no basis-change layer) — also
         p4m-invariant under the same row/column-flip + swap generators (X
         commutes with itself under an X-flip, and summing over all qubits
         is unaffected by permuting them via the row/column swap), so it's a
-        valid alternative readout for config6-config9 too.
+        valid readout for config6/config10 too.
     diff_method: "backprop" (default) is dramatically faster in simulation
         — one differentiation pass through default.qubit's statevector,
         same order of cost as a single forward call — and is what

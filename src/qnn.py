@@ -1,5 +1,4 @@
 import logging
-import math
 import random
 from typing import Any
 
@@ -78,105 +77,28 @@ def equiv_measure(num_qubits: int) -> None:
 
 # --- QNode Factory ---
 
-# Fixed (non-trainable) rotation angle for the frozen entanglers (RXY for
-# config3/4, RYY/RYYYY for config5).
-FROZEN_ENTANGLER_ANGLE = math.pi / 2
-
-# The 9 supported architectures.
-#
-# "kind" selects how create_qnn builds the circuit:
-#   - "uniform": the rotation+entangler+reps pattern below (config1-config5).
-#   - "paper": the D4-matched block-schedule ansatzes from
-#     src.paper_ansatzes (config6-config9) — a fixed 5-block schedule with a
-#     small, tied ("group"-shared) set of trainable angles, unrelated to
-#     "reps" (ignored for these architectures).
-#
-# "twirled" is the MECHANISM flag: it wraps the ansatz in explicit p4m
-# group-twirling, averaged over the 8 group elements in qnn_forward.
-# "is_equivariant" is the resulting PROPERTY: whether the built circuit is
-# actually p4m-equivariant. They're decoupled because config6/config8
-# achieve p4m-equivariance a different way — by construction, via
-# generators that commute with the D4 group — without needing explicit
-# twirling (see src.paper_ansatzes' module docstring).
-#
-# config3/4 use a frozen RXY entangler rather than CNOT: with a CNOT (or any
-# entangler built only from I/X, e.g. RXX) the RX rotations get an *exactly*
-# zero gradient — CNOT's Heisenberg conjugation maps X-type Paulis to X-type
-# Paulis only, and RX(theta) is itself an I/X combination, so two operators
-# built purely from I and X always commute, making the measured expectation
-# value provably constant in theta (verified numerically: identical output
-# to 1e-10 across a full sweep of theta). RXY breaks this for every qubit
-# except the very first one in the chain (which only ever plays the "X" role
-# in the wires=[i, i+1] convention below, so it still gets zero gradient).
+# The three supported architectures (see src.paper_ansatzes): the same
+# 5-block schedule with 6 tied trainable angles per layer.
+#   config6:  generator-equivariant (Equiv) - p4m-equivariant by construction.
+#   config7:  axis-scrambled counterpart (NonEquiv) - not equivariant.
+#   config10: config7 wrapped in explicit p4m twirling (NonEquiv-Twirled):
+#             output averaged over the 8 group elements, exactly invariant,
+#             at 8x the circuit evaluations.
+# "twirled" is the MECHANISM flag, "is_equivariant" the resulting PROPERTY.
 ARCHITECTURES: dict[str, dict[str, Any]] = {
-    "config1": {
-        "kind": "uniform",
-        "rotation_gate": "RY",
-        "entangler": "cnot",
-        "twirled": False,
-        "is_equivariant": False,
-    },
-    "config2": {
-        "kind": "uniform",
-        "rotation_gate": "RY",
-        "entangler": "cnot",
-        "twirled": True,
-        "is_equivariant": True,
-    },
-    "config3": {
-        "kind": "uniform",
-        "rotation_gate": "RX",
-        "entangler": "frozen_rxy",
-        "twirled": False,
-        "is_equivariant": False,
-    },
-    "config4": {
-        "kind": "uniform",
-        "rotation_gate": "RX",
-        "entangler": "frozen_rxy",
-        "twirled": True,
-        "is_equivariant": True,
-    },
-    "config5": {
-        "kind": "uniform",
-        "rotation_gate": "RX",
-        "entangler": "frozen_ryy",
-        "twirled": True,
-        "is_equivariant": True,
-    },
     "config6": {
-        "kind": "paper",
         "paper_ansatz": "6",
         "symmetry": "equivariant",
         "twirled": False,
         "is_equivariant": True,
     },
     "config7": {
-        "kind": "paper",
         "paper_ansatz": "6",
         "symmetry": "nonequivariant",
         "twirled": False,
         "is_equivariant": False,
     },
-    "config8": {
-        "kind": "paper",
-        "paper_ansatz": "18",
-        "symmetry": "equivariant",
-        "twirled": False,
-        "is_equivariant": True,
-    },
-    "config9": {
-        "kind": "paper",
-        "paper_ansatz": "18",
-        "symmetry": "nonequivariant",
-        "twirled": False,
-        "is_equivariant": False,
-    },
-    # config7 wrapped in explicit p4m twirling: the output is averaged over
-    # the 8 group elements, making the (non-equivariant) paper6 circuit
-    # exactly p4m-invariant at 8x the circuit evaluations.
     "config10": {
-        "kind": "paper",
         "paper_ansatz": "6",
         "symmetry": "nonequivariant",
         "twirled": True,
@@ -185,41 +107,12 @@ ARCHITECTURES: dict[str, dict[str, Any]] = {
 }
 
 
-def frozen_rxy_cascade(
-    num_qubits: int, noise_rng: random.Random | None = None, noise_p: float = 0.0
-) -> None:
-    """Cascade of fixed-angle XY rotations (PauliRot(pi/2, "XY")) over
-    adjacent qubits — the entangler for config3/config4."""
-    for i in range(num_qubits - 1):
-        qml.PauliRot(FROZEN_ENTANGLER_ANGLE, "XY", wires=[i, i + 1])
-        apply_gate_noise([i, i + 1], noise_rng, noise_p)
-
-
-def frozen_ryy_cascade(
-    num_qubits: int,
-    cross_edge_index: int,
-    noise_rng: random.Random | None = None,
-    noise_p: float = 0.0,
-) -> None:
-    """Cascade of fixed-angle RYY gates (IsingYY(pi/2)) over adjacent qubits.
-
-    At the single step that would act on the two central qubits
-    (i == cross_edge_index), it is replaced by one 4-qubit RYYYY
-    (PauliRot(pi/2, "YYYY")) over the 4 central qubits instead.
-    """
-    for i in range(num_qubits - 1):
-        if i == cross_edge_index:
-            wires = [
-                cross_edge_index - 1,
-                cross_edge_index,
-                cross_edge_index + 1,
-                cross_edge_index + 2,
-            ]
-            qml.PauliRot(FROZEN_ENTANGLER_ANGLE, "YYYY", wires=wires)
-            apply_gate_noise(wires, noise_rng, noise_p)
-        else:
-            qml.IsingYY(FROZEN_ENTANGLER_ANGLE, wires=[i, i + 1])
-            apply_gate_noise([i, i + 1], noise_rng, noise_p)
+def _check_architecture(architecture: str) -> dict[str, Any]:
+    if architecture not in ARCHITECTURES:
+        raise ValueError(
+            f"architecture must be one of {sorted(ARCHITECTURES)}, got {architecture!r}"
+        )
+    return ARCHITECTURES[architecture]
 
 
 OUTPUT_BIAS_PARAM_NAMES = ("out_scale", "out_bias")
@@ -260,166 +153,62 @@ def initial_parameters(
 
 
 def architecture_param_names(
-    architecture: str, num_qubits: int, reps: int, output_bias: bool = False
+    architecture: str, num_qubits: int, reps: int = 1, output_bias: bool = False,
+    layers: int = 1,
 ) -> list[str]:
+    """Names of the trainable parameters create_qnn(..., architecture)
+    expects: 6 tied circuit angles per layer, plus (w, b) if output_bias.
+    reps is accepted for backward compatibility and ignored; layers
+    stacks copies of the circuit, each with its own angles."""
+    # Local import: src.ansatz_builder imports from this module.
+    from src.ansatz_builder import param_labels
+    from src.paper_ansatzes import paper_architecture_spec
+
+    spec = _check_architecture(architecture)
+    gate_spec = paper_architecture_spec(spec["paper_ansatz"], spec["symmetry"], num_qubits, layers)
     extra = list(OUTPUT_BIAS_PARAM_NAMES) if output_bias else []
-    return _circuit_param_names(architecture, num_qubits, reps) + extra
-
-
-def _circuit_param_names(
-    architecture: str, num_qubits: int, reps: int
-) -> list[str]:
-    """Names for the trainable-parameter tensor create_qnn's architecture
-    needs — length matches what create_qnn(..., architecture) expects for
-    its `params` argument. config1-config5 need num_qubits*reps
-    independent rotation angles; config6-config9 have a fixed, tied
-    parameter budget (6 or 18 total) and ignore `reps` entirely.
-    """
-    if architecture not in ARCHITECTURES:
-        raise ValueError(
-            f"architecture must be one of {sorted(ARCHITECTURES)}, got {architecture!r}"
-        )
-    spec = ARCHITECTURES[architecture]
-    if spec["kind"] == "paper":
-        # Local import: src.ansatz_builder imports ARCHITECTURES from this
-        # module at top level, so importing it back here would be circular
-        # if done at module scope.
-        from src.ansatz_builder import param_labels
-        from src.paper_ansatzes import paper_architecture_spec
-
-        gate_spec = paper_architecture_spec(
-            spec["paper_ansatz"], spec["symmetry"], num_qubits
-        )
-        return param_labels(gate_spec)
-    return [f"rep{r}_q{i}" for r in range(reps) for i in range(num_qubits)]
+    return param_labels(gate_spec) + extra
 
 
 def create_qnn(
     device: str,
     num_qubits: int,
-    reps: int,
-    architecture: str = "config1",
+    reps: int = 1,
+    architecture: str = "config6",
     diff_method: str = "backprop",
     readout: str | None = None,
     noise_p: float = 0.0,
     noise_seed: int = 0,
     output_bias: bool = False,
+    layers: int = 1,
 ) -> Any:
-    """diff_method: "backprop" (default) is fast in simulation — src.train's
-    execute_batch relies on it to run a whole batch through the QNN in a
-    single vectorized call. "parameter-shift" is much slower here but is
-    the only option that would also work on real quantum hardware (see
-    src.ansatz_builder.build_qnn_from_spec's docstring for the tradeoff).
+    """Builds config6 / config7 / config10 (see ARCHITECTURES) as a
+    callable qnn(encoded_states, params).
 
-    readout: only meaningful for config6-config9 (paper-kind
-    architectures); config1-config5's measurement is hardcoded elsewhere
-    in this function and ignores it. "avg_x" (default, i.e. readout=None)
-    measures the mean of X over every qubit; "x0_xhalf" measures only
-    0.5*(X_0 + X_{num_qubits//2}) — see
-    src.ansatz_builder.build_qnn_from_spec's docstring for both.
-
-    noise_p/noise_seed: Monte Carlo single-qubit depolarizing noise
-    inserted after every gate (see src.noise's module docstring). 0.0
-    (default) disables it entirely. noise_seed must differ from whatever
-    seed drew the initial parameters — it seeds an independent source of
-    randomness (which sites get a noise hit, and which Pauli).
+    diff_method: "backprop" (default) is fast in simulation - src.train's
+    execute_batch relies on it to run a whole batch in one vectorized call;
+    "parameter-shift" is much slower but also works on real hardware.
+    readout: "avg_x" (default, mean of X over every qubit) or "x0_xhalf"
+    (0.5 (X_0 + X_{num_qubits/2})); both are p4m-invariant.
+    noise_p/noise_seed: Monte Carlo single-qubit depolarizing noise after
+    every gate (see src.noise); 0.0 disables it.
+    output_bias: append the trainable affine output map (w, b).
+    layers: stacked copies of the circuit, each with its own angles.
+    reps is accepted for backward compatibility and ignored.
     """
-    if architecture not in ARCHITECTURES:
-        raise ValueError(
-            f"architecture must be one of {sorted(ARCHITECTURES)}, got {architecture!r}"
-        )
-    spec = ARCHITECTURES[architecture]
+    from src.ansatz_builder import build_qnn_from_spec
+    from src.paper_ansatzes import paper_architecture_spec
 
-    if spec["kind"] == "paper":
-        # Local import — see architecture_param_names' comment above.
-        from src.ansatz_builder import build_qnn_from_spec
-        from src.paper_ansatzes import paper_architecture_spec
-
-        gate_spec = paper_architecture_spec(
-            spec["paper_ansatz"], spec["symmetry"], num_qubits
-        )
-        # "avg_x" (mean of X over every qubit) matches what config1-config5
-        # already measure in effect — equiv_measure applies H before
-        # measuring Z, and H Z H = X — so every architecture uses the same
-        # measurement by default; readout=None falls back to it.
-        paper_qnn_forward, _, _ = build_qnn_from_spec(
-            device,
-            num_qubits,
-            gate_spec,
-            twirled=spec["twirled"],
-            readout=readout or "avg_x",
-            diff_method=diff_method,
-            noise_p=noise_p,
-            noise_seed=noise_seed,
-        )
-        return _with_output_bias(paper_qnn_forward) if output_bias else paper_qnn_forward
-
-    rotation_gate = spec["rotation_gate"]
-    entangler = spec["entangler"]
-    twirled = spec["twirled"]
-
-    dev = qml.device(device, wires=num_qubits, shots=None)
-    cross_edge_index = (num_qubits // 2) - 1
-
-    @qml.qnode(dev, interface="torch", diff_method=diff_method)
-    def qnn_base(
-        embedding_unitary: torch.Tensor,
-        params: torch.Tensor,
-        g_idx: int = 0,
-    ) -> Any:
-        # Re-seeded fresh on every call — see src.noise's module
-        # docstring for why this reproduces the same noise realization
-        # every time instead of a fresh one per call.
-        noise_rng = make_noise_rng(noise_seed, noise_p)
-
-        qml.StatePrep(
-            as_state_vector(embedding_unitary, num_qubits),
-            wires=range(num_qubits),
-            normalize=True,
-        )
-        apply_gate_noise(range(num_qubits), noise_rng, noise_p)
-
-        if twirled:
-            apply_group_element(g_idx, num_qubits, noise_rng, noise_p)
-
-        for rep in range(reps):
-            for i in range(num_qubits):
-                if rotation_gate == "RX":
-                    qml.RX(params[i + num_qubits * rep], wires=i)
-                else:
-                    qml.RY(params[i + num_qubits * rep], wires=i)
-                apply_gate_noise([i], noise_rng, noise_p)
-
-            if entangler == "frozen_ryy":
-                frozen_ryy_cascade(num_qubits, cross_edge_index, noise_rng, noise_p)
-                continue
-            if entangler == "frozen_rxy":
-                frozen_rxy_cascade(num_qubits, noise_rng, noise_p)
-                continue
-
-            for i in range(num_qubits - 1):
-                qml.CNOT(wires=[i, i + 1])
-                apply_gate_noise([i, i + 1], noise_rng, noise_p)
-
-        if twirled:
-            apply_group_element(g_idx, num_qubits, noise_rng, noise_p)
-
-        equiv_measure(num_qubits)
-
-        coeffs = [1.0 / num_qubits] * num_qubits
-        observables = [qml.Z(i) for i in range(num_qubits)]
-        H = qml.Hamiltonian(coeffs, observables)
-        return qml.expval(H)
-
-    def qnn_forward(embedding_unitary: torch.Tensor, params: torch.Tensor) -> Any:
-        if twirled:
-            results = [qnn_base(embedding_unitary, params, g) for g in range(8)]
-            return torch.stack(results).mean(dim=0)
-        return qnn_base(embedding_unitary, params, 0)
-
-    # See src.ansatz_builder.build_qnn_from_spec's identical comment:
-    # qml.draw()/qml.draw_mpl() need the actual QNode, not a wrapper function,
-    # or the diagram silently truncates after the first few operations.
-    qnn_forward.qnode = qnn_base  # type: ignore[attr-defined]
-
+    spec = _check_architecture(architecture)
+    gate_spec = paper_architecture_spec(spec["paper_ansatz"], spec["symmetry"], num_qubits, layers)
+    qnn_forward, _, _ = build_qnn_from_spec(
+        device,
+        num_qubits,
+        gate_spec,
+        twirled=spec["twirled"],
+        readout=readout or "avg_x",
+        diff_method=diff_method,
+        noise_p=noise_p,
+        noise_seed=noise_seed,
+    )
     return _with_output_bias(qnn_forward) if output_bias else qnn_forward
