@@ -26,6 +26,17 @@ sync_once() {
   if [ ! -d "$RESULTS_REPO/.git" ]; then
     git clone -q --branch "$BRANCH" --single-branch "$REMOTE_URL" "$RESULTS_REPO" || return 1
   fi
+  # Commits need an author: fall back to a per-machine identity (only for
+  # this results clone) if git has none configured.
+  if ! git -C "$RESULTS_REPO" config user.email >/dev/null; then
+    git -C "$RESULTS_REPO" config user.name "eqnn-${MACHINE}"
+    git -C "$RESULTS_REPO" config user.email "${MACHINE}@eqnn-campaign.invalid"
+  fi
+  # Leftovers of an interrupted sync (staged but never committed) would
+  # block the rebase forever: commit them first.
+  if ! git -C "$RESULTS_REPO" diff --cached --quiet; then
+    git -C "$RESULTS_REPO" commit -q -m "results from ${MACHINE} (recovered)" || return 1
+  fi
   git -C "$RESULTS_REPO" pull -q --rebase || return 1
   mkdir -p "$RESULTS_REPO/results" results_paper/imported
   for local_file in results_paper/*.jsonl; do
