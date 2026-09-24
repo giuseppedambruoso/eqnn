@@ -12,7 +12,7 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset, Subset, TensorDataset
 
-from src.data_encoding import embedding_unitary
+from src.data_encoding import embedding_state
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,16 @@ def get_balanced_subset_indices(
 
     combined = torch.cat((sel1, sel2))
     return combined[torch.randperm(len(combined), generator=generator)].tolist()
+
+
+class CenterImage:
+    """Subtracts the image's mean pixel value (a D4-invariant quantity, so
+    this commutes with every p4m transform) before L2 normalization: the
+    amplitude encoding then carries the image's contrast pattern rather
+    than being dominated by its uniform (DC) component."""
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor - tensor.mean()
 
 
 class L2Normalize:
@@ -120,7 +130,7 @@ def load_mnist_data(
     post_transforms = [
         L2Normalize(),
         transforms.Lambda(lambda x: x.squeeze(0)),
-        transforms.Lambda(lambda x: embedding_unitary(x)),
+        transforms.Lambda(lambda x: embedding_state(x)),
     ]
 
     train_transform = transforms.Compose(base_transforms + post_transforms)
@@ -191,6 +201,7 @@ def load_mnist_data_full(
     augment_train: str = "none",
     class1: int = 3,
     class2: int = 4,
+    center: bool = False,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Like load_mnist_data, but returns (train_loader, test_loader,
     aug_test_loader) from a single call. Calling load_mnist_data twice
@@ -233,9 +244,10 @@ def load_mnist_data_full(
         transforms.ToTensor(),
     ]
     post_transforms = [
+        *([CenterImage()] if center else []),
         L2Normalize(),
         transforms.Lambda(lambda x: x.squeeze(0)),
-        transforms.Lambda(lambda x: embedding_unitary(x)),
+        transforms.Lambda(lambda x: embedding_state(x)),
     ]
     train_transform_list = list(base_transforms)
     if augment_train in ("online", "once"):
@@ -322,6 +334,8 @@ def load_mnist_data_full(
 
 # Label convention for load_aero_data_full: 0 = ship, 1 = plane.
 AERO_LABELS = {"ship": 0, "plane": 1}
+# Native side length of rhammell/planesnet chips (pixels).
+PLANESNET_CHIP_SIZE = 20
 
 
 class _FileListDataset(Dataset):
@@ -344,6 +358,19 @@ class _FileListDataset(Dataset):
             return self.transform(img.convert("RGB")), label
 
 
+def kaggle_dataset_dir(kaggle_slug: str) -> str:
+    """Local copy of a Kaggle dataset: $EQNN_KAGGLE_DIR/<dataset name> when
+    that variable is set (offline machines, no Kaggle credentials needed),
+    otherwise the kagglehub download cache."""
+    local_root = os.environ.get("EQNN_KAGGLE_DIR")
+    if local_root:
+        path = os.path.join(local_root, kaggle_slug.split("/")[-1])
+        if not os.path.isdir(path):
+            raise FileNotFoundError(f"{path} not found (EQNN_KAGGLE_DIR={local_root})")
+        return path
+    return kagglehub.dataset_download(kaggle_slug)
+
+
 def _positive_chip_files(kaggle_slug: str) -> list[str]:
     """Downloads (or reuses the local kagglehub cache for) one of
     rhammell's chip datasets and returns only the "object present" chips
@@ -351,7 +378,7 @@ def _positive_chip_files(kaggle_slug: str) -> list[str]:
     (glob's own order is filesystem-dependent). The "0_" (no object)
     chips are discarded entirely: neither class in the combined
     ship-vs-plane task is "background"."""
-    dataset_path = kagglehub.dataset_download(kaggle_slug)
+    dataset_path = kaggle_dataset_dir(kaggle_slug)
     return sorted(glob.glob(os.path.join(dataset_path, "**", "1_*.png"), recursive=True))
 
 
@@ -395,6 +422,8 @@ def load_aero_data_full(
     verbose: bool = False,
     augment_train: str = "none",
     train_frac: float = 0.5,
+    crop_to_plane_scale: bool = False,
+    center: bool = False,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Ship-vs-plane binary classification, combined from two Kaggle
     satellite-chip datasets: rhammell/ships-in-satellite-imagery (label 0)
@@ -456,15 +485,23 @@ def load_aero_data_full(
         for i in torch.randperm(len(test_samples), generator=g_select).tolist()
     ]
 
-    base_transforms = [
+    # crop_to_plane_scale: both datasets are ~3 m/pixel Planet imagery, but
+    # ship chips are 80x80 (~240 m) and plane chips 20x20 (~60 m). A
+    # central 20x20 crop brings ships to the planes' ground footprint (a
+    # no-op on the planes), so the classes no longer differ by object
+    # scale or by how much the resize smooths them. A centred square crop
+    # commutes with every D4 transform, so it preserves the symmetry.
+    crop = [transforms.CenterCrop(PLANESNET_CHIP_SIZE)] if crop_to_plane_scale else []
+    base_transforms = crop + [
         transforms.Resize(img_size),
         transforms.Grayscale(num_output_channels=1),
         transforms.ToTensor(),
     ]
     post_transforms = [
+        *([CenterImage()] if center else []),
         L2Normalize(),
         transforms.Lambda(lambda x: x.squeeze(0)),
-        transforms.Lambda(lambda x: embedding_unitary(x)),
+        transforms.Lambda(lambda x: embedding_state(x)),
     ]
     train_transform_list = list(base_transforms)
     if augment_train in ("online", "once"):
@@ -512,3 +549,282 @@ def load_aero_data_full(
     )
 
     return train_loader, test_loader, aug_test_loader
+
+
+def _balanced_pool_split(
+    labels: list[int], train_frac: float, generator: torch.Generator
+) -> dict[int, tuple[list[int], list[int]]]:
+    """Per-class, one-time deterministic train/test split of indices."""
+    pools = {}
+    for label in sorted(set(labels)):
+        idx = [i for i, y in enumerate(labels) if y == label]
+        perm = torch.randperm(len(idx), generator=generator).tolist()
+        n_train = int(len(idx) * train_frac)
+        pools[label] = (
+            [idx[k] for k in perm[:n_train]],
+            [idx[k] for k in perm[n_train:]],
+        )
+    return pools
+
+
+def _loaders_from_items(
+    train_items: list,
+    test_items: list,
+    make_dataset,
+    base_transforms: list,
+    batch_size: int,
+    num_workers: int,
+    seed: int,
+    augment_train: str,
+    center: bool = False,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Shared tail of the planesnet/ising loaders: identical transform,
+    augmentation and caching semantics to load_aero_data_full."""
+    post_transforms = [
+        *([CenterImage()] if center else []),
+        L2Normalize(),
+        transforms.Lambda(lambda x: x.squeeze(0)),
+        transforms.Lambda(lambda x: embedding_state(x)),
+    ]
+    train_transform_list = list(base_transforms)
+    if augment_train in ("online", "once"):
+        train_transform_list.append(D4Augmentation(p=1))
+    train_full = make_dataset(
+        train_items, transforms.Compose(train_transform_list + post_transforms)
+    )
+    test_full = make_dataset(
+        test_items, transforms.Compose(base_transforms + post_transforms)
+    )
+    aug_test_full = make_dataset(
+        test_items,
+        transforms.Compose(base_transforms + [D4Augmentation(p=1)] + post_transforms),
+    )
+    train_final: Dataset | TensorDataset = (
+        train_full if augment_train == "online" else _materialize(train_full)
+    )
+    g_loader = torch.Generator().manual_seed(seed)
+    train_loader = DataLoader(
+        train_final,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        worker_init_fn=seed_worker,
+        generator=g_loader,
+    )
+    test_loader = DataLoader(
+        _materialize(test_full), batch_size=batch_size, shuffle=False
+    )
+    aug_test_loader = DataLoader(
+        _materialize(aug_test_full), batch_size=batch_size, shuffle=False
+    )
+    return train_loader, test_loader, aug_test_loader
+
+
+def _sample_balanced(
+    pools: dict[int, tuple[list[int], list[int]]],
+    N: int,
+    generator: torch.Generator,
+    split: int,
+) -> list[int]:
+    labels = sorted(pools)
+    counts = {labels[0]: N // 2, labels[1]: N - N // 2}
+    chosen: list[int] = []
+    for label in labels:
+        pool = pools[label][split]
+        if counts[label] > len(pool):
+            raise ValueError(
+                f"Requested {counts[label]} images of class {label}, but the "
+                f"{'train' if split == 0 else 'test'} pool only has {len(pool)}."
+            )
+        chosen += [pool[i] for i in torch.randperm(len(pool), generator=generator)[: counts[label]].tolist()]
+    return [chosen[i] for i in torch.randperm(len(chosen), generator=generator).tolist()]
+
+
+# Label convention for load_planesnet_data_full: 0 = no plane, 1 = plane.
+PLANESNET_LABELS = {"no_plane": 0, "plane": 1}
+
+
+def load_planesnet_data_full(
+    batch_size: int,
+    N: int,
+    num_workers: int,
+    img_size: int = 16,
+    seed: int = 42,
+    verbose: bool = False,
+    augment_train: str = "none",
+    train_frac: float = 0.5,
+    center: bool = False,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Plane vs. no-plane classification within rhammell/planesnet alone:
+    every chip is natively 20x20 (only a mild resize to img_size), and
+    both classes come from the same imagery, sensor and chip size — so,
+    unlike the ship-vs-plane "satellite" task, the classes cannot be told
+    apart by resolution or rescaling artifacts. Filenames prefixed "1_"
+    contain a plane, "0_" do not (background, partial planes, confusers).
+    Same one-time per-class train/test pool split and exact class balance
+    as load_aero_data_full."""
+    if augment_train not in AUGMENT_TRAIN_MODES:
+        raise ValueError(
+            f"augment_train must be one of {AUGMENT_TRAIN_MODES}, got {augment_train!r}"
+        )
+    torch.manual_seed(seed)
+    root = kaggle_dataset_dir("rhammell/planesnet")
+    files = sorted(glob.glob(os.path.join(root, "**", "[01]_*.png"), recursive=True))
+    labels = [
+        PLANESNET_LABELS["plane"]
+        if os.path.basename(f).startswith("1_")
+        else PLANESNET_LABELS["no_plane"]
+        for f in files
+    ]
+    if verbose:
+        logger.info(f"planesnet: {sum(labels)} plane / {len(labels) - sum(labels)} no-plane chips")
+    pools = _balanced_pool_split(labels, train_frac, torch.Generator().manual_seed(seed))
+    g_select = torch.Generator().manual_seed(seed)
+    train_idx = _sample_balanced(pools, N, g_select, 0)
+    test_idx = _sample_balanced(pools, N, g_select, 1)
+    base_transforms = [
+        transforms.Resize(img_size),
+        transforms.Grayscale(num_output_channels=1),
+        transforms.ToTensor(),
+    ]
+    return _loaders_from_items(
+        [(files[i], labels[i]) for i in train_idx],
+        [(files[i], labels[i]) for i in test_idx],
+        _FileListDataset,
+        base_transforms,
+        batch_size,
+        num_workers,
+        seed,
+        augment_train,
+        center,
+    )
+
+
+class _TensorImageDataset(Dataset):
+    """(image_tensor, label) pairs with a transform applied on access."""
+
+    def __init__(self, items: list[tuple[torch.Tensor, int]], transform) -> None:
+        self.items = items
+        self.transform = transform
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
+        image, label = self.items[idx]
+        return self.transform(image), label
+
+
+def load_ising_data_full(
+    batch_size: int,
+    N: int,
+    num_workers: int,
+    img_size: int = 16,
+    data_dir: str = "data",
+    seed: int = 42,
+    verbose: bool = False,
+    augment_train: str = "none",
+    train_frac: float = 0.5,
+    center: bool = False,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Ordered (T < T_c) vs. disordered (T > T_c) 2D Ising configurations,
+    generated natively at img_size x img_size (see src.ising) — spins +-1
+    are used directly as pixel values, so the amplitude encoding is also
+    invariant under the global spin flip (it only changes the state's
+    global sign). The configuration pool itself is generated once with a
+    fixed seed and cached; `seed` only drives the train/test split and
+    sampling, as for the other datasets."""
+    from src.ising import load_or_generate_ising
+
+    if augment_train not in AUGMENT_TRAIN_MODES:
+        raise ValueError(
+            f"augment_train must be one of {AUGMENT_TRAIN_MODES}, got {augment_train!r}"
+        )
+    torch.manual_seed(seed)
+    spins, _, labels_np = load_or_generate_ising(data_dir, size=img_size)
+    labels = labels_np.tolist()
+    if verbose:
+        logger.info(f"ising: {sum(labels)} ordered / {len(labels) - sum(labels)} disordered")
+    pools = _balanced_pool_split(labels, train_frac, torch.Generator().manual_seed(seed))
+    g_select = torch.Generator().manual_seed(seed)
+    train_idx = _sample_balanced(pools, N, g_select, 0)
+    test_idx = _sample_balanced(pools, N, g_select, 1)
+    images = torch.from_numpy(spins.astype(np.float64)).unsqueeze(1)
+    return _loaders_from_items(
+        [(images[i], labels[i]) for i in train_idx],
+        [(images[i], labels[i]) for i in test_idx],
+        _TensorImageDataset,
+        [],
+        batch_size,
+        num_workers,
+        seed,
+        augment_train,
+        center,
+    )
+
+
+# EuroSAT binary tasks: (label 0 class, label 1 class). Sentinel-2 RGB
+# chips, natively 64x64 — so 12 qubits need no rescaling at all.
+EUROSAT_TASKS = {
+    "highway_river": ("Highway", "River"),
+    "forest_industrial": ("Forest", "Industrial"),
+}
+EUROSAT_NATIVE_SIZE = 64
+
+
+def load_eurosat_data_full(
+    batch_size: int,
+    N: int,
+    num_workers: int,
+    img_size: int = 16,
+    data_dir: str = "data",
+    seed: int = 42,
+    verbose: bool = False,
+    augment_train: str = "none",
+    task: str = "highway_river",
+    train_frac: float = 0.5,
+    center: bool = False,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Binary EuroSAT (RGB, data_dir/eurosat/2750/<Class>/*.jpg) task.
+    Overhead land-cover imagery: rotations and reflections do not change
+    the label. Same one-time per-class train/test pool split and exact
+    class balance as the other loaders."""
+    if augment_train not in AUGMENT_TRAIN_MODES:
+        raise ValueError(
+            f"augment_train must be one of {AUGMENT_TRAIN_MODES}, got {augment_train!r}"
+        )
+    if task not in EUROSAT_TASKS:
+        raise ValueError(f"task must be one of {sorted(EUROSAT_TASKS)}, got {task!r}")
+    if img_size > EUROSAT_NATIVE_SIZE:
+        raise ValueError(f"img_size {img_size} exceeds EuroSAT's native {EUROSAT_NATIVE_SIZE}")
+    torch.manual_seed(seed)
+    files: list[str] = []
+    labels: list[int] = []
+    for label, class_name in enumerate(EUROSAT_TASKS[task]):
+        class_files = sorted(glob.glob(os.path.join(data_dir, "eurosat", "2750", class_name, "*.jpg")))
+        if not class_files:
+            raise FileNotFoundError(f"No EuroSAT images found for class {class_name!r}")
+        files += class_files
+        labels += [label] * len(class_files)
+    if verbose:
+        logger.info(f"eurosat {task}: {labels.count(0)} / {labels.count(1)} images")
+    pools = _balanced_pool_split(labels, train_frac, torch.Generator().manual_seed(seed))
+    g_select = torch.Generator().manual_seed(seed)
+    train_idx = _sample_balanced(pools, N, g_select, 0)
+    test_idx = _sample_balanced(pools, N, g_select, 1)
+    resize = [transforms.Resize(img_size)] if img_size != EUROSAT_NATIVE_SIZE else []
+    base_transforms = resize + [
+        transforms.Grayscale(num_output_channels=1),
+        transforms.ToTensor(),
+    ]
+    return _loaders_from_items(
+        [(files[i], labels[i]) for i in train_idx],
+        [(files[i], labels[i]) for i in test_idx],
+        _FileListDataset,
+        base_transforms,
+        batch_size,
+        num_workers,
+        seed,
+        augment_train,
+        center,
+    )

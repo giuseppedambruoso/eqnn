@@ -6,6 +6,7 @@ from typing import Any
 import pennylane as qml
 import torch
 
+from src.data_encoding import as_state_vector
 from src.noise import apply_gate_noise, make_noise_rng
 
 logger = logging.getLogger(__name__)
@@ -171,6 +172,16 @@ ARCHITECTURES: dict[str, dict[str, Any]] = {
         "twirled": False,
         "is_equivariant": False,
     },
+    # config7 wrapped in explicit p4m twirling: the output is averaged over
+    # the 8 group elements, making the (non-equivariant) paper6 circuit
+    # exactly p4m-invariant at 8x the circuit evaluations.
+    "config10": {
+        "kind": "paper",
+        "paper_ansatz": "6",
+        "symmetry": "nonequivariant",
+        "twirled": True,
+        "is_equivariant": True,
+    },
 }
 
 
@@ -211,7 +222,51 @@ def frozen_ryy_cascade(
             apply_gate_noise([i, i + 1], noise_rng, noise_p)
 
 
+OUTPUT_BIAS_PARAM_NAMES = ("out_scale", "out_bias")
+
+
+def _with_output_bias(qnn_forward: Any) -> Any:
+    """Classical affine post-processing of the measured expectation value:
+    returns tanh(w <O> + b) with (w, b) = the last two entries of `params`,
+    so that train.execute_batch's (1 + output) / 2 equals
+    sigmoid(2 (w <O> + b)). Without it the decision threshold is pinned at
+    <O> = 0, and a dataset whose <O> has the same sign for both classes
+    cannot be classified at all. It acts only on the (already invariant)
+    scalar output, so it never affects equivariance."""
+
+    def forward(encoded: torch.Tensor, params: torch.Tensor) -> Any:
+        raw = qnn_forward(encoded, params[:-2])
+        return torch.tanh(params[-2] * raw + params[-1])
+
+    forward.qnode = getattr(qnn_forward, "qnode", None)  # type: ignore[attr-defined]
+    return forward
+
+
+def initial_parameters(
+    param_names: list[str], generator: torch.Generator, device: str = "cpu"
+) -> torch.Tensor:
+    """Uniform(-0.1, 0.1) initialization for every circuit angle; the
+    output-bias parameters (if present) start at w = 1, b = 0, i.e. the
+    model initially coincides with the one without output bias."""
+    params = torch.empty(len(param_names), device=torch.device(device)).uniform_(
+        -0.1, 0.1, generator=generator
+    )
+    for i, name in enumerate(param_names):
+        if name == "out_scale":
+            params[i] = 1.0
+        elif name == "out_bias":
+            params[i] = 0.0
+    return params
+
+
 def architecture_param_names(
+    architecture: str, num_qubits: int, reps: int, output_bias: bool = False
+) -> list[str]:
+    extra = list(OUTPUT_BIAS_PARAM_NAMES) if output_bias else []
+    return _circuit_param_names(architecture, num_qubits, reps) + extra
+
+
+def _circuit_param_names(
     architecture: str, num_qubits: int, reps: int
 ) -> list[str]:
     """Names for the trainable-parameter tensor create_qnn's architecture
@@ -248,6 +303,7 @@ def create_qnn(
     readout: str | None = None,
     noise_p: float = 0.0,
     noise_seed: int = 0,
+    output_bias: bool = False,
 ) -> Any:
     """diff_method: "backprop" (default) is fast in simulation — src.train's
     execute_batch relies on it to run a whole batch through the QNN in a
@@ -290,13 +346,13 @@ def create_qnn(
             device,
             num_qubits,
             gate_spec,
-            twirled=False,
+            twirled=spec["twirled"],
             readout=readout or "avg_x",
             diff_method=diff_method,
             noise_p=noise_p,
             noise_seed=noise_seed,
         )
-        return paper_qnn_forward
+        return _with_output_bias(paper_qnn_forward) if output_bias else paper_qnn_forward
 
     rotation_gate = spec["rotation_gate"]
     entangler = spec["entangler"]
@@ -316,7 +372,11 @@ def create_qnn(
         # every time instead of a fresh one per call.
         noise_rng = make_noise_rng(noise_seed, noise_p)
 
-        qml.QubitUnitary(embedding_unitary, wires=range(num_qubits))
+        qml.StatePrep(
+            as_state_vector(embedding_unitary, num_qubits),
+            wires=range(num_qubits),
+            normalize=True,
+        )
         apply_gate_noise(range(num_qubits), noise_rng, noise_p)
 
         if twirled:
@@ -362,4 +422,4 @@ def create_qnn(
     # or the diagram silently truncates after the first few operations.
     qnn_forward.qnode = qnn_base  # type: ignore[attr-defined]
 
-    return qnn_forward
+    return _with_output_bias(qnn_forward) if output_bias else qnn_forward

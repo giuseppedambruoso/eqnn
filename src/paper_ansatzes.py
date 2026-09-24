@@ -34,16 +34,17 @@ preserves parameter count, parameter sharing, gate arities, gate count, and
 depth while deliberately misaligning the ansatz with the image symmetry —
 config6/config8 (equivariant) vs config7/config9 (non-equivariant).
 
-Only num_qubits == 8 is supported: the block schedule is hand-crafted for
-exactly 4 coordinate qubits per axis (16x16 images), matching this
-project's fixed 8-qubit / img_size=16 default throughout.
+num_qubits may be 8, 10 or 12 (16x16, 32x32 or 64x64 images): see
+block_schedule, which reproduces the original hand-crafted 8-qubit
+schedule exactly and extends it to 5 or 6 coordinate bits per axis.
 """
 
 from dataclasses import dataclass
 from typing import Any
 
-N_COORD_QUBITS = 4
+N_COORD_QUBITS = 4  # default (8 qubits, 16x16 images)
 N_QUBITS = 2 * N_COORD_QUBITS
+SUPPORTED_NUM_QUBITS = (8, 10, 12)
 PARAMETER_GROUP_NAMES = ("fine_shared", "coarse")
 EQUIVARIANT = "equivariant"
 NONEQUIVARIANT = "nonequivariant"
@@ -64,13 +65,25 @@ class OrbitBlockSpec:
 # bits 1 and 3. Stage 1 transfers the remaining information from bit 2 to
 # bit 0 — an 8 -> 4 -> 2 pooling schedule (most load-bearing when paired
 # with readout="x0_xhalf", which only reads bits 0 and 4 back out).
-BLOCK_SCHEDULE: tuple[OrbitBlockSpec, ...] = (
-    OrbitBlockSpec(0, "fine-01", 0, 1),
-    OrbitBlockSpec(0, "fine-23", 2, 3),
-    OrbitBlockSpec(0, "shift-12", 1, 2),
-    OrbitBlockSpec(0, "wrap-30", 3, 0),
-    OrbitBlockSpec(1, "coarse-02", 0, 2),
-)
+def block_schedule(n_coord: int) -> tuple[OrbitBlockSpec, ...]:
+    """Block schedule for n_coord coordinate bits per axis.
+
+    Stage 0 ("fine", shared angles) couples every pair of neighbouring
+    bits on a ring, in brick order: first (0,1), (2,3), ..., then
+    (1,2), (3,4), ..., closing the ring with (n_coord-1, 0). Stage 1
+    ("coarse", own angles) couples bit 0 with bit n_coord//2. For
+    n_coord=4 this is exactly the original hand-crafted schedule
+    (0,1), (2,3), (1,2), (3,0) + coarse (0,2).
+    """
+    even = [(2 * k, 2 * k + 1) for k in range(n_coord // 2)]
+    odd = [(2 * k + 1, 2 * k + 2) for k in range((n_coord - 1) // 2)]
+    wrap = [(n_coord - 1, 0)]
+    blocks = [OrbitBlockSpec(0, f"fine-{a}{b}", a, b) for a, b in even + odd + wrap]
+    blocks.append(OrbitBlockSpec(1, f"coarse-0{n_coord // 2}", 0, n_coord // 2))
+    return tuple(blocks)
+
+
+BLOCK_SCHEDULE: tuple[OrbitBlockSpec, ...] = block_schedule(N_COORD_QUBITS)
 
 PAPER6_PARAMETER_NAMES = ("rx_a", "rx_b", "ryyyy_cross")
 SHARED18_PARAMETER_NAMES = (
@@ -115,34 +128,36 @@ def _param(group: str) -> dict[str, Any]:
     return {"init": "random", "value": None, "frozen": False, "group": group}
 
 
-def _paired_rx_spec(stage: int, name: str, bit: int) -> list[dict[str, Any]]:
+def _paired_rx_spec(stage: int, name: str, bit: int, coord: int) -> list[dict[str, Any]]:
     """Same RX angle applied to matching row/column coordinate bits."""
 
     group = f"stage{stage}_{name}"
     return [
         {"gate": "RX", "wires": [bit], "param": _param(group)},
-        {"gate": "RX", "wires": [bit + N_COORD_QUBITS], "param": _param(group)},
+        {"gate": "RX", "wires": [bit + coord], "param": _param(group)},
     ]
 
 
-def _axis_scrambled_rx_spec(stage: int, name: str, bit: int) -> list[dict[str, Any]]:
+def _axis_scrambled_rx_spec(
+    stage: int, name: str, bit: int, coord: int
+) -> list[dict[str, Any]]:
     """Matched symmetry-breaking RX (row) / RY (column) pair."""
 
     group = f"stage{stage}_{name}"
     return [
         {"gate": "RX", "wires": [bit], "param": _param(group)},
-        {"gate": "RY", "wires": [bit + N_COORD_QUBITS], "param": _param(group)},
+        {"gate": "RY", "wires": [bit + coord], "param": _param(group)},
     ]
 
 
 def _paper6_block_spec(
-    stage: int, a: int, b: int, equivariant: bool
+    stage: int, a: int, b: int, equivariant: bool, coord: int = N_COORD_QUBITS
 ) -> list[dict[str, Any]]:
     names = PAPER6_PARAMETER_NAMES
-    cross_wires = [a, b, a + N_COORD_QUBITS, b + N_COORD_QUBITS]
+    cross_wires = [a, b, a + coord, b + coord]
 
     rx = _paired_rx_spec if equivariant else _axis_scrambled_rx_spec
-    gates = rx(stage, names[0], a) + rx(stage, names[1], b)
+    gates = rx(stage, names[0], a, coord) + rx(stage, names[1], b, coord)
 
     word = "YYYY" if equivariant else "YYZZ"
     gates.append(
@@ -157,16 +172,15 @@ def _paper6_block_spec(
 
 
 def _shared18_block_spec(
-    stage: int, a: int, b: int, equivariant: bool
+    stage: int, a: int, b: int, equivariant: bool, coord: int = N_COORD_QUBITS
 ) -> list[dict[str, Any]]:
     names = SHARED18_PARAMETER_NAMES
-    coord = N_COORD_QUBITS
     cross_wires = [a, b, a + coord, b + coord]
     rx = _paired_rx_spec if equivariant else _axis_scrambled_rx_spec
 
     gates: list[dict[str, Any]] = []
-    gates += rx(stage, names[0], a)
-    gates += rx(stage, names[1], b)
+    gates += rx(stage, names[0], a, coord)
+    gates += rx(stage, names[1], b, coord)
 
     if equivariant:
         # Two identical gates together exponentiate the swap-invariant
@@ -217,8 +231,8 @@ def _shared18_block_spec(
             }
         )
 
-    gates += rx(stage, names[4], a)
-    gates += rx(stage, names[5], b)
+    gates += rx(stage, names[4], a, coord)
+    gates += rx(stage, names[5], b, coord)
 
     if equivariant:
         # These Pauli words have even Y/Z parity in each coordinate
@@ -301,9 +315,9 @@ def paper_architecture_spec(
     (the default create_qnn uses) or readout="x0_xhalf" to preserve the
     intended (non-)equivariance.
     """
-    if num_qubits != N_QUBITS:
+    if num_qubits not in SUPPORTED_NUM_QUBITS:
         raise ValueError(
-            f"Paper ansatzes require num_qubits == {N_QUBITS}, got {num_qubits}"
+            f"Paper ansatzes require num_qubits in {SUPPORTED_NUM_QUBITS}, got {num_qubits}"
         )
     if paper_ansatz not in PAPER_ANSATZ_CHOICES:
         raise ValueError(
@@ -313,6 +327,7 @@ def paper_architecture_spec(
     block_fn = _paper6_block_spec if paper_ansatz == "6" else _shared18_block_spec
 
     spec: list[dict[str, Any]] = []
-    for block in BLOCK_SCHEDULE:
-        spec += block_fn(block.stage, block.a, block.b, equivariant)
+    coord = num_qubits // 2
+    for block in block_schedule(coord):
+        spec += block_fn(block.stage, block.a, block.b, equivariant, coord)
     return spec

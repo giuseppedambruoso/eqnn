@@ -51,12 +51,30 @@ def coordinate_to_unitary(x: int, y: int, img: torch.Tensor) -> torch.Tensor | N
 
 
 def embedding_unitary(image: torch.Tensor) -> torch.Tensor:
+    """Matrix M with M|0...0> = sum_ij x_ij |i>|j> (row-major index i*cols+j)
+    and zeros elsewhere — exactly sum_ij coordinate_to_unitary(i, j, image),
+    built directly instead of as 256 Kronecker products (~0.2 s/image)."""
     rows, cols = image.shape
-    coords = [(i, j) for i in range(rows) for j in range(cols)]
+    out = torch.zeros(rows * cols, rows * cols, dtype=torch.float64)
+    out[:, 0] = image.reshape(-1).to(torch.float64)
+    return out
 
-    parts = [coordinate_to_unitary(i, j, image) for i, j in coords]
-    non_null_parts = [p for p in parts if p is not None]
-    if len(non_null_parts) != len(parts):
-        raise ValueError("coordinate_to_unitary returned None for a valid coordinate")
 
-    return torch.stack(non_null_parts).sum(dim=0)
+def embedding_state(image: torch.Tensor) -> torch.Tensor:
+    """The encoded state sum_ij x_ij |i>|j> itself, as a 2^(2n) float64
+    vector (row-major index i*cols+j) — the first column of
+    embedding_unitary(image), without the dense 2^(2n) x 2^(2n) matrix
+    (4096 x 4096 = 134 MB per image at 12 qubits)."""
+    return image.reshape(-1).to(torch.float64)
+
+
+def as_state_vector(encoded: torch.Tensor, num_qubits: int) -> torch.Tensor:
+    """Accepts either state vectors (dim,) / (batch, dim) or legacy
+    embedding_unitary matrices (dim, dim) / (batch, dim, dim), and returns
+    state vectors. A legacy matrix M only ever acts on |0...0>, so its
+    encoded state is exactly its first column. Only ambiguous for a batch
+    of exactly `dim` state vectors, which never occurs with this project's
+    batch sizes (N // 10 <= 64 < dim = 256)."""
+    dim = 2**num_qubits
+    is_matrix = encoded.shape[-1] == dim and encoded.ndim >= 2 and encoded.shape[-2] == dim
+    return encoded[..., :, 0] if is_matrix else encoded

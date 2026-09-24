@@ -46,3 +46,8 @@ dist/
 
 # kagglehub dataset cache (docker-compose volume)
 /.kagglehub_cache/
+
+# paper campaign: local results/logs (shared via the campaign-results branch)
+/results_paper/
+# symlink to the shared data directory
+/data

@@ -23,10 +23,19 @@ def test_paper_architecture_spec_param_count(paper_ansatz, symmetry):
     assert len(param_labels(spec)) == expected
 
 
-@pytest.mark.parametrize("num_qubits", [4, 6, 10])
-def test_paper_architecture_spec_requires_8_qubits(num_qubits):
+@pytest.mark.parametrize("num_qubits", [4, 6, 9, 14])
+def test_paper_architecture_spec_rejects_unsupported_qubit_counts(num_qubits):
     with pytest.raises(ValueError, match="num_qubits"):
         paper_architecture_spec("6", "equivariant", num_qubits)
+
+
+@pytest.mark.parametrize("num_qubits", [8, 10, 12])
+@pytest.mark.parametrize("paper_ansatz", ["6", "18"])
+def test_parameter_count_is_independent_of_qubit_count(paper_ansatz, num_qubits):
+    spec = paper_architecture_spec(paper_ansatz, "equivariant", num_qubits)
+    validate_spec(spec, num_qubits=num_qubits)
+    expected = 2 * len(PAPER_ANSATZ_PARAMETER_NAMES[paper_ansatz])
+    assert len(param_labels(spec)) == expected
 
 
 def test_unknown_paper_ansatz_raises():

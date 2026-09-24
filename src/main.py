@@ -9,8 +9,22 @@ import numpy as np
 import torch
 from omegaconf import DictConfig
 
-from src.data_loading import AERO_LABELS, load_aero_data_full, load_mnist_data_full
-from src.qnn import ARCHITECTURES, architecture_param_names, create_qnn
+from src.data_loading import (
+    AERO_LABELS,
+    PLANESNET_LABELS,
+    load_aero_data_full,
+    load_eurosat_data_full,
+    load_ising_data_full,
+    load_mnist_data_full,
+    load_planesnet_data_full,
+)
+from src.ising import ISING_LABELS
+from src.qnn import (
+    ARCHITECTURES,
+    architecture_param_names,
+    create_qnn,
+    initial_parameters,
+)
 from src.train import train_loop
 
 logger = logging.getLogger(__name__)
@@ -54,7 +68,19 @@ def main(cfg: DictConfig) -> None:
 
     N = cfg.DATA.N
     dataset = cfg.DATA.dataset
-    img_size = cfg.DATA.img_size
+    # The image side is fixed by the number of qubits: amplitude encoding
+    # of an S x S image needs 2*log2(S) qubits (8 -> 16x16, 10 -> 32x32,
+    # 12 -> 64x64). DATA.img_size, if set, must agree.
+    if num_qubits not in (8, 10, 12):
+        raise ValueError(f"QNN.num_qubits must be 8, 10 or 12, got {num_qubits}")
+    img_size = 2 ** (num_qubits // 2)
+    if cfg.DATA.get("img_size") not in (None, img_size):
+        raise ValueError(
+            f"DATA.img_size={cfg.DATA.img_size} is inconsistent with "
+            f"QNN.num_qubits={num_qubits} (needs {img_size}); leave it null"
+        )
+    center = bool(cfg.DATA.get("center", False))
+    output_bias = bool(cfg.QNN.get("output_bias", False))
     data_dir = cfg.DATA.data_dir
     augment_train = cfg.DATA.augment_train
     class1 = cfg.DATA.class1
@@ -77,6 +103,7 @@ def main(cfg: DictConfig) -> None:
             augment_train,
             class1,
             class2,
+            center=center,
         )
     elif dataset == "satellite":
         # Ship vs plane is fixed by the dataset itself, not a CLI-selectable
@@ -93,10 +120,32 @@ def main(cfg: DictConfig) -> None:
             SEED,
             verbose,
             augment_train,
+            crop_to_plane_scale=bool(cfg.DATA.get("crop_to_plane_scale", True)),
+            center=center,
+        )
+    elif dataset == "planesnet":
+        class1, class2 = PLANESNET_LABELS["no_plane"], PLANESNET_LABELS["plane"]
+        train_loader, test_loader, aug_test_loader = load_planesnet_data_full(
+            batch_size, N, num_workers, img_size, SEED, verbose, augment_train,
+            center=center,
+        )
+    elif dataset == "ising":
+        class1, class2 = ISING_LABELS["disordered"], ISING_LABELS["ordered"]
+        train_loader, test_loader, aug_test_loader = load_ising_data_full(
+            batch_size, N, num_workers, img_size, data_dir, SEED, verbose, augment_train,
+            center=center,
+        )
+    elif dataset == "eurosat":
+        eurosat_task = cfg.DATA.get("eurosat_task", "highway_river")
+        class1, class2 = 0, 1
+        train_loader, test_loader, aug_test_loader = load_eurosat_data_full(
+            batch_size, N, num_workers, img_size, data_dir, SEED, verbose,
+            augment_train, eurosat_task, center=center,
         )
     else:
         raise ValueError(
-            f"Unknown DATA.dataset {dataset!r}; must be one of 'mnist', 'satellite'."
+            f"Unknown DATA.dataset {dataset!r}; must be one of "
+            "'mnist', 'satellite', 'planesnet', 'ising', 'eurosat'."
         )
 
     # Default wandb group: every config.yaml parameter that defines the
@@ -126,6 +175,8 @@ def main(cfg: DictConfig) -> None:
         "class2": class2,
         "noise_p": noise_p,
         "noise_seed": noise_seed,
+        "output_bias": output_bias,
+        "center": center,
     }
     config_hash = hashlib.sha1(
         json.dumps(config_identity, sort_keys=True).encode()
@@ -140,14 +191,15 @@ def main(cfg: DictConfig) -> None:
         readout=readout,
         noise_p=noise_p,
         noise_seed=noise_seed,
+        output_bias=output_bias,
     )
     is_equivariant = ARCHITECTURES[architecture]["is_equivariant"]
 
-    param_names = architecture_param_names(architecture, num_qubits, reps)
-    g = torch.Generator(device=torch.device(dev)).manual_seed(SEED)
-    initial_params = torch.empty(len(param_names), device=torch.device(dev)).uniform_(
-        -0.1, 0.1, generator=g
+    param_names = architecture_param_names(
+        architecture, num_qubits, reps, output_bias=output_bias
     )
+    g = torch.Generator(device=torch.device(dev)).manual_seed(SEED)
+    initial_params = initial_parameters(param_names, g, dev)
 
     train_loop(
         train_loader,

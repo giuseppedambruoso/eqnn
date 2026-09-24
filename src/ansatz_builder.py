@@ -34,7 +34,7 @@ from typing import Any
 import pennylane as qml
 import torch
 
-from src.data_encoding import embedding_unitary
+from src.data_encoding import as_state_vector, embedding_state
 from src.noise import apply_gate_noise, make_noise_rng
 from src.qnn import (
     ARCHITECTURES,
@@ -385,7 +385,11 @@ def build_qnn_from_spec(
         # this QNode runs — see src.noise's module docstring.
         noise_rng = make_noise_rng(noise_seed, noise_p)
 
-        qml.QubitUnitary(embedding_unitary_matrix, wires=range(num_qubits))
+        qml.StatePrep(
+            as_state_vector(embedding_unitary_matrix, num_qubits),
+            wires=range(num_qubits),
+            normalize=True,
+        )
         apply_gate_noise(range(num_qubits), noise_rng, noise_p)
 
         if twirled:
@@ -480,8 +484,8 @@ def check_p4m_invariance(
             torch.flip(img, dims=[-2]),
             img.transpose(-1, -2),
         ]
-        base = qnn_forward(embedding_unitary(variants[0]), params)
+        base = qnn_forward(embedding_state(variants[0]), params)
         for variant in variants[1:]:
-            out = qnn_forward(embedding_unitary(variant), params)
+            out = qnn_forward(embedding_state(variant), params)
             max_deviation = max(max_deviation, abs((out - base).item()))
     return max_deviation < atol, max_deviation

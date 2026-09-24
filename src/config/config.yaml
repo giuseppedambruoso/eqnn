@@ -21,7 +21,7 @@ GENERAL:
 
 DATA:
   N: 20  # number of images in the training set
-  dataset: "mnist"  # "mnist" or "satellite" (ship vs plane — see src/data_loading.py:load_aero_data_full)
+  dataset: "mnist"  # "mnist", "satellite", "planesnet", "ising" or "eurosat"
   class1: 3  # first MNIST digit class (remapped to label 0) — ignored for "satellite" (fixed ship=0/plane=1)
   class2: 4  # second MNIST digit class (remapped to label 1) — ignored for "satellite"
   augment_test: True
@@ -31,19 +31,30 @@ DATA:
   # epoch. once: a random p4m transform drawn once per image, then cached
   # like the test set — fast, but weaker regularizer than online.
   augment_train: "none"  # one of: none, online, once — see src/data_loading.py
-  img_size: 16
+  # Derived from QNN.num_qubits (8 -> 16, 10 -> 32, 12 -> 64); leave null.
+  img_size: null
+  # Subtract each image's mean before L2 normalization (D4-invariant).
+  center: False
+  # satellite only: crop ship chips (80x80) to the planes' 20x20 footprint.
+  crop_to_plane_scale: True
+  # eurosat only: "highway_river" or "forest_industrial".
+  eurosat_task: "highway_river"
   data_dir: "data"
 
 QNN:
   device: "default.qubit"
-  num_qubits: 8
+  num_qubits: 8  # 8, 10 or 12 (16x16, 32x32 or 64x64 images)
+  # Trainable classical affine post-processing sigmoid(2(w<O>+b)) of the
+  # measured expectation value (2 extra parameters, invariance-preserving).
+  output_bias: False
   reps: 2
   # config1: RY+CNOT (not equivariant)         | config2: RY+CNOT+twirling (equivariant)
   # config3: RX+RXY (not equivariant)           | config4: RX+RXY+twirling (equivariant)
   # config5: RX+frozen-RYY/RYYYY+twirling (equivariant)
   # config6: paper6, generator-equivariant      | config7: paper6, axis-scrambled (not equivariant)
   # config8: shared18, generator-equivariant    | config9: shared18, axis-scrambled (not equivariant)
-  # config6-config9 need num_qubits=8 and ignore `reps` (fixed parameter budget)
+  # config6-config10 accept num_qubits 8/10/12 and ignore `reps` (fixed parameter budget)
+  # config10: config7 + explicit p4m twirling (invariant)
   # — see src/qnn.py:ARCHITECTURES and src/paper_ansatzes.py
   architecture: "config1"
   # Only meaningful for config6-config9 (ignored for config1-config5):
