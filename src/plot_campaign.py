@@ -56,6 +56,20 @@ def result_files(path: str) -> list[str]:
     return [p for p in [path] + sorted(imported) if os.path.exists(p)]
 
 
+TASK_MAX_QUBITS = {"mnist45": 8, "satellite": 8, "ising": 12, "eurosat_fi": 12}
+
+
+def qubits_of(path: str) -> int:
+    import re
+
+    match = re.search(r"_(\d+)q", os.path.basename(path))
+    return int(match.group(1)) if match else 8
+
+
+def tasks_for(qubits: int) -> list[str]:
+    return [t for t in TASK_TITLES if TASK_MAX_QUBITS[t] >= qubits]
+
+
 def load_points(path: str) -> tuple[dict, int]:
     """Returns ({(task, arch): {N: ((clean_mean, clean_sem), (aug_mean,
     aug_sem), n_seeds)}}, completed rounds), where a round r is complete
@@ -75,13 +89,13 @@ def load_points(path: str) -> tuple[dict, int]:
             mean_sem([r["val_aug_acc"] for r in rs]),
             len(rs),
         )
-    all_keys = [(t, a, n) for t in TASK_TITLES for a in ARCHS for n in N_VALUES]
+    all_keys = [(t, a, n) for t in tasks_for(qubits_of(path)) for a in ARCHS for n in N_VALUES]
     rounds = min(len(runs.get(k, {})) for k in all_keys)
     return points, rounds
 
 
 def plot(points: dict, rounds: int, out: str, qubits: int = 8) -> int:
-    tasks = [t for t in TASK_TITLES]
+    tasks = tasks_for(qubits)
     ncols = 3  # one extra panel slot holds the legend
     nrows = math.ceil((len(tasks) + 1) / ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(4.2 * ncols, 3.4 * nrows), squeeze=False)
@@ -119,7 +133,7 @@ def plot(points: dict, rounds: int, out: str, qubits: int = 8) -> int:
     ]
     legend_ax = list(axes.flat)[-1]
     legend_ax.legend(handles=handles, loc="center", fontsize=9, frameon=False)
-    total = len(TASK_TITLES) * len(ARCHS) * len(N_VALUES)
+    total = len(tasks) * len(ARCHS) * len(N_VALUES)
     status = (f"all {len(SEEDS)} seeds complete" if rounds >= len(SEEDS)
               else f"round {rounds + 1}/{len(SEEDS)} in progress, {rounds} seed(s) complete everywhere")
     fig.suptitle(
@@ -135,4 +149,4 @@ def plot(points: dict, rounds: int, out: str, qubits: int = 8) -> int:
 
 if __name__ == "__main__":
     pts, rnd = load_points(sys.argv[1])
-    print(plot(pts, rnd, sys.argv[2]), rnd)
+    print(plot(pts, rnd, sys.argv[2], qubits=qubits_of(sys.argv[1])), rnd)

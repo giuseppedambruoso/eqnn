@@ -52,6 +52,11 @@ NOISE_P_TEST = tuple(round(0.01 * k, 2) for k in range(21))
 NOISE_P_TRAIN = (0.0, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2)
 EPOCHS = 70
 MICRO_BATCH = 32
+# Autograd memory grows with the state size: smaller micro-batches for more
+# qubits (measured peak for the heaviest job, twirled N=640: 8 qubits
+# ~0.6 GB with 32; 12 qubits 3.9 GB with 32 vs 1.4 GB with 8).
+MICRO_BATCH_BY_QUBITS = {8: 32, 10: 16, 12: 8}
+GB_PER_WORKER_BY_QUBITS = {8: 0.7, 10: 1.0, 12: 1.5}
 LEARNING_RATE = 0.05
 
 # Single model configuration used for every task (chosen once, for all
@@ -156,9 +161,10 @@ def _train(qnn, train_loader, params: torch.Tensor, job: dict) -> torch.Tensor:
             # memory (which otherwise dominates for twirled/large circuits).
             opt.zero_grad()
             batch = labels.shape[0]
-            for start in range(0, batch, MICRO_BATCH):
-                x = images[start : start + MICRO_BATCH]
-                y = labels[start : start + MICRO_BATCH]
+            micro = MICRO_BATCH_BY_QUBITS.get(job["qubits"], MICRO_BATCH)
+            for start in range(0, batch, micro):
+                x = images[start : start + micro]
+                y = labels[start : start + micro]
                 pred = execute_batch(qnn, x, dev, params).reshape(-1)
                 loss = loss_function(pred, y) * (y.shape[0] / batch)
                 loss.backward()
@@ -359,7 +365,7 @@ def main() -> None:
         rounds = [(r, js) for r, js in rounds if r in args.rounds]
         jobs = [j for _, js in rounds for j in js]
     if args.workers is None:
-        args.workers = default_workers()
+        args.workers = default_workers(max(GB_PER_WORKER_BY_QUBITS[q] for q in args.qubits))
     print(f"using {args.workers} worker processes", flush=True)
     total = sum(estimated_cost(j) for j in jobs)
     print(f"{len(jobs)} jobs to run in rounds "
