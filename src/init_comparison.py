@@ -7,6 +7,11 @@
             dataset. Same rule for all datasets, acts only on the invariant
             scalar output (equivariance untouched).
 
+  standardize  FIXED (non-trainable) standardization z = (<O> - mean)/std with
+            the same training-set statistics, followed by the trainable
+            affine map w z + b starting at w = 1, b = 0: unlike datainit, w
+            stays O(1), so Adam can still move it (and flip its sign).
+
 Motivation: on PlanesNet <O> ~ 0.99 for BOTH classes (nearly uniform
 images -> state close to |+>^n), so with the default init w would need to
 grow to ~100 and training stays stuck at chance.
@@ -32,7 +37,7 @@ from src.train import execute_batch, loss_function, validate
 OUT = "results_paper/init_comparison.jsonl"
 TASKS = ["planesnet", "ising", "satellite", "eurosat_hr", "eurosat_fi", "mnist45"]
 ARCHS = ["config6", "config7"]
-VARIANTS = ["datainit", "default"]
+VARIANTS = ["standardize", "datainit", "default"]
 SEEDS = [1, 2, 3, 4, 5]
 N = 80
 
@@ -48,12 +53,16 @@ def run(args: tuple) -> dict:
     qnn = pe._make_qnn(job)
     names = pe.architecture_param_names(arch, 8, 2, output_bias=True)
     params = pe.initial_parameters(names, torch.Generator().manual_seed(seed))
-    if variant == "datainit":
+    if variant in ("datainit", "standardize"):
         raw_qnn = pe.create_qnn("default.qubit", 8, 2, arch, readout=pe.TASKS[task][0])
         with torch.no_grad():
             raw = torch.cat([raw_qnn(x, params[:-2]).reshape(-1) for x, _ in loaders[0]])
         mean, std = raw.mean().item(), max(raw.std().item(), 1e-6)
-        params[-2], params[-1] = 1.0 / std, -mean / std
+        if variant == "datainit":
+            params[-2], params[-1] = 1.0 / std, -mean / std
+        else:
+            def qnn(x, p, raw_qnn=raw_qnn, mean=mean, std=std):
+                return torch.tanh(p[-2] * (raw_qnn(x, p[:-2]) - mean) / std + p[-1])
     params.requires_grad_()
     opt = torch.optim.Adam([params], lr=pe.LEARNING_RATE, betas=(0.5, 0.999))
     dev = torch.device("cpu")
@@ -94,15 +103,16 @@ def summary(rows: list[dict]) -> str:
         sem = statistics.stdev(v) / len(v) ** 0.5 if len(v) > 1 else 0.0
         return f"{statistics.mean(v):.3f}+-{sem:.3f}"
 
-    lines = [f"{'task':<11} {'arch':<9} | {'default: test / rotated':<27} | {'datainit: test / rotated':<27} | n"]
+    order = ("default", "datainit", "standardize")
+    lines = [f"{'task':<11} {'arch':<9} | " + " | ".join(f"{v + ': test / rotated':<27}" for v in order) + " | n"]
     for task, arch in itertools.product(TASKS, ARCHS):
         cells, ns = [], []
-        for variant in ("default", "datainit"):
+        for variant in order:
             rs = [r for r in rows if (r["task"], r["arch"], r["variant"]) == (task, arch, variant)]
             ns.append(str(len(rs)))
             cells.append(f"{ms([r['val'] for r in rs])} / {ms([r['aug'] for r in rs])}")
         label = pe.ARCH_LABELS[arch]
-        lines.append(f"{task:<11} {label:<9} | {cells[0]:<27} | {cells[1]:<27} | {'/'.join(ns)}")
+        lines.append(f"{task:<11} {label:<9} | " + " | ".join(f"{c:<27}" for c in cells) + f" | {'/'.join(ns)}")
     return "\n".join(lines)
 
 
