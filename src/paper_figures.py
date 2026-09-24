@@ -24,12 +24,16 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from src.plot_campaign import ARCH_LABELS, ARCHS, COLORS, N_VALUES, result_files  # noqa: E402
 
-TASKS = ("mnist45", "satellite", "ising", "eurosat_fi")
+TASKS = ("mnist45", "satellite", "ising", "eurosat_fi",
+         "galaxy_round_edgeon", "galaxy_round_spiral", "resisc_airport_harbor")
 TITLES = {
     "mnist45": "MNIST 4 vs 5",
     "satellite": "SATELLITE",
     "ising": "Ising",
     "eurosat_fi": "EuroSAT Forest vs Industrial",
+    "galaxy_round_edgeon": "Galaxy10 round vs edge-on",
+    "galaxy_round_spiral": "Galaxy10 round vs spiral",
+    "resisc_airport_harbor": "RESISC45 airport vs harbor",
 }
 STYLES = (("-", "o", "original test set"), ("--", "s", "p4m-transformed test set"))
 
@@ -89,15 +93,19 @@ def draw(ax, series: dict, xs_log: bool) -> None:
 
 def fig_accuracy(records: list[dict], out: str) -> dict:
     agg = aggregate(records, "sweep", "N")
-    fig, axes = plt.subplots(1, 4, figsize=(11, 2.9), sharey=True)
-    for ax, task in zip(axes, TASKS):
+    ncols = 4
+    nrows = math.ceil((len(TASKS) + 1) / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(11, 2.9 * nrows), sharey=True, squeeze=False)
+    for ax, task in zip(axes.flat, TASKS):
         draw(ax, {a: agg.get((task, a), {}) for a in ARCHS}, xs_log=True)
         ax.set_title(TITLES[task])
         ax.set_xlabel("training-set size $N$")
-    axes[0].set_ylabel("test accuracy")
-    fig.legend(handles=legend_handles(), loc="lower center", ncol=3, frameon=False,
-               bbox_to_anchor=(0.5, -0.02))
-    fig.tight_layout(rect=(0, 0.13, 1, 1))
+    for row in axes:
+        row[0].set_ylabel("test accuracy")
+    for ax in list(axes.flat)[len(TASKS):]:
+        ax.axis("off")
+    list(axes.flat)[-1].legend(handles=legend_handles(), loc="center", frameon=False)
+    fig.tight_layout()
     fig.savefig(out, bbox_inches="tight")
     plt.close(fig)
     return {f"{t}|{a}": {str(n): v for n, v in agg[(t, a)].items()} for (t, a) in agg}
@@ -127,6 +135,11 @@ def fig_noise(records: list[dict], out: str) -> dict:
             for kind, agg in (("train_and_test", both), ("test_only", test))}
 
 
+SHORT = {"mnist45": "MNIST", "satellite": "SATELLITE", "ising": "Ising", "eurosat_fi": "EuroSAT",
+         "galaxy_round_edgeon": "Galaxy10\n(edge-on)", "galaxy_round_spiral": "Galaxy10\n(spiral)",
+         "resisc_airport_harbor": "RESISC45"}
+
+
 def fig_samples(out: str, n_per_class: int = 5) -> None:
     import torch
 
@@ -137,8 +150,11 @@ def fig_samples(out: str, n_per_class: int = 5) -> None:
         "satellite": ("ship", "plane"),
         "ising": ("disordered", "ordered"),
         "eurosat_fi": ("Forest", "Industrial"),
+        "galaxy_round_edgeon": ("round", "edge-on"),
+        "galaxy_round_spiral": ("round", "spiral"),
+        "resisc_airport_harbor": ("airport", "harbor"),
     }
-    fig, axes = plt.subplots(len(TASKS), 2 * n_per_class, figsize=(8.4, 4.0))
+    fig, axes = plt.subplots(len(TASKS), 2 * n_per_class, figsize=(8.4, 1.0 * len(TASKS)))
     for row, task in enumerate(TASKS):
         # the first test images of each class, as encoded (16x16 amplitudes)
         loader = loaders_for(task, 80, 1, 8)[1]
@@ -153,7 +169,7 @@ def fig_samples(out: str, n_per_class: int = 5) -> None:
                 ax.set_yticks([])
                 if k == 0:
                     ax.set_title(class_names[task][cls], fontsize=8, loc="left")
-        axes[row, 0].set_ylabel(TITLES[task].replace(" Forest vs Industrial", ""), fontsize=8)
+        axes[row, 0].set_ylabel(SHORT[task], fontsize=7)
     fig.tight_layout()
     fig.savefig(out, dpi=200)
     plt.close(fig)
@@ -164,14 +180,16 @@ def main() -> None:
     ap.add_argument("out_dir")
     ap.add_argument("--qubits", type=int, default=8)
     ap.add_argument("--no-samples", action="store_true")
+    ap.add_argument("--noise", action="store_true", help="also the noise figure")
     args = ap.parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
     records = [r for r in load(f"results_paper/campaign_v2_{args.qubits}q.jsonl")
                if r["task"] in TASKS]
     summary = {
         "accuracy_vs_N": fig_accuracy(records, os.path.join(args.out_dir, "accuracy_vs_N.pdf")),
-        "noise": fig_noise(records, os.path.join(args.out_dir, "noise.pdf")),
     }
+    if args.noise:
+        summary["noise"] = fig_noise(records, os.path.join(args.out_dir, "noise.pdf"))
     sweeps = [r for r in records if r["kind"] == "sweep"]
     summary["stuck_runs"] = collections.Counter(
         f"{r['task']}|{r['arch']}" for r in sweeps
