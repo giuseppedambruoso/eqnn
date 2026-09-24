@@ -38,10 +38,12 @@ def result_files(path: str) -> list[str]:
 
 
 def read_records(path: str) -> list[dict]:
+    """All records of the tasks still in the study (e.g. the dropped
+    MNIST 3 vs 4 is ignored)."""
     records = []
     for file in result_files(path):
         with open(file) as f:
-            records += [json.loads(line) for line in f]
+            records += [r for r in map(json.loads, f) if r["task"] in TASK_MAX_QUBITS]
     return records
 
 
