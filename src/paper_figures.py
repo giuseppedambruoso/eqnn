@@ -291,6 +291,66 @@ def fig_gaps(records: list[dict], records_wm: list[dict], out: str) -> dict:
             "shortcut_gap": {f"{t}|{a}": v for (t, a), v in short_ms.items()},
             "generalization_gap": gen_ms}
 
+
+def is_stuck(r: dict) -> bool:
+    """A run that stayed exactly at chance level on training AND test set."""
+    return abs(r["val_acc"] - 0.5) < 0.013 and abs(r["train_acc"] - 0.5) < 0.013
+
+
+def load_layers(qubits: int = 8) -> dict:
+    """{layers: sweep records} for every stacked-layer campaign with complete
+    results (all tasks x archs x N x seeds); layers = 1 is the main study."""
+    import glob
+    import re
+
+    out = {1: [r for r in load(f"results_paper/campaign_v2_{qubits}q.jsonl") if r["kind"] == "sweep"]}
+    paths = glob.glob(f"results_paper/campaign_v2_L*_{qubits}q.jsonl") + glob.glob(
+        f"results_paper/imported/campaign_v2_L*_{qubits}q.*.jsonl")
+    for L in sorted({int(re.search(r"_L(\d+)_", p).group(1)) for p in paths}):
+        out[L] = [r for r in load(f"results_paper/campaign_v2_L{L}_{qubits}q.jsonl") if r["kind"] == "sweep"]
+    expected = len(TASKS) * len(ARCHS) * len(N_VALUES) * 6
+    return {L: [r for r in rs if r["task"] in TASKS] for L, rs in out.items()
+            if len([r for r in rs if r["task"] in TASKS]) >= expected}
+
+
+def fig_depth(layers: dict, out: str) -> dict:
+    """Trainability vs depth: (a) fraction of runs stuck at chance, (b) mean
+    test accuracy over tasks, (c) the same excluding stuck runs."""
+    Ls = sorted(layers)
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.4))
+    summary = {}
+    for arch in ARCHS:
+        frac, acc, acc_ok = [], [], []
+        for L in Ls:
+            rs = [r for r in layers[L] if r["arch"] == arch]
+            p = sum(map(is_stuck, rs)) / len(rs)
+            frac.append((p, math.sqrt(p * (1 - p) / len(rs))))
+            per_task = [statistics.mean(r["val_acc"] for r in rs if r["task"] == t) for t in TASKS]
+            acc.append(mean_sem(per_task))
+            ok = [[r["val_acc"] for r in rs if r["task"] == t and not is_stuck(r)] for t in TASKS]
+            acc_ok.append(mean_sem([statistics.mean(v) for v in ok if v]))
+        summary[arch] = {"stuck_fraction": frac, "accuracy": acc, "accuracy_not_stuck": acc_ok}
+        for ax, series in zip(axes, (frac, acc, acc_ok)):
+            ax.errorbar(Ls, [m for m, _ in series], yerr=[e for _, e in series], color=COLORS[arch],
+                        marker={"config6": "o", "config7": "s", "config10": "D"}[arch], ms=5,
+                        lw=1.4, capsize=2.5, label=ARCH_LABELS[arch])
+    titles = ("(a) runs stuck at chance level", "(b) mean test accuracy",
+              "(c) mean test accuracy, stuck runs excluded")
+    ylabels = ("fraction of runs", "test accuracy (mean over tasks)", "test accuracy (mean over tasks)")
+    for ax, title, ylabel in zip(axes, titles, ylabels):
+        ax.set_title(title)
+        ax.set_xlabel("number of layers $L$ (6$L$ circuit parameters)")
+        ax.set_ylabel(ylabel)
+        ax.set_xticks(Ls)
+        ax.grid(alpha=0.3)
+    axes[0].set_ylim(bottom=0)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.02))
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    return {"layers": Ls, **summary}
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("out_dir")
@@ -309,6 +369,9 @@ def main() -> None:
     if records_wm:
         summary["watermark"] = fig_watermark(records_wm, os.path.join(args.out_dir, "watermark.pdf"))
         summary["gaps"] = fig_gaps(records, records_wm, os.path.join(args.out_dir, "gaps.pdf"))
+    layers = load_layers(args.qubits)
+    if len(layers) > 1:
+        summary["depth"] = fig_depth(layers, os.path.join(args.out_dir, "depth.pdf"))
     if args.noise:
         summary["noise"] = fig_noise(records, os.path.join(args.out_dir, "noise.pdf"))
     sweeps = [r for r in records if r["kind"] == "sweep"]
