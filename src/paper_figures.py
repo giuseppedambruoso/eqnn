@@ -223,16 +223,25 @@ def fig_watermark(records: list[dict], out: str) -> dict:
     return {f"{t}|{a}|{N}": v for (t, a, N), v in agg.items()}
 
 
-def _bars(ax, tasks: tuple, values: dict, ylabel: str) -> None:
-    """Grouped bars: one group per task, one bar per architecture (mean +- SEM)."""
-    width = 0.27
+MARKERS = {"config6": "o", "config7": "s", "config10": "D"}
+
+
+def _dots(ax, tasks: tuple, values: dict, ylabel: str) -> None:
+    """Dot plot: one column per task, one marker per architecture (mean +-
+    SEM), slightly offset - unlike bars, exact zeros stay visible."""
+    offset = 0.22
+    for i in range(len(tasks)):
+        if i % 2:
+            ax.axvspan(i - 0.5, i + 0.5, color="0.5", alpha=0.07, lw=0)
     for k, arch in enumerate(ARCHS):
-        xs = [i + (k - 1) * width for i in range(len(tasks))]
+        xs = [i + (k - 1) * offset for i in range(len(tasks))]
         ms = [values.get((t, arch), (float("nan"), 0.0)) for t in tasks]
-        ax.bar(xs, [m for m, _ in ms], width, yerr=[e for _, e in ms], color=COLORS[arch],
-               capsize=2, label=ARCH_LABELS[arch])
+        ax.errorbar(xs, [m for m, _ in ms], yerr=[e for _, e in ms], fmt=MARKERS[arch],
+                    color=COLORS[arch], ms=6, capsize=2.5, lw=1.2, label=ARCH_LABELS[arch],
+                    markeredgecolor="white", markeredgewidth=0.6, zorder=3)
     ax.set_xticks(range(len(tasks)), [SHORT_LABEL[t] for t in tasks], rotation=35, ha="right")
-    ax.axhline(0, color="black", lw=0.6)
+    ax.set_xlim(-0.5, len(tasks) - 0.5)
+    ax.axhline(0, color="black", lw=0.6, zorder=1)
     ax.set_ylabel(ylabel)
     ax.grid(alpha=0.3, axis="y")
 
@@ -254,10 +263,10 @@ def fig_gaps(records: list[dict], records_wm: list[dict], out: str) -> dict:
             short[(r["task"], r["arch"])].append(r["shortcut_acc"] - r["transformed_acc"])
     inv_ms = {k: mean_sem(v) for k, v in inv.items()}
     short_ms = {k: mean_sem(v) for k, v in short.items()}
-    fig, axes = plt.subplots(1, 3, figsize=(11, 3.3), gridspec_kw={"width_ratios": [1.15, 1, 0.9]})
-    _bars(axes[0], TASKS, inv_ms, "original $-$ transformed test acc.")
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.6), gridspec_kw={"width_ratios": [1.15, 1, 0.9]})
+    _dots(axes[0], TASKS, inv_ms, "original $-$ transformed test acc.")
     axes[0].set_title("(a) invariance gap, no watermark")
-    _bars(axes[1], WM_TASKS, short_ms, "watermarked $-$ transformed test acc.")
+    _dots(axes[1], WM_TASKS, short_ms, "watermarked $-$ transformed test acc.")
     axes[1].set_title("(b) shortcut gap, watermark in training")
     gen_ms = {}
     for arch in ARCHS:
@@ -265,7 +274,7 @@ def fig_gaps(records: list[dict], records_wm: list[dict], out: str) -> dict:
                for N in N_VALUES]
         gen_ms[arch] = dict(zip(map(str, N_VALUES), pts))
         axes[2].errorbar(N_VALUES, [m for m, _ in pts], yerr=[e for _, e in pts], color=COLORS[arch],
-                         marker="o", ms=3.5, lw=1.2, capsize=2, label=ARCH_LABELS[arch])
+                         marker=MARKERS[arch], ms=4.5, lw=1.2, capsize=2, label=ARCH_LABELS[arch])
     axes[2].set_xscale("log", base=2)
     axes[2].set_xticks(N_VALUES, [str(n) for n in N_VALUES])
     axes[2].axhline(0, color="black", lw=0.6)
@@ -273,8 +282,9 @@ def fig_gaps(records: list[dict], records_wm: list[dict], out: str) -> dict:
     axes[2].set_ylabel("train $-$ test accuracy")
     axes[2].set_title("(c) train $-$ test, no watermark")
     axes[2].grid(alpha=0.3)
-    axes[1].legend(frameon=False, loc="upper left")
-    fig.tight_layout()
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.02))
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
     fig.savefig(out, bbox_inches="tight")
     plt.close(fig)
     return {"invariance_gap": {f"{t}|{a}": v for (t, a), v in inv_ms.items()},
