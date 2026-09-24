@@ -33,6 +33,8 @@ import torch
 
 from src.data_loading import (
     load_aero_data_full,
+    load_galaxy10_data_full,
+    load_resisc45_data_full,
     load_eurosat_data_full,
     load_ising_data_full,
     load_mnist_data_full,
@@ -108,6 +110,15 @@ def loaders_for(task: str, N: int, seed: int, num_qubits: int):
     if task in ("eurosat_hr", "eurosat_fi"):
         sub = "highway_river" if task == "eurosat_hr" else "forest_industrial"
         return load_eurosat_data_full(b, N, 0, size, "data", seed, False, "none", sub, center=center)
+    screening = {
+        "galaxy_round_spiral": (load_galaxy10_data_full, "round_spiral"),
+        "galaxy_round_edgeon": (load_galaxy10_data_full, "round_edgeon"),
+        "resisc_airport_harbor": (load_resisc45_data_full, "airport_harbor"),
+        "resisc_farmland": (load_resisc45_data_full, "circular_rectangular_farmland"),
+    }
+    if task in screening:
+        loader, sub = screening[task]
+        return loader(b, N, 0, size, "data", seed, False, "none", sub, center=center)
     raise ValueError(task)
 
 

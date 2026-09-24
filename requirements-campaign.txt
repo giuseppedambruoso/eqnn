@@ -17,3 +17,6 @@ tqdm==4.67.1
 wandb==0.22.3
 # setup check (equivariance tests)
 pytest==9.1.1
+# Galaxy10 (HDF5) and NWPU-RESISC45 (parquet) screening datasets
+h5py==3.15.1
+pyarrow==24.0.0

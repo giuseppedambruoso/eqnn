@@ -828,3 +828,135 @@ def load_eurosat_data_full(
         augment_train,
         center,
     )
+
+
+# --- Astronomical and remote-sensing screening datasets -------------------
+
+GALAXY10_URL = "https://www.astro.utoronto.ca/~bovy/Galaxy10/Galaxy10.h5"
+# Galaxy10 SDSS (astroNN): 21785 RGB 69x69 galaxy images, 10 Galaxy Zoo
+# classes. Binary tasks: (label-0 classes, label-1 classes).
+GALAXY10_TASKS = {
+    "round_spiral": ((1,), (7, 8, 9)),  # smooth completely round vs face-on spirals
+    "round_edgeon": ((1,), (4, 5, 6)),  # smooth completely round vs edge-on disks
+}
+RESISC45_URL = "https://huggingface.co/datasets/timm/resisc45/resolve/main/data/{split}-00000-of-00001.parquet"
+# NWPU-RESISC45: 45 scene classes x 700 RGB 256x256 aerial images.
+RESISC45_TASKS = {
+    "airport_harbor": (1, 17),
+    "circular_rectangular_farmland": (8, 31),
+}
+
+
+def _download(url: str, path: str) -> None:
+    import urllib.request
+
+    if not os.path.exists(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        logger.info(f"Downloading {url}")
+        urllib.request.urlretrieve(url, path + ".part")
+        os.replace(path + ".part", path)
+
+
+def _galaxy10_arrays(data_dir: str, task: str) -> tuple[np.ndarray, list[int]]:
+    cache = os.path.join(data_dir, "galaxy10", f"{task}.npz")
+    if not os.path.exists(cache):
+        import h5py
+
+        path = os.path.join(data_dir, "galaxy10", "Galaxy10.h5")
+        _download(GALAXY10_URL, path)
+        neg, pos = GALAXY10_TASKS[task]
+        with h5py.File(path, "r") as f:
+            ans = f["ans"][:]
+            idx = np.flatnonzero(np.isin(ans, neg + pos))
+            images = f["images"][idx]
+        labels = np.array([int(a in pos) for a in ans[idx]])
+        np.savez(cache, images=images, labels=labels)
+    data = np.load(cache)
+    return data["images"], data["labels"].tolist()
+
+
+def _resisc45_arrays(data_dir: str, task: str) -> tuple[np.ndarray, list[int]]:
+    """All 700 images of each of the two classes (train+validation+test
+    splits of the HF mirror), decoded once and cached as uint8 arrays."""
+    import io
+
+    cache = os.path.join(data_dir, "resisc45", f"{task}.npz")
+    if not os.path.exists(cache):
+        import pyarrow.parquet as pq
+
+        neg, pos = RESISC45_TASKS[task]
+        images, labels = [], []
+        for split in ("train", "validation", "test"):
+            path = os.path.join(data_dir, "resisc45", f"{split}.parquet")
+            _download(RESISC45_URL.format(split=split), path)
+            table = pq.read_table(path, columns=["image", "label"])
+            for row in table.to_pylist():
+                if row["label"] in (neg, pos):
+                    img = Image.open(io.BytesIO(row["image"]["bytes"])).convert("RGB")
+                    images.append(np.asarray(img, dtype=np.uint8))
+                    labels.append(int(row["label"] == pos))
+        np.savez_compressed(cache, images=np.stack(images), labels=np.array(labels))
+    data = np.load(cache)
+    return data["images"], data["labels"].tolist()
+
+
+def _load_array_task(
+    images: np.ndarray,
+    labels: list[int],
+    batch_size: int,
+    N: int,
+    num_workers: int,
+    img_size: int,
+    seed: int,
+    augment_train: str,
+    center: bool,
+    crop: int | None,
+    train_frac: float = 0.5,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Shared loader for in-memory (n, H, W, 3) uint8 image arrays: same
+    one-time per-class pool split and exact class balance as the others."""
+    if augment_train not in AUGMENT_TRAIN_MODES:
+        raise ValueError(
+            f"augment_train must be one of {AUGMENT_TRAIN_MODES}, got {augment_train!r}"
+        )
+    torch.manual_seed(seed)
+    pools = _balanced_pool_split(labels, train_frac, torch.Generator().manual_seed(seed))
+    g_select = torch.Generator().manual_seed(seed)
+    train_idx = _sample_balanced(pools, N, g_select, 0)
+    test_idx = _sample_balanced(pools, N, g_select, 1)
+
+    def item(i: int) -> tuple[torch.Tensor, int]:
+        return torch.from_numpy(images[i]).permute(2, 0, 1).float() / 255.0, labels[i]
+
+    side = crop or images.shape[1]
+    base = ([transforms.CenterCrop(crop)] if crop else []) + (
+        [transforms.Resize(img_size, antialias=True)] if img_size != side else []
+    ) + [transforms.Grayscale(num_output_channels=1)]
+    return _loaders_from_items(
+        [item(i) for i in train_idx], [item(i) for i in test_idx], _TensorImageDataset,
+        base, batch_size, num_workers, seed, augment_train, center,
+    )
+
+
+def load_galaxy10_data_full(
+    batch_size: int, N: int, num_workers: int, img_size: int = 16, data_dir: str = "data",
+    seed: int = 42, verbose: bool = False, augment_train: str = "none",
+    task: str = "round_spiral", center: bool = False,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Galaxy10 SDSS: the 69x69 images are centre-cropped to 64x64 (the
+    galaxy is centred; the crop commutes with D4), then reduced to
+    img_size. Galaxy morphology does not depend on the image orientation."""
+    images, labels = _galaxy10_arrays(data_dir, task)
+    return _load_array_task(images, labels, batch_size, N, num_workers, img_size, seed,
+                            augment_train, center, crop=64)
+
+
+def load_resisc45_data_full(
+    batch_size: int, N: int, num_workers: int, img_size: int = 16, data_dir: str = "data",
+    seed: int = 42, verbose: bool = False, augment_train: str = "none",
+    task: str = "airport_harbor", center: bool = False,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """NWPU-RESISC45: 256x256 aerial scenes, reduced to img_size."""
+    images, labels = _resisc45_arrays(data_dir, task)
+    return _load_array_task(images, labels, batch_size, N, num_workers, img_size, seed,
+                            augment_train, center, crop=None)
