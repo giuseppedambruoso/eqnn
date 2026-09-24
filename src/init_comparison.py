@@ -54,7 +54,7 @@ def run(args: tuple) -> dict:
     names = pe.architecture_param_names(arch, 8, 2, output_bias=True)
     params = pe.initial_parameters(names, torch.Generator().manual_seed(seed))
     if variant in ("datainit", "standardize"):
-        raw_qnn = pe.create_qnn("default.qubit", 8, 2, arch, readout=pe.TASKS[task][0])
+        raw_qnn = pe.create_qnn("default.qubit", 8, 2, arch, readout=pe.readout_for(task))
         with torch.no_grad():
             raw = torch.cat([raw_qnn(x, params[:-2]).reshape(-1) for x, _ in loaders[0]])
         mean, std = raw.mean().item(), max(raw.std().item(), 1e-6)

@@ -6,7 +6,7 @@ set). The campaign runs in rounds, one parameter seed per round: each
 far (+- SEM once there are at least two).
 
 Usage:
-    python -m src.plot_campaign results_paper/campaign_8q.jsonl out.pdf
+    python -m src.plot_campaign results_paper/campaign_v2_8q.jsonl out.pdf
 Prints "<plotted points> <completed rounds>" (used to detect updates).
 """
 
@@ -32,9 +32,7 @@ SEEDS = (1, 2, 3, 4, 5, 6)
 TASK_TITLES = {
     "mnist45": "MNIST 4 vs 5",
     "satellite": "SATELLITE (ship vs plane)",
-    "planesnet": "PlanesNet (plane vs no plane)",
     "ising": "Ising (ordered vs disordered)",
-    "eurosat_hr": "EuroSAT Highway vs River",
     "eurosat_fi": "EuroSAT Forest vs Industrial",
 }
 COLORS = {"config6": "#1f5fa8", "config7": "#b8202e", "config10": "#d9a21b"}
@@ -84,8 +82,8 @@ def load_points(path: str) -> tuple[dict, int]:
 
 def plot(points: dict, rounds: int, out: str, qubits: int = 8) -> int:
     tasks = [t for t in TASK_TITLES]
-    ncols = 4
-    nrows = math.ceil(len(tasks) / ncols)
+    ncols = 3  # one extra panel slot holds the legend
+    nrows = math.ceil((len(tasks) + 1) / ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(4.2 * ncols, 3.4 * nrows), squeeze=False)
     n_points = 0
     for ax, task in zip(axes.flat, tasks):

@@ -3,7 +3,7 @@
 # branch of this repository on GitHub.
 #
 # Every machine only ever pushes ITS OWN files
-#   results/<campaign_<q>q | init_comparison>.<machine>.jsonl
+#   results/<name>.<machine>.jsonl   (one per results_paper/<name>.jsonl)
 # so pushes from different machines never conflict; the files of all the
 # other machines are copied into results_paper/imported/, where the
 # campaign (to skip jobs already done elsewhere), src.plot_campaign and
@@ -28,9 +28,9 @@ sync_once() {
   fi
   git -C "$RESULTS_REPO" pull -q --rebase || return 1
   mkdir -p "$RESULTS_REPO/results" results_paper/imported
-  for stem in campaign_8q campaign_10q campaign_12q init_comparison; do
-    local_file="results_paper/${stem}.jsonl"
+  for local_file in results_paper/*.jsonl; do
     [ -f "$local_file" ] || continue
+    stem="$(basename "$local_file" .jsonl)"
     # Only complete (newline-terminated) lines: the job may be appending
     # to the file right now.
     head -n "$(wc -l < "$local_file")" "$local_file" > "$RESULTS_REPO/results/${stem}.${MACHINE}.jsonl"

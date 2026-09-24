@@ -56,18 +56,30 @@ LEARNING_RATE = 0.05
 
 # Single model configuration used for every task (chosen once, for all
 # datasets, from the preliminary comparison — see the paper's Methods).
-MODEL_OPTIONS = {"output_bias": True, "center": False}
+MODEL_OPTIONS = {"output_bias": True, "center": False, "standardize": True}
+# standardize: the measured <O> is standardized with FIXED statistics,
+# z = (<O> - mean) / std, computed once per training run on the training
+# images with the initial (untrained) circuit, and fed to the trainable
+# affine output map tanh(w z + b) (w = 1, b = 0 at start). Keeps w of order
+# one for every dataset, so the output map can be learned (and its sign
+# flipped); acts only on the invariant scalar output. Chosen from
+# src.init_comparison (preliminary comparison, N = 80, 5 seeds).
 
 # task -> (readout, max supported qubits given the native resolution)
 TASKS = {
     # MNIST 3 vs 4 was dropped from the study (user decision, 2026-09-24).
     "mnist45": ("x0_xhalf", 8),  # 28x28
     "satellite": ("avg_x", 8),  # planes 20x20, ships cropped to 20x20
-    "planesnet": ("avg_x", 8),  # 20x20
+    # PlanesNet and EuroSAT Highway vs River were dropped: at chance level for
+    # every model and output initialization in the preliminary comparison.
     "ising": ("avg_x", 12),  # generated natively at any size
-    "eurosat_hr": ("avg_x", 12),  # 64x64
-    "eurosat_fi": ("avg_x", 12),
+    "eurosat_fi": ("avg_x", 12),  # 64x64
 }
+
+
+def readout_for(task: str) -> str:
+    """MNIST: X on the two pooled-to qubits; every other task: mean X."""
+    return "x0_xhalf" if task.startswith("mnist") else "avg_x"
 
 
 def img_size_for(num_qubits: int) -> int:
@@ -96,14 +108,41 @@ def loaders_for(task: str, N: int, seed: int, num_qubits: int):
 
 def _make_qnn(job: dict, noise_p: float = 0.0, noise_seed: int = 0):
     return create_qnn("default.qubit", job["qubits"], 2, job["arch"],
-                      readout=TASKS[job["task"]][0], noise_p=noise_p,
+                      readout=readout_for(job["task"]), noise_p=noise_p,
                       noise_seed=noise_seed, output_bias=MODEL_OPTIONS["output_bias"])
 
 
-def _train(qnn, train_loader, job: dict) -> torch.Tensor:
+def _raw_qnn(job: dict, noise_p: float = 0.0, noise_seed: int = 0):
+    """The circuit alone: returns the measured <O> (no output map)."""
+    return create_qnn("default.qubit", job["qubits"], 2, job["arch"],
+                      readout=readout_for(job["task"]), noise_p=noise_p, noise_seed=noise_seed)
+
+
+def _init_params(job: dict) -> torch.Tensor:
     names = architecture_param_names(job["arch"], job["qubits"], 2,
                                      output_bias=MODEL_OPTIONS["output_bias"])
-    params = initial_parameters(names, torch.Generator().manual_seed(job["seed"])).requires_grad_()
+    return initial_parameters(names, torch.Generator().manual_seed(job["seed"]))
+
+
+def _output_stats(raw_qnn, train_loader, params: torch.Tensor) -> tuple[float, float]:
+    """Mean and std of <O> over the training images, initial circuit."""
+    with torch.no_grad():
+        values = torch.cat([raw_qnn(x, params[:-2]).reshape(-1) for x, _ in train_loader])
+    return values.mean().item(), max(values.std().item(), 1e-6)
+
+
+def _model(raw_qnn, stats: tuple[float, float]):
+    """Full classifier: tanh(w (<O> - mean) / std + b), (w, b) = params[-2:]."""
+    mean, std = stats
+
+    def forward(encoded: torch.Tensor, params: torch.Tensor):
+        return torch.tanh(params[-2] * (raw_qnn(encoded, params[:-2]) - mean) / std + params[-1])
+
+    return forward
+
+
+def _train(qnn, train_loader, params: torch.Tensor, job: dict) -> torch.Tensor:
+    params = params.clone().requires_grad_()
     opt = torch.optim.Adam([params], lr=LEARNING_RATE, betas=(0.5, 0.999))
     dev = torch.device("cpu")
     t_start = time.time()
@@ -165,23 +204,31 @@ def run_job(job: dict) -> list[dict]:
     torch.manual_seed(job["seed"])
     loaders = loaders_for(job["task"], job["N"], job["seed"], job["qubits"])
     records = []
+    params0 = _init_params(job)
     if job["kind"] == "sweep":
-        qnn = _make_qnn(job)
-        params = _train(qnn, loaders[0], job)
+        raw = _raw_qnn(job)
+        stats = _output_stats(raw, loaders[0], params0)
+        qnn = _model(raw, stats)
+        params = _train(qnn, loaders[0], params0, job)
         records.append({**job, "noise_p": 0.0, "noise_seed": None, **_evaluate(qnn, loaders, params)})
         if (job["N"], job["seed"]) == (NOISE_N, NOISE_PARAM_SEED):
             for p, ns in itertools.product(NOISE_P_TEST, NOISE_SEEDS):
                 if p == 0.0 and ns != NOISE_SEEDS[0]:
                     continue
-                noisy = _make_qnn(job, p, ns)
+                # noiselessly-trained model (same fixed output statistics)
+                noisy = _model(_raw_qnn(job, p, ns), stats)
                 records.append({**job, "kind": "test_noise", "noise_p": p, "noise_seed": ns,
                                 **_evaluate(noisy, loaders, params)})
     elif job["kind"] == "train_noise":
-        qnn = _make_qnn(job, job["noise_p"], job["noise_seed"])
-        params = _train(qnn, loaders[0], job)
+        raw = _raw_qnn(job, job["noise_p"], job["noise_seed"])
+        stats = _output_stats(raw, loaders[0], params0)
+        qnn = _model(raw, stats)
+        params = _train(qnn, loaders[0], params0, job)
         records.append({**job, **_evaluate(qnn, loaders, params)})
     else:
         raise ValueError(job["kind"])
+    for r in records:
+        r["output_mean"], r["output_std"] = stats
     for r in records:
         r["seconds"] = round(time.time() - t0, 1)
         r["model_options"] = MODEL_OPTIONS
@@ -250,15 +297,20 @@ def rounds_in_lpt_order(jobs: list[dict]) -> list[tuple[int, list[dict]]]:
     return [(r, lpt_order(rounds[r])) for r in sorted(rounds)]
 
 
+# v2: campaign with the standardized output (the first campaign, with the
+# default output init, stays in campaign_<q>q.jsonl and is not used).
+RESULTS_STEM = "campaign_v2"
+
+
 def out_path(qubits: int) -> str:
-    return f"results_paper/campaign_{qubits}q.jsonl"
+    return f"results_paper/{RESULTS_STEM}_{qubits}q.jsonl"
 
 
 def imported_paths(qubits: int) -> list[str]:
     """Results produced on OTHER machines, brought here by src.sync_results."""
     import glob
 
-    return sorted(glob.glob(f"results_paper/imported/campaign_{qubits}q.*.jsonl"))
+    return sorted(glob.glob(f"results_paper/imported/{RESULTS_STEM}_{qubits}q.*.jsonl"))
 
 
 def default_workers(gb_per_worker: float = 0.7) -> int:

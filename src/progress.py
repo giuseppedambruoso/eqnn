@@ -19,8 +19,7 @@ import time
 # Must mirror src.paper_experiments.
 PROGRESS_DIR = "results_paper/progress"
 ARCH_LABELS = {"config6": "Equiv", "config7": "NonEquiv", "config10": "NonEquiv-Twirled"}
-TASK_MAX_QUBITS = {"mnist45": 8, "satellite": 8, "planesnet": 8,
-                   "ising": 12, "eurosat_hr": 12, "eurosat_fi": 12}
+TASK_MAX_QUBITS = {"mnist45": 8, "satellite": 8, "ising": 12, "eurosat_fi": 12}
 N_SEEDS = 6
 SWEEP_JOBS_PER_TASK = 3 * 5 * N_SEEDS  # archs x N values x seeds
 NOISE_JOBS_PER_TASK = 3 * (1 + 10 * 3)  # archs x (p=0 + 10 p values x 3 realizations)
@@ -28,7 +27,7 @@ POINTS_PER_TASK = 3 * 5
 
 
 def out_path(qubits: int) -> str:
-    return f"results_paper/campaign_{qubits}q.jsonl"
+    return f"results_paper/campaign_v2_{qubits}q.jsonl"
 
 
 def result_files(path: str) -> list[str]:
@@ -87,7 +86,7 @@ def snapshot(qubits: int) -> str:
     total_jobs = len(tasks) * (SWEEP_JOBS_PER_TASK + NOISE_JOBS_PER_TASK)
     path = out_path(qubits)
     done = 0
-    if os.path.exists(path):
+    if result_files(path):
         records = read_records(path)
         done = len({job_key(r) for r in records if r["kind"] in ("sweep", "train_noise")})
         n_imported = len(result_files(path)) - 1
