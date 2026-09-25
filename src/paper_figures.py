@@ -4,6 +4,8 @@
 
 Writes:
   accuracy_vs_N.pdf   noiseless test accuracy vs N, one panel per task
+  watermark.pdf       watermark study: accuracy vs N on the three test sets
+  gaps.pdf            invariance, shortcut and generalization gaps
   noise.pdf           accuracy vs depolarizing probability (N = 80):
                       noise in training and test / in test only
   dataset_samples.png examples of every task as seen by the model
@@ -175,6 +177,180 @@ def fig_samples(out: str, n_per_class: int = 5) -> None:
     plt.close(fig)
 
 
+
+WM_TASKS = ("mnist45", "satellite", "eurosat_fi", "galaxy_round_edgeon",
+            "galaxy_round_spiral", "resisc_airport_harbor")
+WM_STYLES = (("shortcut_acc", "-", "o", "watermarked test"),
+             ("transformed_acc", "--", "s", "watermark transformed"),
+             ("clean_acc", ":", "^", "no watermark"))
+SHORT_LABEL = {"mnist45": "MNIST", "satellite": "SATELLITE", "ising": "Ising",
+               "eurosat_fi": "EuroSAT", "galaxy_round_edgeon": "Gal. edge-on",
+               "galaxy_round_spiral": "Gal. spiral", "resisc_airport_harbor": "RESISC45"}
+
+
+def fig_watermark(records: list[dict], out: str) -> dict:
+    """Watermark study: accuracy vs N on the three test sets, per task."""
+    groups = collections.defaultdict(list)
+    for r in records:
+        if r["kind"] == "watermark":
+            groups[(r["task"], r["arch"], r["N"])].append(r)
+    agg = {k: [mean_sem([r[f] for r in rs]) for f, *_ in WM_STYLES] for k, rs in groups.items()}
+    ncols = 3
+    nrows = math.ceil(len(WM_TASKS) / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(11, 2.9 * nrows + 0.8), sharey=True, squeeze=False)
+    for ax, task in zip(axes.flat, WM_TASKS):
+        for arch in ARCHS:
+            Ns = sorted(N for (t, a, N) in agg if t == task and a == arch)
+            for k, (_, ls, marker, _) in enumerate(WM_STYLES):
+                ax.errorbar(Ns, [agg[(task, arch, N)][k][0] for N in Ns],
+                            yerr=[agg[(task, arch, N)][k][1] for N in Ns], color=COLORS[arch],
+                            ls=ls, marker=marker, ms=3.5, lw=1.2, capsize=2)
+        ax.set_xscale("log", base=2)
+        ax.set_xticks(N_VALUES, [str(n) for n in N_VALUES])
+        ax.set_ylim(0.2, 1.02)
+        ax.axhline(0.5, color="gray", lw=0.7, ls=":")
+        ax.grid(alpha=0.3)
+        ax.set_title(TITLES[task])
+        ax.set_xlabel("training-set size $N$")
+    for row in axes:
+        row[0].set_ylabel("test accuracy")
+    handles = [plt.Line2D([], [], color=COLORS[a], ls=ls, marker=m, ms=4, label=f"{ARCH_LABELS[a]}, {lab}")
+               for a in ARCHS for _, ls, m, lab in WM_STYLES]
+    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.01))
+    fig.tight_layout(rect=(0, 0.1, 1, 1))
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    return {f"{t}|{a}|{N}": v for (t, a, N), v in agg.items()}
+
+
+MARKERS = {"config6": "o", "config7": "s", "config10": "D"}
+
+
+def _dots(ax, tasks: tuple, values: dict, ylabel: str) -> None:
+    """Dot plot: one column per task, one marker per architecture (mean +-
+    SEM), slightly offset - unlike bars, exact zeros stay visible."""
+    offset = 0.22
+    for i in range(len(tasks)):
+        if i % 2:
+            ax.axvspan(i - 0.5, i + 0.5, color="0.5", alpha=0.07, lw=0)
+    for k, arch in enumerate(ARCHS):
+        xs = [i + (k - 1) * offset for i in range(len(tasks))]
+        ms = [values.get((t, arch), (float("nan"), 0.0)) for t in tasks]
+        ax.errorbar(xs, [m for m, _ in ms], yerr=[e for _, e in ms], fmt=MARKERS[arch],
+                    color=COLORS[arch], ms=6, capsize=2.5, lw=1.2, label=ARCH_LABELS[arch],
+                    markeredgecolor="white", markeredgewidth=0.6, zorder=3)
+    ax.set_xticks(range(len(tasks)), [SHORT_LABEL[t] for t in tasks], rotation=35, ha="right")
+    ax.set_xlim(-0.5, len(tasks) - 0.5)
+    ax.axhline(0, color="black", lw=0.6, zorder=1)
+    ax.set_ylabel(ylabel)
+    ax.grid(alpha=0.3, axis="y")
+
+
+def fig_gaps(records: list[dict], records_wm: list[dict], out: str) -> dict:
+    """(a) invariance gap (original - transformed test accuracy) without the
+    watermark; (b) shortcut gap (watermarked - transformed-watermark test
+    accuracy); both averaged over all N and seeds (mean +- SEM over runs);
+    (c) generalization gap (train - test accuracy) vs N without the
+    watermark, averaged over the tasks (mean +- SEM over tasks)."""
+    inv, short = collections.defaultdict(list), collections.defaultdict(list)
+    gen = collections.defaultdict(list)
+    for r in records:
+        if r["kind"] == "sweep":
+            inv[(r["task"], r["arch"])].append(r["val_acc"] - r["val_aug_acc"])
+            gen[(r["task"], r["arch"], r["N"])].append(r["train_acc"] - r["val_acc"])
+    for r in records_wm:
+        if r["kind"] == "watermark":
+            short[(r["task"], r["arch"])].append(r["shortcut_acc"] - r["transformed_acc"])
+    inv_ms = {k: mean_sem(v) for k, v in inv.items()}
+    short_ms = {k: mean_sem(v) for k, v in short.items()}
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.6), gridspec_kw={"width_ratios": [1.15, 1, 0.9]})
+    _dots(axes[0], TASKS, inv_ms, "original $-$ transformed test acc.")
+    axes[0].set_title("(a) invariance gap, no watermark")
+    _dots(axes[1], WM_TASKS, short_ms, "watermarked $-$ transformed test acc.")
+    axes[1].set_title("(b) shortcut gap, watermark in training")
+    gen_ms = {}
+    for arch in ARCHS:
+        pts = [mean_sem([statistics.mean(gen[(t, arch, N)]) for t in TASKS if gen.get((t, arch, N))])
+               for N in N_VALUES]
+        gen_ms[arch] = dict(zip(map(str, N_VALUES), pts))
+        axes[2].errorbar(N_VALUES, [m for m, _ in pts], yerr=[e for _, e in pts], color=COLORS[arch],
+                         marker=MARKERS[arch], ms=4.5, lw=1.2, capsize=2, label=ARCH_LABELS[arch])
+    axes[2].set_xscale("log", base=2)
+    axes[2].set_xticks(N_VALUES, [str(n) for n in N_VALUES])
+    axes[2].axhline(0, color="black", lw=0.6)
+    axes[2].set_xlabel("training-set size $N$")
+    axes[2].set_ylabel("train $-$ test accuracy")
+    axes[2].set_title("(c) train $-$ test, no watermark")
+    axes[2].grid(alpha=0.3)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.02))
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    return {"invariance_gap": {f"{t}|{a}": v for (t, a), v in inv_ms.items()},
+            "shortcut_gap": {f"{t}|{a}": v for (t, a), v in short_ms.items()},
+            "generalization_gap": gen_ms}
+
+
+def is_stuck(r: dict) -> bool:
+    """A run that stayed exactly at chance level on training AND test set."""
+    return abs(r["val_acc"] - 0.5) < 0.013 and abs(r["train_acc"] - 0.5) < 0.013
+
+
+def load_layers(qubits: int = 8) -> dict:
+    """{layers: sweep records} for every stacked-layer campaign with complete
+    results (all tasks x archs x N x seeds); layers = 1 is the main study."""
+    import glob
+    import re
+
+    out = {1: [r for r in load(f"results_paper/campaign_v2_{qubits}q.jsonl") if r["kind"] == "sweep"]}
+    paths = glob.glob(f"results_paper/campaign_v2_L*_{qubits}q.jsonl") + glob.glob(
+        f"results_paper/imported/campaign_v2_L*_{qubits}q.*.jsonl")
+    for L in sorted({int(re.search(r"_L(\d+)_", p).group(1)) for p in paths}):
+        out[L] = [r for r in load(f"results_paper/campaign_v2_L{L}_{qubits}q.jsonl") if r["kind"] == "sweep"]
+    expected = len(TASKS) * len(ARCHS) * len(N_VALUES) * 6
+    return {L: [r for r in rs if r["task"] in TASKS] for L, rs in out.items()
+            if len([r for r in rs if r["task"] in TASKS]) >= expected}
+
+
+def fig_depth(layers: dict, out: str) -> dict:
+    """Trainability vs depth: (a) fraction of runs stuck at chance, (b) mean
+    test accuracy over tasks, (c) the same excluding stuck runs."""
+    Ls = sorted(layers)
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.4))
+    summary = {}
+    for arch in ARCHS:
+        frac, acc, acc_ok = [], [], []
+        for L in Ls:
+            rs = [r for r in layers[L] if r["arch"] == arch]
+            p = sum(map(is_stuck, rs)) / len(rs)
+            frac.append((p, math.sqrt(p * (1 - p) / len(rs))))
+            per_task = [statistics.mean(r["val_acc"] for r in rs if r["task"] == t) for t in TASKS]
+            acc.append(mean_sem(per_task))
+            ok = [[r["val_acc"] for r in rs if r["task"] == t and not is_stuck(r)] for t in TASKS]
+            acc_ok.append(mean_sem([statistics.mean(v) for v in ok if v]))
+        summary[arch] = {"stuck_fraction": frac, "accuracy": acc, "accuracy_not_stuck": acc_ok}
+        for ax, series in zip(axes, (frac, acc, acc_ok)):
+            ax.errorbar(Ls, [m for m, _ in series], yerr=[e for _, e in series], color=COLORS[arch],
+                        marker={"config6": "o", "config7": "s", "config10": "D"}[arch], ms=5,
+                        lw=1.4, capsize=2.5, label=ARCH_LABELS[arch])
+    titles = ("(a) runs stuck at chance level", "(b) mean test accuracy",
+              "(c) mean test accuracy, stuck runs excluded")
+    ylabels = ("fraction of runs", "test accuracy (mean over tasks)", "test accuracy (mean over tasks)")
+    for ax, title, ylabel in zip(axes, titles, ylabels):
+        ax.set_title(title)
+        ax.set_xlabel("number of layers $L$ (6$L$ circuit parameters)")
+        ax.set_ylabel(ylabel)
+        ax.set_xticks(Ls)
+        ax.grid(alpha=0.3)
+    axes[0].set_ylim(bottom=0)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.02))
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    return {"layers": Ls, **summary}
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("out_dir")
@@ -188,6 +364,14 @@ def main() -> None:
     summary = {
         "accuracy_vs_N": fig_accuracy(records, os.path.join(args.out_dir, "accuracy_vs_N.pdf")),
     }
+    records_wm = [r for r in load(f"results_paper/campaign_v2_wm_{args.qubits}q.jsonl")
+                  if r["task"] in WM_TASKS]
+    if records_wm:
+        summary["watermark"] = fig_watermark(records_wm, os.path.join(args.out_dir, "watermark.pdf"))
+        summary["gaps"] = fig_gaps(records, records_wm, os.path.join(args.out_dir, "gaps.pdf"))
+    layers = load_layers(args.qubits)
+    if len(layers) > 1:
+        summary["depth"] = fig_depth(layers, os.path.join(args.out_dir, "depth.pdf"))
     if args.noise:
         summary["noise"] = fig_noise(records, os.path.join(args.out_dir, "noise.pdf"))
     sweeps = [r for r in records if r["kind"] == "sweep"]
