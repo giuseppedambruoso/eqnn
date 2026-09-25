@@ -184,7 +184,9 @@ def _train(qnn, train_loader, params: torch.Tensor, job: dict) -> torch.Tensor:
             # memory (which otherwise dominates for twirled/large circuits).
             opt.zero_grad()
             batch = labels.shape[0]
-            micro = MICRO_BATCH_BY_QUBITS.get(job["qubits"], MICRO_BATCH)
+            # deeper stacked circuits store proportionally more autograd state
+            micro = max(4, MICRO_BATCH_BY_QUBITS.get(job["qubits"], MICRO_BATCH)
+                        // max(1, job.get("layers", 1) // 2))
             for start in range(0, batch, micro):
                 x = images[start : start + micro]
                 y = labels[start : start + micro]
@@ -283,7 +285,7 @@ def job_key(job: dict) -> tuple:
 
 
 def build_jobs(tasks, kinds, qubits: int, seeds=SEEDS, n_values=N_VALUES,
-               layers: int = 1) -> list[dict]:
+               layers: int = 1, archs=ARCHS) -> list[dict]:
     jobs = []
     for task in tasks:
         if qubits > ALL_TASKS[task][1]:
@@ -293,7 +295,7 @@ def build_jobs(tasks, kinds, qubits: int, seeds=SEEDS, n_values=N_VALUES,
             base["layers"] = layers
         for kind in ("sweep", "watermark"):
             if kind in kinds:
-                for arch, N, seed in itertools.product(ARCHS, n_values, seeds):
+                for arch, N, seed in itertools.product(archs, n_values, seeds):
                     jobs.append({**base, "kind": kind, "arch": arch, "N": N, "seed": seed})
         if "train_noise" in kinds:
             for arch, p, ns in itertools.product(ARCHS, NOISE_P_TRAIN, NOISE_SEEDS):
@@ -393,6 +395,8 @@ def main() -> None:
     ap.add_argument("--n-values", nargs="+", type=int, default=list(N_VALUES))
     ap.add_argument("--layers", type=int, default=1,
                     help="stacked copies of the circuit, each with its own angles")
+    ap.add_argument("--archs", nargs="+", default=list(ARCHS), choices=ARCHS,
+                    help="architectures to run (default: all three)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     wm = "watermark" in args.kinds
@@ -412,7 +416,7 @@ def main() -> None:
                     r = json.loads(line)
                     if r["kind"] in ("sweep", "train_noise", "watermark"):
                         done.add(job_key(r))
-        jobs += [j for j in build_jobs(tasks, args.kinds, q, args.seeds, args.n_values, args.layers)
+        jobs += [j for j in build_jobs(tasks, args.kinds, q, args.seeds, args.n_values, args.layers, args.archs)
                  if job_key(j) not in done]
     rounds = rounds_in_lpt_order(jobs)
     if args.rounds:
