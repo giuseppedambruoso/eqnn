@@ -29,7 +29,8 @@ NOISE_JOBS_PER_TASK = 3 * (1 + 10 * 3)  # archs x (p=0 + 10 p values x 3 realiza
 POINTS_PER_TASK = 3 * 5
 
 
-STEM = "campaign_v2"  # set to "campaign_v2_wm" by --watermark
+STEM = "campaign_v2"  # set by --watermark / --layers
+N_ARCHS = 3
 
 
 def out_path(qubits: int) -> str:
@@ -91,8 +92,9 @@ def snapshot(qubits: int) -> str:
     lines = []
     tasks = [t for t, q in TASK_MAX_QUBITS.items() if q >= qubits]
     extra = [t for t, q in SWEEP_ONLY_TASKS.items() if q >= qubits]
-    if STEM.endswith("_wm"):
-        tasks, total_jobs = tasks + extra, (len(tasks) + len(extra)) * SWEEP_JOBS_PER_TASK
+    if STEM != "campaign_v2":  # watermark / stacked-layer studies: sweep-like jobs only
+        tasks = tasks + extra
+        total_jobs = len(tasks) * SWEEP_JOBS_PER_TASK * N_ARCHS // 3
     else:
         total_jobs = len(tasks) * (SWEEP_JOBS_PER_TASK + NOISE_JOBS_PER_TASK)
         total_jobs += len(extra) * SWEEP_JOBS_PER_TASK
@@ -155,10 +157,15 @@ def main() -> None:
     ap.add_argument("--interval", type=float, default=5.0)
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--watermark", action="store_true", help="the watermark study")
+    ap.add_argument("--layers", type=int, default=1, help="stacked-layer campaign (e.g. 6)")
+    ap.add_argument("--archs", type=int, default=3, help="number of architectures run (for the total)")
     args = ap.parse_args()
-    global STEM
+    global STEM, N_ARCHS
     if args.watermark:
         STEM = "campaign_v2_wm"
+    if args.layers > 1:
+        STEM = f"campaign_v2_L{args.layers}"
+    N_ARCHS = args.archs
     if args.once:
         print(snapshot(args.qubits))
         return
