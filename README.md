@@ -79,8 +79,8 @@ results/                 one JSON line per run (format below)
 supplementary/           every result that the paper summarizes but does not report in full (README.md: all the
                            tables in Markdown; tables/: LaTeX versions; figures/: the whole grid), from
                            analysis/supplementary.py
-paper/                   the paper: EQNN_draft_v4.tex (single LaTeX file), references.bib, figures/ (generated),
-                           tables/ (generated; their contents are pasted in EQNN_draft_v4.tex between
+paper/                   the paper: paper.tex (single LaTeX file), references.bib, figures/ (generated),
+                           tables/ (generated; their contents are pasted in paper.tex between
                            % BEGIN/END tab_*.tex markers), numbers.txt (generated)
 tests/                   checks of the statements of the paper (invariance, twirl, noise simulation, DLA)
 ```
@@ -106,7 +106,7 @@ the Zenodo record https://doi.org/10.5281/zenodo.18299473 (CC BY-NC-ND 4.0, not 
 make figures    # analysis/*.py: every figure into paper/figures and every table into paper/tables (about one minute)
 make supplementary  # analysis/supplementary.py: every setting not reported in the paper, into supplementary/
 make numbers    # analysis/text_numbers.py: the numbers quoted in the text, into paper/numbers.txt
-make paper      # pdflatex + bibtex: paper/EQNN_draft_v4.pdf
+make paper      # pdflatex + bibtex: paper/paper.pdf
 make arxiv      # paper/arxiv.tar.gz, the sources to upload to arXiv
 ```
 
@@ -123,7 +123,7 @@ make arxiv      # paper/arxiv.tar.gz, the sources to upload to arXiv
 | Fig. 7 (shortcuts) | `figures/fig_cues.pdf` | `analysis/paper_figures.py` | `mnist_pose`, `synthetic`, `galaxy`, `erythrocytes` (cues) |
 | Sec. V C (watermark removed on Galaxy10: output shift and recalibrated threshold) | `results/watermark_shift.json` | `experiments/watermark_shift.py` | `galaxy`, `mnist_pose`, `synthetic` (corner watermark) |
 | Fig. 8 (hardware noise) | `figures/fig_noise.pdf` | `analysis/paper_figures.py` | `noise_train_test`, `noise_test_only` |
-| Table II (the four tasks) | in `EQNN_draft_v4.tex` | static | — |
+| Table II (the four tasks) | in `paper.tex` | static | — |
 | Table III (DLA and function classes) | `tables/tab_dla.tex` | `analysis/paper_figures.py` | `results/dla.json` |
 | Fig. 9 (gradients: variance and histograms) | `figures/fig_gradients.pdf` | `analysis/paper_figures.py` | `results/gradient_variance.json`, `results/gradient_histograms.json` |
 | Fig. 10 (learning curves) | `figures/fig_curves.pdf` | `analysis/paper_figures.py` | `mnist_pose`, `synthetic`, `galaxy`, `erythrocytes` |
@@ -131,7 +131,7 @@ make arxiv      # paper/arxiv.tar.gz, the sources to upload to arXiv
 | Table IV (paired comparisons) | `tables/tab_paired.tex` | `analysis/paper_figures.py` | `mnist_pose`, `synthetic`, `galaxy`, `erythrocytes` |
 | Fig. 12 (dependence on N and L) | `figures/fig_scaling.pdf` | `analysis/paper_figures.py` | `mnist_pose`, `synthetic`, `galaxy`, `erythrocytes`, `mnist_upright` |
 | Fig. 13 (noise model) | `figures/fig_noise_model.pdf` | `analysis/schematics.py` | — |
-| Table V (noise parameters) | in `EQNN_draft_v4.tex` | values of `eqnn/noise.py` (`TYPICAL`, `SPREAD`) | — |
+| Table V (noise parameters) | in `paper.tex` | values of `eqnn/noise.py` (`TYPICAL`, `SPREAD`) | — |
 | Table VI (symmetry breaking by the noise) | `tables/tab_symbreak.tex` | `analysis/paper_figures.py` (simulation) | — |
 | Numbers quoted in the text | `numbers.txt` | `analysis/text_numbers.py` | all of `results/` |
 | Supplementary (main settings: training, test, gap) | `supplementary/tables/tab_main.tex` | `analysis/supplementary.py` | `mnist_pose`, `synthetic`, `galaxy`, `erythrocytes` |

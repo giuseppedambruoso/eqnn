@@ -13,13 +13,13 @@ supplementary:    ## every setting that the paper does not report in full (suppl
 numbers:          ## every number quoted in the text that is not read from a table
 	$(PYTHON) analysis/text_numbers.py > paper/numbers.txt
 
-paper:            ## compile paper/EQNN_draft_v4.pdf
-	cd paper && pdflatex -interaction=nonstopmode EQNN_draft_v4 >/dev/null && bibtex EQNN_draft_v4 >/dev/null && \
-	pdflatex -interaction=nonstopmode EQNN_draft_v4 >/dev/null && pdflatex -interaction=nonstopmode EQNN_draft_v4 >/dev/null
-	@echo paper/EQNN_draft_v4.pdf
+paper:            ## compile paper/paper.pdf
+	cd paper && pdflatex -interaction=nonstopmode paper >/dev/null && bibtex paper >/dev/null && \
+	pdflatex -interaction=nonstopmode paper >/dev/null && pdflatex -interaction=nonstopmode paper >/dev/null
+	@echo paper/paper.pdf
 
-arxiv: paper      ## paper/arxiv.tar.gz: the sources to upload to arXiv (with the compiled bibliography EQNN_draft_v4.bbl)
-	cd paper && tar czf arxiv.tar.gz EQNN_draft_v4.tex EQNN_draft_v4.bbl figures
+arxiv: paper      ## paper/arxiv.tar.gz: the sources to upload to arXiv (with the compiled bibliography paper.bbl)
+	cd paper && tar czf arxiv.tar.gz paper.tex paper.bbl figures
 	@echo paper/arxiv.tar.gz
 
 test:             ## checks of the statements of the paper
