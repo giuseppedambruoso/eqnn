@@ -1,0 +1,32 @@
+{
+ "dla": 569,
+ "dla_nonequiv": 569,
+ "observables": {
+  "Equiv": 417,
+  "NonEquiv": 1480,
+  "Twirled": 1272,
+  "NoSym": 1480
+ },
+ "dim": {
+  "Equiv": 237,
+  "NonEquiv": 1304,
+  "Twirled": 666,
+  "NoSym": 772
+ },
+ "inv": {
+  "Equiv": 237,
+  "NonEquiv": 31,
+  "Twirled": 666,
+  "NoSym": 237
+ },
+ "pair": {
+  "Equiv&NonEquiv": 4,
+  "Equiv&Twirled": 14,
+  "Equiv&NoSym": 237,
+  "NonEquiv&Twirled": 31,
+  "NonEquiv&NoSym": 5,
+  "Twirled&NoSym": 14
+ },
+ "total": 32896,
+ "total_inv": 4224
+}

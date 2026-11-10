@@ -1,0 +1,23 @@
+== 0. the simulated observables lie in the exactly computed space (Equiv, L = 8, 60 random angle vectors)
+  largest relative component outside the space: 5.2e-15
+
+== 1. dynamical Lie algebra: exact (eqnn.dla) vs PennyLane qml.lie_closure
+  equivariant circuit: PennyLane 569, exact 569 (65 s)
+  non-equivariant circuit: PennyLane 569, exact 569 (61 s)
+
+== 2. size of the function class: exact vs numerical rank of Re(U^dag O U) over random angles (L = 8)
+  Equiv: numerical rank 237 from 346 samples, exact 237; singular values (relative) s_237 = 5.8e-02, s_238 = 3.7e-15 (28 s)
+  Twirled: numerical rank 664 from 882 samples, exact 666; singular values (relative) s_666 = 4.9e-16, s_667 = 4.3e-16 (52 s)
+  NoSym: numerical rank 768 from 1015 samples, exact 772; singular values (relative) s_772 = 4.7e-16, s_773 = 4.5e-16 (86 s)
+  NonEquiv: numerical rank 1300 from 1680 samples, exact 1304; singular values (relative) s_1304 = 3.3e-16, s_1305 = 3.2e-16 (176 s)
+
+== 3. how many layers reach the whole function class (numerical rank of Re(U^dag O U), random angles)
+  Equiv: L = 1, 2, 4: 94, 234, 237 (all circuits: 237)
+  Twirled: L = 1, 2, 4: 251, 659, 664 (all circuits: 666)
+== (a) one angle per gate of the gate set (pairs tied, blocks independent), L = 4
+  Twirled: 666 (exact 666, 42s)
+  NoSym: 772 (exact 772, 47s)
+  NonEquiv: 1304 (exact 1304, 93s)
+== (b) rank vs depth, shared angles
+  NoSym: L = 1, 2, 4: [274, 749, 768] (exact 772)
+  NonEquiv: L = 1, 2, 4: [488, 1292, 1300] (exact 1304)

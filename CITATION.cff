@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use this code, these results or these figures, please cite the paper below."
+title: "Invariance can prevent overfitting and shortcut learning in quantum neural networks"
+authors:
+  - family-names: "D'Ambruoso"
+    given-names: "Giuseppe"
+  - family-names: "Gramegna"
+    given-names: "Giovanni"
+  - family-names: "Pomarico"
+    given-names: "Domenico"
+  - family-names: "Magnifico"
+    given-names: "Giuseppe"
+  - family-names: "Lupo"
+    given-names: "Cosmo"
+repository-code: "https://github.com/giuseppedambruoso/eqnn"
+license:
+  - GPL-3.0-or-later
+  - CC-BY-SA-4.0
+type: software
+preferred-citation:
+  type: article
+  title: "Invariance can prevent overfitting and shortcut learning in quantum neural networks"
+  authors:
+    - family-names: "D'Ambruoso"
+      given-names: "Giuseppe"
+    - family-names: "Gramegna"
+      given-names: "Giovanni"
+    - family-names: "Pomarico"
+      given-names: "Domenico"
+    - family-names: "Magnifico"
+      given-names: "Giuseppe"
+    - family-names: "Lupo"
+      given-names: "Cosmo"
+  year: 2026
+  notes: "Preprint"

@@ -1,0 +1,105 @@
+== Main settings (L = 4; N = 40, 20 on the synthetic task; 15 seeds): train / test / gap
+  MNIST: Equiv 0.90/0.85/+0.05  Twirled 0.90/0.84/+0.06  NonEquiv 0.89/0.74/+0.15  NoSym 0.89/0.73/+0.16
+  Synthetic: Equiv 0.99/0.96/+0.03  Twirled 0.96/0.89/+0.07  NonEquiv 0.97/0.82/+0.15  NoSym 0.97/0.83/+0.14
+  Galaxy10: Equiv 0.80/0.76/+0.04  Twirled 0.81/0.76/+0.05  NonEquiv 0.84/0.73/+0.11  NoSym 0.77/0.66/+0.11
+  Blood cells: Equiv 0.80/0.73/+0.06  Twirled 0.86/0.78/+0.08  NonEquiv 0.86/0.70/+0.17  NoSym 0.83/0.66/+0.16
+  gaps of the invariant models 0.03-0.08, of the non-invariant ones 0.11-0.17; gap of NonEquiv / gap of an invariant model 2.2-4.9
+  test accuracy Equiv - NonEquiv: MNIST +0.11 (15/15), gap -0.10; Synthetic +0.14 (14/15), gap -0.12; Galaxy10 +0.03 (12/15), gap -0.07; Blood cells +0.04 (12/15), gap -0.11
+  test accuracy Equiv - NoSym: MNIST +0.12 (15/15), gap -0.11; Synthetic +0.13 (14/15), gap -0.11; Galaxy10 +0.09 (15/15), gap -0.07; Blood cells +0.07 (12/15), gap -0.10
+  test accuracy NoSym - NonEquiv: MNIST -0.01 (6/15), gap +0.01; Synthetic +0.01 (10/15), gap -0.01; Galaxy10 -0.07 (0/15), gap -0.00; Blood cells -0.03 (6/15), gap -0.00
+  test accuracy Equiv - Twirled: MNIST +0.01 (9/15), gap -0.01; Synthetic +0.07 (13/15), gap -0.04; Galaxy10 +0.00 (8/15), gap -0.01; Blood cells -0.05 (2/15), gap -0.01
+
+== Upright MNIST (main setting): NonEquiv on upright digits
+  15 seeds: gap upright 0.06 vs random pose 0.15; test upright 0.92 vs Equiv 0.85; trained upright, tested on rotated digits 0.64
+
+== Shortcuts in the main settings (five seeds): train / with cue / cue moved / no cue
+  MNIST, corner watermark: Equiv 0.83/0.77/0.77/0.77  Twirled 0.89/0.81/0.81/0.83  NonEquiv 0.99/0.98/0.57/0.65  NoSym 0.99/0.98/0.52/0.54
+  MNIST, brightness gradient: Equiv 0.90/0.82/0.82/0.83  Twirled 0.86/0.80/0.80/0.80  NonEquiv 0.93/0.77/0.67/0.72  NoSym 0.97/0.95/0.53/0.61
+  MNIST, center/corner mark: Equiv 0.99/1.00/1.00/0.51  Twirled 1.00/1.00/1.00/0.51  NonEquiv 1.00/1.00/1.00/0.52  NoSym 0.88/0.87/0.87/0.52
+  Synthetic, corner watermark: Equiv 1.00/0.97/0.97/0.94  Twirled 0.96/0.89/0.89/0.89  NonEquiv 1.00/0.95/0.76/0.85  NoSym 0.99/0.93/0.68/0.76
+  Synthetic, brightness gradient: Equiv 1.00/0.95/0.95/0.97  Twirled 0.96/0.85/0.85/0.86  NonEquiv 0.98/0.81/0.78/0.81  NoSym 0.98/0.87/0.76/0.81
+  Synthetic, center/corner mark: Equiv 1.00/1.00/1.00/0.50  Twirled 1.00/1.00/1.00/0.50  NonEquiv 1.00/0.99/0.99/0.52  NoSym 1.00/0.99/0.99/0.58
+  Galaxy10, corner watermark: Equiv 0.77/0.70/0.70/0.56  Twirled 0.81/0.75/0.75/0.64  NonEquiv 1.00/1.00/0.51/0.52  NoSym 1.00/0.99/0.50/0.50
+  Galaxy10, brightness gradient: Equiv 0.72/0.68/0.68/0.69  Twirled 0.81/0.74/0.74/0.72  NonEquiv 0.86/0.71/0.63/0.66  NoSym 0.96/0.91/0.53/0.53
+  Galaxy10, center/corner mark: Equiv 1.00/1.00/1.00/0.50  Twirled 1.00/1.00/1.00/0.50  NonEquiv 1.00/1.00/1.00/0.50  NoSym 1.00/1.00/1.00/0.51
+  Blood cells, corner watermark: Equiv 0.71/0.64/0.64/0.64  Twirled 0.82/0.77/0.77/0.76  NonEquiv 0.99/0.97/0.51/0.59  NoSym 0.95/0.96/0.55/0.57
+  Blood cells, brightness gradient: Equiv 0.77/0.73/0.73/0.75  Twirled 0.84/0.77/0.77/0.78  NonEquiv 0.82/0.66/0.61/0.67  NoSym 0.93/0.87/0.56/0.62
+  Blood cells, center/corner mark: Equiv 1.00/1.00/1.00/0.48  Twirled 1.00/1.00/1.00/0.51  NonEquiv 1.00/1.00/1.00/0.51  NoSym 0.97/0.91/0.92/0.44
+
+== Noise in training and test (five seeds): test accuracy / gap at every scale
+  MNIST Equiv: s=0 0.84/+0.05  s=0.25 0.86/+0.09  s=0.5 0.84/+0.06  s=1 0.83/+0.04  s=2 0.84/+0.02  s=4 0.75/+0.02
+  MNIST Twirled: s=0 0.82/+0.08  s=0.25 0.83/+0.04  s=0.5 0.81/+0.06  s=1 0.83/+0.05  s=2 0.82/+0.03  s=4 0.75/-0.01
+  MNIST NonEquiv: s=0 0.74/+0.15  s=0.25 0.75/+0.17  s=0.5 0.75/+0.13  s=1 0.72/+0.10  s=2 0.73/+0.04  s=4 0.63/+0.05
+  MNIST NoSym: s=0 0.73/+0.18  s=0.25 0.70/+0.17  s=0.5 0.72/+0.17  s=1 0.71/+0.17  s=2 0.68/+0.16  s=4 0.57/+0.05
+  Synthetic Equiv: s=0 0.97/+0.03  s=0.25 0.97/+0.02  s=0.5 0.98/+0.02  s=1 0.97/+0.02  s=2 0.97/+0.00  s=4 0.98/+0.01
+  Synthetic Twirled: s=0 0.89/+0.09  s=0.25 0.90/+0.08  s=0.5 0.92/+0.03  s=1 0.90/+0.04  s=2 0.84/+0.04  s=4 0.83/-0.01
+  Synthetic NonEquiv: s=0 0.82/+0.16  s=0.25 0.82/+0.16  s=0.5 0.83/+0.14  s=1 0.79/+0.18  s=2 0.81/+0.14  s=4 0.76/+0.10
+  Synthetic NoSym: s=0 0.84/+0.13  s=0.25 0.86/+0.12  s=0.5 0.87/+0.09  s=1 0.88/+0.08  s=2 0.84/+0.08  s=4 0.70/+0.08
+  Galaxy10 Equiv: s=0 0.75/+0.05  s=0.25 0.75/+0.02  s=0.5 0.73/+0.00  s=1 0.75/-0.01  s=2 0.79/+0.04  s=4 0.79/-0.00
+  Galaxy10 Twirled: s=0 0.79/+0.04  s=0.25 0.76/+0.07  s=0.5 0.75/+0.04  s=1 0.73/+0.05  s=2 0.75/+0.04  s=4 0.71/+0.06
+  Galaxy10 NonEquiv: s=0 0.72/+0.15  s=0.25 0.70/+0.14  s=0.5 0.69/+0.13  s=1 0.67/+0.13  s=2 0.63/+0.15  s=4 0.58/+0.16
+  Galaxy10 NoSym: s=0 0.63/+0.12  s=0.25 0.65/+0.14  s=0.5 0.65/+0.17  s=1 0.62/+0.17  s=2 0.65/+0.13  s=4 0.53/+0.12
+  Blood cells Equiv: s=0 0.78/+0.06  s=0.25 0.78/+0.04  s=0.5 0.72/+0.04  s=1 0.78/+0.01  s=2 0.72/+0.05  s=4 0.53/+0.06
+  Blood cells Twirled: s=0 0.81/+0.06  s=0.25 0.79/+0.04  s=0.5 0.78/+0.04  s=1 0.75/+0.05  s=2 0.70/+0.06  s=4 0.55/+0.05
+  Blood cells NonEquiv: s=0 0.72/+0.15  s=0.25 0.69/+0.20  s=0.5 0.69/+0.16  s=1 0.64/+0.18  s=2 0.62/+0.17  s=4 0.51/+0.12
+  Blood cells NoSym: s=0 0.67/+0.15  s=0.25 0.61/+0.12  s=0.5 0.65/+0.16  s=1 0.66/+0.13  s=2 0.56/+0.15  s=4 0.50/+0.02
+  Equiv - NonEquiv in test accuracy: MNIST +0.10 +0.11 +0.09 +0.11 +0.12 +0.12; Synthetic +0.16 +0.14 +0.15 +0.18 +0.16 +0.23; Galaxy10 +0.03 +0.04 +0.04 +0.08 +0.15 +0.20; Blood cells +0.06 +0.09 +0.03 +0.14 +0.10 +0.02
+
+== Noise in the test only (15 seeds): test accuracy at s = 0, 1, 2, 4
+  MNIST: Equiv 0.85/0.84/0.71/0.50  Twirled 0.84/0.79/0.52/0.50  NonEquiv 0.74/0.70/0.54/0.50  NoSym 0.73/0.64/0.50/0.50
+  Synthetic: Equiv 0.96/0.91/0.62/0.50  Twirled 0.89/0.89/0.66/0.50  NonEquiv 0.82/0.81/0.60/0.50  NoSym 0.83/0.74/0.50/0.50
+  Galaxy10: Equiv 0.76/0.77/0.59/0.50  Twirled 0.76/0.74/0.56/0.50  NonEquiv 0.73/0.68/0.52/0.50  NoSym 0.66/0.58/0.50/0.50
+  Blood cells: Equiv 0.73/0.68/0.57/0.50  Twirled 0.78/0.66/0.51/0.50  NonEquiv 0.70/0.63/0.52/0.50  NoSym 0.66/0.59/0.50/0.50
+
+== Failures to train (training accuracy <= 0.6)
+  MNIST: main setting {'Equiv': 0, 'Twirled': 0, 'NonEquiv': 0, 'NoSym': 0}; L=8 {'Equiv': '6/20', 'Twirled': '1/20', 'NonEquiv': '0/20', 'NoSym': '0/20'}
+  Synthetic: main setting {'Equiv': 0, 'Twirled': 1, 'NonEquiv': 0, 'NoSym': 0}; L=4 {'Equiv': '0/30', 'Twirled': '1/30', 'NonEquiv': '0/30', 'NoSym': '0/30'}
+  Galaxy10: main setting {'Equiv': 0, 'Twirled': 0, 'NonEquiv': 0, 'NoSym': 2}; L=8 {'Equiv': '8/20', 'Twirled': '5/20', 'NonEquiv': '1/20', 'NoSym': '10/20'}
+  Blood cells: main setting {'Equiv': 1, 'Twirled': 0, 'NonEquiv': 0, 'NoSym': 0}; L=8 {'Equiv': '6/20', 'Twirled': '1/20', 'NonEquiv': '0/20', 'NoSym': '10/20'}
+
+== DLA and function classes (results/dla.json): DLA 569 / 569; features {'Equiv': 237, 'NonEquiv': 1304, 'Twirled': 666, 'NoSym': 772}; invariant {'Equiv': 237, 'NonEquiv': 31, 'Twirled': 666, 'NoSym': 237}; shared {'Equiv&NonEquiv': 4, 'Equiv&Twirled': 14, 'Equiv&NoSym': 237, 'NonEquiv&Twirled': 31, 'NonEquiv&NoSym': 5, 'Twirled&NoSym': 14}; all quadratic features 32896, invariant 4224
+
+== Gradients at initialization, main settings (200 draws): median |dL/dtheta_k|, and median of Equiv / NoSym
+  MNIST: Equiv 0.116  Twirled 0.106  NonEquiv 0.136  NoSym 0.092  Equiv/NoSym 1.3
+  Synthetic: Equiv 0.179  Twirled 0.375  NonEquiv 0.342  NoSym 0.206  Equiv/NoSym 0.9
+  Galaxy10: Equiv 0.281  Twirled 0.272  NonEquiv 0.331  NoSym 0.047  Equiv/NoSym 6.0
+  Blood cells: Equiv 0.230  Twirled 0.240  NonEquiv 0.239  NoSym 0.089  Equiv/NoSym 2.6
+
+== Dependence on N (L = 4) and on L (N of the main setting): gaps
+  MNIST Equiv: N=10..80 +0.11 +0.07 +0.05 +0.03 | L=(1, 2, 4, 8) +0.05 +0.04 +0.05 +0.05
+  MNIST Twirled: N=10..80 +0.14 +0.13 +0.06 +0.04 | L=(1, 2, 4, 8) +0.04 +0.02 +0.06 +0.03
+  MNIST NonEquiv: N=10..80 +0.28 +0.26 +0.15 +0.07 | L=(1, 2, 4, 8) +0.10 +0.12 +0.15 +0.18
+  MNIST NoSym: N=10..80 +0.26 +0.26 +0.16 +0.10 | L=(1, 2, 4, 8) +0.10 +0.13 +0.16 +0.13
+  Synthetic Equiv: N=10..80 +0.05 +0.03 +0.02 +0.01 | L=(1, 2, 4) +0.07 +0.04 +0.03
+  Synthetic Twirled: N=10..80 +0.14 +0.07 +0.05 +0.02 | L=(1, 2, 4) +0.06 +0.07 +0.07
+  Synthetic NonEquiv: N=10..80 +0.22 +0.15 +0.08 +0.05 | L=(1, 2, 4) +0.06 +0.12 +0.15
+  Synthetic NoSym: N=10..80 +0.25 +0.14 +0.06 +0.04 | L=(1, 2, 4) +0.12 +0.13 +0.14
+  Galaxy10 Equiv: N=10..80 +0.12 +0.16 +0.04 +0.08 | L=(1, 2, 4, 8) +0.01 +0.05 +0.04 +0.02
+  Galaxy10 Twirled: N=10..80 +0.06 +0.18 +0.05 +0.06 | L=(1, 2, 4, 8) +0.03 +0.05 +0.05 +0.04
+  Galaxy10 NonEquiv: N=10..80 +0.22 +0.19 +0.11 +0.09 | L=(1, 2, 4, 8) +0.13 +0.13 +0.11 +0.14
+  Galaxy10 NoSym: N=10..80 +0.19 +0.23 +0.11 +0.07 | L=(1, 2, 4, 8) +0.15 +0.12 +0.11 +0.13
+  Blood cells Equiv: N=10..80 +0.16 +0.14 +0.06 +0.01 | L=(1, 2, 4, 8) +0.01 +0.08 +0.06 +0.06
+  Blood cells Twirled: N=10..80 +0.19 +0.08 +0.08 +0.03 | L=(1, 2, 4, 8) -0.03 +0.05 +0.08 +0.04
+  Blood cells NonEquiv: N=10..80 +0.21 +0.28 +0.17 +0.06 | L=(1, 2, 4, 8) +0.02 +0.11 +0.17 +0.20
+  Blood cells NoSym: N=10..80 +0.33 +0.19 +0.16 +0.08 | L=(1, 2, 4, 8) +0.13 +0.13 +0.16 +0.16
+  MNIST: test accuracy of NonEquiv at N=80 0.79, of Equiv at N=40 0.85
+
+== Learning curves (main settings): test / train accuracy at epochs 7, 14, 21, 35, 70
+  MNIST Equiv: test 0.79 0.77 0.82 0.84 0.84 | train 0.84 0.83 0.89 0.89 0.90
+  MNIST Twirled: test 0.75 0.76 0.79 0.82 0.82 | train 0.79 0.83 0.86 0.88 0.90
+  MNIST NonEquiv: test 0.69 0.70 0.71 0.72 0.72 | train 0.78 0.82 0.85 0.87 0.89
+  MNIST NoSym: test 0.65 0.68 0.73 0.70 0.73 | train 0.75 0.79 0.86 0.83 0.89
+  Synthetic Equiv: test 0.81 0.89 0.89 0.94 0.96 | train 0.85 0.93 0.93 1.00 0.99
+  Synthetic Twirled: test 0.85 0.82 0.88 0.90 0.88 | train 0.93 0.88 0.94 0.97 0.96
+  Synthetic NonEquiv: test 0.76 0.79 0.82 0.83 0.82 | train 0.86 0.91 0.98 0.96 0.97
+  Synthetic NoSym: test 0.69 0.75 0.79 0.86 0.84 | train 0.80 0.87 0.93 0.99 0.97
+  Galaxy10 Equiv: test 0.66 0.65 0.71 0.72 0.73 | train 0.71 0.68 0.79 0.78 0.80
+  Galaxy10 Twirled: test 0.67 0.67 0.68 0.70 0.73 | train 0.72 0.75 0.76 0.79 0.81
+  Galaxy10 NonEquiv: test 0.59 0.61 0.63 0.63 0.71 | train 0.72 0.75 0.80 0.78 0.84
+  Galaxy10 NoSym: test 0.63 0.64 0.63 0.64 0.65 | train 0.75 0.78 0.75 0.77 0.77
+  Blood cells Equiv: test 0.69 0.71 0.77 0.77 0.73 | train 0.71 0.77 0.82 0.81 0.80
+  Blood cells Twirled: test 0.69 0.71 0.76 0.77 0.78 | train 0.73 0.77 0.82 0.83 0.86
+  Blood cells NonEquiv: test 0.65 0.66 0.68 0.68 0.70 | train 0.73 0.78 0.82 0.84 0.86
+  Blood cells NoSym: test 0.63 0.65 0.66 0.67 0.66 | train 0.71 0.77 0.77 0.79 0.83
+
+== First version of the synthetic task: 52 runs; test accuracy at N=40, 80: 0.46-0.57
