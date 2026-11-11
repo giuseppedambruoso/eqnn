@@ -1,4 +1,4 @@
-"""eqnn: code of the paper "Where does the advantage of equivariant quantum neural networks come from? A study on image classification".
+"""eqnn: code of the paper "Invariance can prevent overfitting and shortcut learning in Quantum Neural Networks", arXiv:2611.14368.
 
 Modules
   data       the two tasks (MNIST 4 vs 5 in random pose, synthetic cross vs square), the action of D4, the cues

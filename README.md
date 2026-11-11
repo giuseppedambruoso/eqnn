@@ -1,9 +1,10 @@
-# Invariance can prevent overfitting and shortcut learning in quantum neural networks
+# Invariance can prevent overfitting and shortcut learning in Quantum Neural Networks
 
 Code, results and LaTeX sources of the paper
 
 > G. D'Ambruoso, G. Gramegna, D. Pomarico, G. Magnifico, C. Lupo,
-> *Invariance can prevent overfitting and shortcut learning in quantum neural networks* (preprint).
+> *Invariance can prevent overfitting and shortcut learning in Quantum Neural Networks*,
+> [arXiv:2611.14368](https://arxiv.org/abs/2611.14368) (2026).
 
 This repository is self-contained. It holds the code used to train every model of the paper, the results of every
 run, and the scripts that turn the results into the figures and tables. Every figure and table can be rebuilt in
@@ -197,5 +198,21 @@ Copyright (C) 2026 Giuseppe D'Ambruoso
   Commons Attribution-ShareAlike 4.0 International. See [LICENSE-CC-BY-SA-4.0](LICENSE-CC-BY-SA-4.0).
 
 Both licenses are copyleft: modified versions must be shared under the same terms. If you use this code, these
-results or these figures in your work, please cite the paper (see `CITATION.cff`). The data sets used by the code
-(MNIST, Galaxy10 SDSS, erythrocytesIDB) are not distributed here and keep their own licenses.
+results or these figures in your work, please cite the paper (see also `CITATION.cff`):
+
+```bibtex
+@article{dambruoso2026invariance,
+  title         = {Invariance can prevent overfitting and shortcut learning in {Quantum Neural Networks}},
+  author        = {D'Ambruoso, Giuseppe and Gramegna, Giovanni and Pomarico, Domenico and Magnifico, Giuseppe and Lupo, Cosmo},
+  journal       = {arXiv preprint arXiv:2611.14368},
+  year          = {2026},
+  eprint        = {2611.14368},
+  archivePrefix = {arXiv},
+  primaryClass  = {quant-ph},
+  doi           = {10.48550/arXiv.2611.14368},
+  url           = {https://arxiv.org/abs/2611.14368}
+}
+```
+
+The data sets used by the code (MNIST, Galaxy10 SDSS, erythrocytesIDB) are not distributed here and keep their own
+licenses.

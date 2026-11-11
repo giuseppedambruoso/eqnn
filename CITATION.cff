@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this code, these results or these figures, please cite the paper below."
-title: "Invariance can prevent overfitting and shortcut learning in quantum neural networks"
+title: "Invariance can prevent overfitting and shortcut learning in Quantum Neural Networks"
 authors:
   - family-names: "D'Ambruoso"
     given-names: "Giuseppe"
@@ -19,7 +19,7 @@ license:
 type: software
 preferred-citation:
   type: article
-  title: "Invariance can prevent overfitting and shortcut learning in quantum neural networks"
+  title: "Invariance can prevent overfitting and shortcut learning in Quantum Neural Networks"
   authors:
     - family-names: "D'Ambruoso"
       given-names: "Giuseppe"
@@ -32,4 +32,7 @@ preferred-citation:
     - family-names: "Lupo"
       given-names: "Cosmo"
   year: 2026
-  notes: "Preprint"
+  journal: "arXiv preprint"
+  doi: "10.48550/arXiv.2611.14368"
+  url: "https://arxiv.org/abs/2611.14368"
+  notes: "arXiv:2611.14368 [quant-ph]"
