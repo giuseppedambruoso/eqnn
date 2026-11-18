@@ -16,6 +16,3 @@ paper/*.fdb_latexmk
 paper/*.synctex.gz
 paper/arxiv.tar.gz
 *:Zone.Identifier
-
-# The paper is not published in this repository
-paper/
